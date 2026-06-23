@@ -126,7 +126,7 @@ async function completeOpenAiCompatibleChat(
         model: config.model,
         messages,
         temperature: 0.2,
-        max_tokens: 700,
+        max_tokens: 2000,
       }),
     },
   );
