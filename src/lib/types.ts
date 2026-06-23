@@ -66,6 +66,9 @@ export type PaymentReceipt = {
   payer?: string;
   transaction?: string;
   paymentResource?: string;
+  feeRouterSplitId?: string;
+  feeRouterCreateSplitTx?: string;
+  feeRouterPayTx?: string;
   previousHash: string;
   receiptHash: string;
   createdAt: string;
@@ -76,6 +79,9 @@ export type ReceiptEvidence = {
   payer?: string;
   transaction?: string;
   paymentResource?: string;
+  feeRouterSplitId?: string;
+  feeRouterCreateSplitTx?: string;
+  feeRouterPayTx?: string;
 };
 
 export type QueryPaymentEvidence = {

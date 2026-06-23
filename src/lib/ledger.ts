@@ -32,6 +32,9 @@ type ReceiptHashPayload = {
   payer?: string;
   transaction?: string;
   paymentResource?: string;
+  feeRouterSplitId?: string;
+  feeRouterCreateSplitTx?: string;
+  feeRouterPayTx?: string;
   previousHash: string;
   createdAt: string;
 };
@@ -89,6 +92,15 @@ function buildReceiptPayload(
   if (evidence.paymentResource !== undefined) {
     payload.paymentResource = evidence.paymentResource;
   }
+  if (evidence.feeRouterSplitId !== undefined) {
+    payload.feeRouterSplitId = evidence.feeRouterSplitId;
+  }
+  if (evidence.feeRouterCreateSplitTx !== undefined) {
+    payload.feeRouterCreateSplitTx = evidence.feeRouterCreateSplitTx;
+  }
+  if (evidence.feeRouterPayTx !== undefined) {
+    payload.feeRouterPayTx = evidence.feeRouterPayTx;
+  }
   return payload;
 }
 
@@ -128,6 +140,15 @@ function payloadFromReceipt(
   }
   if (includeUndefinedOptionals || receipt.paymentResource !== undefined) {
     payload.paymentResource = receipt.paymentResource;
+  }
+  if (receipt.feeRouterSplitId !== undefined) {
+    payload.feeRouterSplitId = receipt.feeRouterSplitId;
+  }
+  if (receipt.feeRouterCreateSplitTx !== undefined) {
+    payload.feeRouterCreateSplitTx = receipt.feeRouterCreateSplitTx;
+  }
+  if (receipt.feeRouterPayTx !== undefined) {
+    payload.feeRouterPayTx = receipt.feeRouterPayTx;
   }
   return payload;
 }

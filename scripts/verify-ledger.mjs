@@ -46,6 +46,15 @@ function receiptPayload(receipt, includeUndefinedOptionals) {
   if (includeUndefinedOptionals || receipt.paymentResource !== undefined) {
     payload.paymentResource = receipt.paymentResource;
   }
+  if (receipt.feeRouterSplitId !== undefined) {
+    payload.feeRouterSplitId = receipt.feeRouterSplitId;
+  }
+  if (receipt.feeRouterCreateSplitTx !== undefined) {
+    payload.feeRouterCreateSplitTx = receipt.feeRouterCreateSplitTx;
+  }
+  if (receipt.feeRouterPayTx !== undefined) {
+    payload.feeRouterPayTx = receipt.feeRouterPayTx;
+  }
   return payload;
 }
 
