@@ -1,0 +1,1356 @@
+{
+  "queries": [
+    {
+      "id": "0x946d60370424484f",
+      "question": "Paid source access: LeptonWeb Build Log",
+      "answer": "The agent paid LeptonWeb Lab for direct access to \"LeptonWeb Build Log\" and wrote the purchase into the public attribution ledger.",
+      "queryHash": "0x610336560abf9953aa99d013facb4e7d29cea3198cc5e7616615dbbb8b7a2ffb",
+      "answerHash": "0x1e4b13dac8163cc970830db04c9aacfb052521979c8ef467b91026a926e391d1",
+      "totalAtomicUsdc": 1700,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Direct x402 source purchase."
+        }
+      ],
+      "receiptHashes": [
+        "0xe7d40c49f2af0557984809e40325cba236d27f28514fbad877a9f14a2285e154"
+      ],
+      "createdAt": "2026-06-21T15:16:01.262Z"
+    },
+    {
+      "id": "0x5b01b925de62232c",
+      "question": "How does Tollgate settle reader payments and creator citation receipts on Arc?",
+      "answer": "The paying agent treated \"How does Tollgate settle reader payments and creator citation receipts on Arc?\" as a source-backed answer, not a free scrape. LeptonWeb Lab: A builder log for Tollgate, showing paid citations, receipt hashes, x402 source access, and creator onboarding on Arc. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. Indie Researcher: A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0xbf2f34034669a0142540cc79a0b161730c40328957cd4da2c4109c26222db639",
+      "answerHash": "0x6754a317e040f520d7fb43e643971e860b37db2e9fb6b0c68b38275c4cee529a",
+      "totalAtomicUsdc": 4700,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Matched tollgate, receipts, arc in the source registry."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched arc in the source registry."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "handle": "@sourcepaid",
+          "wallet": "0x6666666666666666666666666666666666666666",
+          "url": "https://example.com/citation-economics",
+          "amountAtomicUsdc": 1200,
+          "reason": "Selected by semantic overlap with the question and payment policy."
+        }
+      ],
+      "sourceDecisions": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "priceAtomicUsdc": 1700,
+          "score": 30,
+          "valuePerAtomicUsdc": 0.017647,
+          "selected": true,
+          "reason": "Bought: relevance score 30 cleared the budget policy."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "priceAtomicUsdc": 1800,
+          "score": 15,
+          "valuePerAtomicUsdc": 0.008333,
+          "selected": true,
+          "reason": "Bought: relevance score 15 cleared the budget policy."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "priceAtomicUsdc": 1200,
+          "score": 11,
+          "valuePerAtomicUsdc": 0.009167,
+          "selected": true,
+          "reason": "Bought: relevance score 11 cleared the budget policy."
+        },
+        {
+          "sourceId": "arc-finality-usdc",
+          "title": "Arc Settlement Sketch",
+          "creator": "Arc Builder Desk",
+          "priceAtomicUsdc": 2200,
+          "score": 10,
+          "valuePerAtomicUsdc": 0.004545,
+          "selected": false,
+          "reason": "Skipped: 2200 atomic USDC exceeded the remaining source budget."
+        },
+        {
+          "sourceId": "forum-mandates",
+          "title": "Covenant Account Spend Controls",
+          "creator": "Forum Protocol",
+          "priceAtomicUsdc": 1500,
+          "score": 8,
+          "valuePerAtomicUsdc": 0.005333,
+          "selected": false,
+          "reason": "Skipped: lower value than the purchased source bundle."
+        },
+        {
+          "sourceId": "rsshub-distribution",
+          "title": "RSS Distribution Surface",
+          "creator": "Open Feed Maintainers",
+          "priceAtomicUsdc": 900,
+          "score": 6,
+          "valuePerAtomicUsdc": 0.006667,
+          "selected": false,
+          "reason": "Skipped: lower value than the purchased source bundle."
+        },
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "priceAtomicUsdc": 2400,
+          "score": 5,
+          "valuePerAtomicUsdc": 0.002083,
+          "selected": false,
+          "reason": "Skipped: 2400 atomic USDC exceeded the remaining source budget."
+        }
+      ],
+      "agentBudget": {
+        "sourceBudgetAtomicUsdc": 6500,
+        "spentAtomicUsdc": 4700,
+        "remainingAtomicUsdc": 1800,
+        "candidateCount": 7,
+        "purchasedCount": 3
+      },
+      "receiptHashes": [
+        "0xefb8f15cccc5b1157880dc516e3aa3f560ce125c1574c67cbd04c5d20b070f6e",
+        "0x1633d1625b071d097b9a1f0141570b6209161ca5f2ec4551228b36103100e892",
+        "0xcf0239674ed77b1d7c796eafeedee5720b85e7a4ca4836db61a86d1cbe1a7ea5"
+      ],
+      "readerPayment": {
+        "amountAtomicUsdc": 1000,
+        "settlementMode": "x402-settled",
+        "payTo": "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836",
+        "paymentResource": "/api/paid-query",
+        "payer": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+        "transaction": "0x92e7b0ad3fd4d96de82c06374c2964f311c324f308e5fb91c4ad4d02676d19ce",
+        "paymentHash": "0x835c5ae04f829df85a6833dd47165bb8768ce1bef428639a6abdfb8ecb4abf77"
+      },
+      "createdAt": "2026-06-21T15:15:49.284Z"
+    },
+    {
+      "id": "0x2145324494a0560b",
+      "question": "Paid source access: Gateway Nanopayments Primer",
+      "answer": "The agent paid Circle Developer Notes for direct access to \"Gateway Nanopayments Primer\" and wrote the purchase into the public attribution ledger.",
+      "queryHash": "0xd525dfc97f12df124c148426c82f2af05fbeeb66cb796b9e32ade333f8e614de",
+      "answerHash": "0x74afba901650a7eb2007c25d90da4c5d02328f9c333c28da930e35cb960303ae",
+      "totalAtomicUsdc": 2400,
+      "citations": [
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Direct x402 source purchase."
+        }
+      ],
+      "receiptHashes": [
+        "0x7859f61e2f5118d04225b875f23687521a4bca2eaf1a50169215cb8128eab962"
+      ],
+      "createdAt": "2026-06-21T14:30:57.214Z"
+    },
+    {
+      "id": "0xa3372a7b6e38b61a",
+      "question": "How does Tollgate prove reader-paid answers and creator citation payouts on Arc?",
+      "answer": "The paying agent treated \"How does Tollgate prove reader-paid answers and creator citation payouts on Arc?\" as a source-backed answer, not a free scrape. LeptonWeb Lab: A builder log for Tollgate, showing paid citations, receipt hashes, x402 source access, and creator onboarding on Arc. Indie Researcher: A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0x512f083da0d4cece93f82b1e25951a16c181333ce763a95861a9830f1517d89d",
+      "answerHash": "0xfca89fdfa5a4963e1240f21f7c445e4fcda6ab458d7a8b225b848db023a1ac19",
+      "totalAtomicUsdc": 4700,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Matched tollgate, arc in the source registry."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "handle": "@sourcepaid",
+          "wallet": "0x6666666666666666666666666666666666666666",
+          "url": "https://example.com/citation-economics",
+          "amountAtomicUsdc": 1200,
+          "reason": "Matched answers in the source registry."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched arc in the source registry."
+        }
+      ],
+      "sourceDecisions": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "priceAtomicUsdc": 1700,
+          "score": 23,
+          "valuePerAtomicUsdc": 0.013529,
+          "selected": true,
+          "reason": "Bought: relevance score 23 cleared the budget policy."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "priceAtomicUsdc": 1200,
+          "score": 18,
+          "valuePerAtomicUsdc": 0.015,
+          "selected": true,
+          "reason": "Bought: relevance score 18 cleared the budget policy."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "priceAtomicUsdc": 1800,
+          "score": 14,
+          "valuePerAtomicUsdc": 0.007778,
+          "selected": true,
+          "reason": "Bought: relevance score 14 cleared the budget policy."
+        },
+        {
+          "sourceId": "arc-finality-usdc",
+          "title": "Arc Settlement Sketch",
+          "creator": "Arc Builder Desk",
+          "priceAtomicUsdc": 2200,
+          "score": 8,
+          "valuePerAtomicUsdc": 0.003636,
+          "selected": false,
+          "reason": "Skipped: 2200 atomic USDC exceeded the remaining source budget."
+        },
+        {
+          "sourceId": "rsshub-distribution",
+          "title": "RSS Distribution Surface",
+          "creator": "Open Feed Maintainers",
+          "priceAtomicUsdc": 900,
+          "score": 6,
+          "valuePerAtomicUsdc": 0.006667,
+          "selected": false,
+          "reason": "Skipped: lower value than the purchased source bundle."
+        }
+      ],
+      "agentBudget": {
+        "sourceBudgetAtomicUsdc": 6500,
+        "spentAtomicUsdc": 4700,
+        "remainingAtomicUsdc": 1800,
+        "candidateCount": 5,
+        "purchasedCount": 3
+      },
+      "receiptHashes": [
+        "0x41cee47cbc1529ce0ac947e054d4eae537133fb5368a321b06b94441fd07716a",
+        "0x562279aadd2b9a2628e5852e76208fa48c0551bfeff6b5157b416706f282ad25",
+        "0x2e6e050a6c7cad06a4294a5cf211c8b405badac68f74ba287cc2efaf46daa44b"
+      ],
+      "readerPayment": {
+        "amountAtomicUsdc": 1000,
+        "settlementMode": "x402-verified",
+        "payTo": "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836",
+        "paymentResource": "/api/paid-query",
+        "payer": "0xa90d7374447B64D180E70C296F5DeccE1049CD30",
+        "paymentHash": "0x87a53fcb4afdcb265c62262cafc53069e2542de79169bbf11a447738db8f174d"
+      },
+      "createdAt": "2026-06-21T14:30:54.832Z"
+    },
+    {
+      "id": "0x521b07453475f115",
+      "question": "How can a budgeted AI agent buy publisher citations without overspending?",
+      "answer": "The paying agent treated \"How can a budgeted AI agent buy publisher citations without overspending?\" as a source-backed answer, not a free scrape. Circle Developer Notes: Circle Gateway batches signed EIP-3009 authorizations so x402 payments can clear at sub-cent values without per-payment gas. Indie Researcher: A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work. Forum Protocol: Forum-style mandates bound an agent budget, publish receipts, and make spend controls enforceable instead of advisory. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0x4173f3a444367087f91d6893fdf263c298a6fbbe1ea3c164fd4c2908ede466f9",
+      "answerHash": "0xf5bec5ffd2311f1de3d6979dde2b977102f92ab98dbd1f02ee35ca15152e550a",
+      "totalAtomicUsdc": 5100,
+      "citations": [
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Selected by semantic overlap with the question and payment policy."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "handle": "@sourcepaid",
+          "wallet": "0x6666666666666666666666666666666666666666",
+          "url": "https://example.com/citation-economics",
+          "amountAtomicUsdc": 1200,
+          "reason": "Matched citations in the source registry."
+        },
+        {
+          "sourceId": "forum-mandates",
+          "title": "Covenant Account Spend Controls",
+          "creator": "Forum Protocol",
+          "handle": "@ggudman",
+          "wallet": "0x5555555555555555555555555555555555555555",
+          "url": "https://forum.gudman.xyz",
+          "amountAtomicUsdc": 1500,
+          "reason": "Selected by semantic overlap with the question and payment policy."
+        }
+      ],
+      "sourceDecisions": [
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "priceAtomicUsdc": 2400,
+          "score": 10,
+          "valuePerAtomicUsdc": 0.004167,
+          "selected": true,
+          "reason": "Bought: relevance score 10 cleared the budget policy."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "priceAtomicUsdc": 1200,
+          "score": 9,
+          "valuePerAtomicUsdc": 0.0075,
+          "selected": true,
+          "reason": "Bought: relevance score 9 cleared the budget policy."
+        },
+        {
+          "sourceId": "forum-mandates",
+          "title": "Covenant Account Spend Controls",
+          "creator": "Forum Protocol",
+          "priceAtomicUsdc": 1500,
+          "score": 8,
+          "valuePerAtomicUsdc": 0.005333,
+          "selected": true,
+          "reason": "Bought: relevance score 8 cleared the budget policy."
+        },
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "priceAtomicUsdc": 1700,
+          "score": 8,
+          "valuePerAtomicUsdc": 0.004706,
+          "selected": false,
+          "reason": "Skipped: 1700 atomic USDC exceeded the remaining source budget."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "priceAtomicUsdc": 1800,
+          "score": 2,
+          "valuePerAtomicUsdc": 0.001111,
+          "selected": false,
+          "reason": "Skipped: 1800 atomic USDC exceeded the remaining source budget."
+        }
+      ],
+      "agentBudget": {
+        "sourceBudgetAtomicUsdc": 6500,
+        "spentAtomicUsdc": 5100,
+        "remainingAtomicUsdc": 1400,
+        "candidateCount": 5,
+        "purchasedCount": 3
+      },
+      "receiptHashes": [
+        "0xdb3b37c8f6badbfff7bbc2197bb533f5c60d163aecf698940e4727d865cc2a8b",
+        "0x3fefc542edb44710d89d24c0f9d92db842d6580cc0c93d1a52df36cfd059a523",
+        "0x290ada126e7b50646ad4780d645e8ff9683b8dc0c3004403996d303ae9f9514c"
+      ],
+      "createdAt": "2026-06-21T14:30:52.676Z"
+    },
+    {
+      "id": "0x4e2614245dc002ce",
+      "question": "How can a budgeted AI agent buy publisher citations without overspending?",
+      "answer": "The paying agent treated \"How can a budgeted AI agent buy publisher citations without overspending?\" as a source-backed answer, not a free scrape. Circle Developer Notes: Circle Gateway batches signed EIP-3009 authorizations so x402 payments can clear at sub-cent values without per-payment gas. Indie Researcher: A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work. Forum Protocol: Forum-style mandates bound an agent budget, publish receipts, and make spend controls enforceable instead of advisory. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0x4173f3a444367087f91d6893fdf263c298a6fbbe1ea3c164fd4c2908ede466f9",
+      "answerHash": "0xf5bec5ffd2311f1de3d6979dde2b977102f92ab98dbd1f02ee35ca15152e550a",
+      "totalAtomicUsdc": 5100,
+      "citations": [
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Selected by semantic overlap with the question and payment policy."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "handle": "@sourcepaid",
+          "wallet": "0x6666666666666666666666666666666666666666",
+          "url": "https://example.com/citation-economics",
+          "amountAtomicUsdc": 1200,
+          "reason": "Matched citations in the source registry."
+        },
+        {
+          "sourceId": "forum-mandates",
+          "title": "Covenant Account Spend Controls",
+          "creator": "Forum Protocol",
+          "handle": "@ggudman",
+          "wallet": "0x5555555555555555555555555555555555555555",
+          "url": "https://forum.gudman.xyz",
+          "amountAtomicUsdc": 1500,
+          "reason": "Selected by semantic overlap with the question and payment policy."
+        }
+      ],
+      "sourceDecisions": [
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "priceAtomicUsdc": 2400,
+          "score": 10,
+          "valuePerAtomicUsdc": 0.004167,
+          "selected": true,
+          "reason": "Bought: relevance score 10 cleared the budget policy."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "priceAtomicUsdc": 1200,
+          "score": 9,
+          "valuePerAtomicUsdc": 0.0075,
+          "selected": true,
+          "reason": "Bought: relevance score 9 cleared the budget policy."
+        },
+        {
+          "sourceId": "forum-mandates",
+          "title": "Covenant Account Spend Controls",
+          "creator": "Forum Protocol",
+          "priceAtomicUsdc": 1500,
+          "score": 8,
+          "valuePerAtomicUsdc": 0.005333,
+          "selected": true,
+          "reason": "Bought: relevance score 8 cleared the budget policy."
+        },
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "priceAtomicUsdc": 1700,
+          "score": 8,
+          "valuePerAtomicUsdc": 0.004706,
+          "selected": false,
+          "reason": "Skipped: 1700 atomic USDC exceeded the remaining source budget."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "priceAtomicUsdc": 1800,
+          "score": 2,
+          "valuePerAtomicUsdc": 0.001111,
+          "selected": false,
+          "reason": "Skipped: 1800 atomic USDC exceeded the remaining source budget."
+        }
+      ],
+      "agentBudget": {
+        "sourceBudgetAtomicUsdc": 6500,
+        "spentAtomicUsdc": 5100,
+        "remainingAtomicUsdc": 1400,
+        "candidateCount": 5,
+        "purchasedCount": 3
+      },
+      "receiptHashes": [
+        "0x73a7f2cabb2ec2d196212fe8a41745c932d8005327046a32f16c862b2b4744c4",
+        "0xfed612a112ec9d40b1863cd5313f43e315fbd041994516c1f3d10e5eae13f5b7",
+        "0x175d362a524f607dea0c8c6b257c0aa623fa8ab86078ec13d5f543d9b137e6c9"
+      ],
+      "createdAt": "2026-06-21T13:36:28.264Z"
+    },
+    {
+      "id": "0x4c7a72d2e044f208",
+      "question": "How does Tollgate prove paid citations with x402 receipts on Arc?",
+      "answer": "The paying agent treated \"How does Tollgate prove paid citations with x402 receipts on Arc?\" as a source-backed answer, not a free scrape. LeptonWeb Lab: A builder log for Tollgate, showing paid citations, receipt hashes, x402 source access, and creator onboarding on Arc. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. Circle Developer Notes: Circle Gateway batches signed EIP-3009 authorizations so x402 payments can clear at sub-cent values without per-payment gas. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0xad43cc9130909e266978a604f6cc83fdd072ca61a020ef0b09fef32459d713e0",
+      "answerHash": "0x014ca1c0a60b8fce92707d02fcc5dddd4a575846f6e042f03b19156f1ffcba59",
+      "totalAtomicUsdc": 5900,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Matched tollgate, citations, receipts, arc, x402 in the source registry."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched arc, x402 in the source registry."
+        },
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Matched x402 in the source registry."
+        }
+      ],
+      "receiptHashes": [
+        "0x232baada4b66d02de30780f2e355061fce6e9fc2cdcc3a74bf82d30c9c95ad24",
+        "0x0f64e16633bf38c2db58ead6337a98ce06d4b178cb03c58da744f36155670308",
+        "0x1ecf222f59d2ef67de20f74ca22c237a28eec4eb2870e7fa58d262fbd2aaa78a"
+      ],
+      "readerPayment": {
+        "amountAtomicUsdc": 1000,
+        "settlementMode": "x402-verified",
+        "payTo": "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836",
+        "paymentResource": "/api/paid-query",
+        "payer": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+        "paymentHash": "0x9513aaf404e1da4f8b68a440af403ba4ffb22cf31c9842407fa506ca1d50802a"
+      },
+      "createdAt": "2026-06-20T14:36:12.433Z"
+    },
+    {
+      "id": "0x659278c7cb0ba7f1",
+      "question": "Paid source access: LeptonWeb Build Log",
+      "answer": "The agent paid LeptonWeb Lab for direct access to \"LeptonWeb Build Log\" and wrote the purchase into the public attribution ledger.",
+      "queryHash": "0x610336560abf9953aa99d013facb4e7d29cea3198cc5e7616615dbbb8b7a2ffb",
+      "answerHash": "0x1e4b13dac8163cc970830db04c9aacfb052521979c8ef467b91026a926e391d1",
+      "totalAtomicUsdc": 1700,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Direct x402 source purchase."
+        }
+      ],
+      "receiptHashes": [
+        "0x3964974e58d57e85a0dbc84dc3cfa144ae6757a93459fbaf158ff4c2ddb675ad"
+      ],
+      "createdAt": "2026-06-20T14:35:49.196Z"
+    },
+    {
+      "id": "0x612dd1485e3ece9f",
+      "question": "How does Tollgate prove paid citations with x402 receipts on Arc?",
+      "answer": "The paying agent treated \"How does Tollgate prove paid citations with x402 receipts on Arc?\" as a source-backed answer, not a free scrape. LeptonWeb Lab: A builder log for Tollgate, showing paid citations, receipt hashes, x402 source access, and creator onboarding on Arc. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. Circle Developer Notes: Circle Gateway batches signed EIP-3009 authorizations so x402 payments can clear at sub-cent values without per-payment gas. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0x68d8dfb7bf756aaa716e3870f7e36829dc16b14426f4f73835f30432b4e5fe89",
+      "answerHash": "0xf343305208e59b0915ad78689ad7cdac145af6c214e9dac4d7f528dba983563a",
+      "totalAtomicUsdc": 5900,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0x22949cA9A470181c66a034E81a743E2518579E95",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Matched tollgate, citations, receipts, arc, x402 in the source registry."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched arc, x402 in the source registry."
+        },
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Matched x402 in the source registry."
+        }
+      ],
+      "receiptHashes": [
+        "0x1c220cd626a120e000b0bc7da51ac45b2a6690bfbc9d55cc0571d65d5ba4dc62",
+        "0x1c77afce753204c125108e2c88bc35a7087b3a21e1730936e492a3c023afaaf4",
+        "0x21dea428cdd697aec1d75e3c47db4cbe64dd9f0c983ddf1106c03a5b388e3573"
+      ],
+      "readerPayment": {
+        "amountAtomicUsdc": 1000,
+        "settlementMode": "x402-verified",
+        "payTo": "0x22949cA9A470181c66a034E81a743E2518579E95",
+        "paymentResource": "/api/paid-query",
+        "payer": "0x26F866013a057bbcBAeA2356F2D390bCdbcCC0E0",
+        "paymentHash": "0x41aa96d3c90527cfa97eacd8d56231d85260ddea7047e5c80d532b1fe38514d4"
+      },
+      "createdAt": "2026-06-16T14:34:13.725Z"
+    },
+    {
+      "id": "0x0de551f54c696b47",
+      "question": "How does Tollgate prove paid citations with x402 receipts on Arc?",
+      "answer": "The paying agent treated \"How does Tollgate prove paid citations with x402 receipts on Arc?\" as a source-backed answer, not a free scrape. LeptonWeb Lab: A builder log for Tollgate, showing paid citations, receipt hashes, x402 source access, and creator onboarding on Arc. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. Circle Developer Notes: Circle Gateway batches signed EIP-3009 authorizations so x402 payments can clear at sub-cent values without per-payment gas. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0x149e7228781319e4bf216b39b26a177cc9bdc8efa0859b9dc8cd108de34fc5d9",
+      "answerHash": "0x5e607504bcde4982dd6d6128e5a440350084d7944b4ad7fbf0986d1d76be35b6",
+      "totalAtomicUsdc": 5900,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0x22949cA9A470181c66a034E81a743E2518579E95",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Matched tollgate, citations, receipts, arc, x402 in the source registry."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched arc, x402 in the source registry."
+        },
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Matched x402 in the source registry."
+        }
+      ],
+      "receiptHashes": [
+        "0xeaa7464726a3dd315518f722c863638c3c2345d127dbdd512ebefdb5703f16ff",
+        "0x70dff21149c147c71d9f610055eeacd23713ac91c24d5478fe5b97d8951a948b",
+        "0x6e77feadd3d50f63563a8c34506bec7a5464573097bc536fcd96eee277048a77"
+      ],
+      "readerPayment": {
+        "amountAtomicUsdc": 1000,
+        "settlementMode": "x402-verified",
+        "payTo": "0x22949cA9A470181c66a034E81a743E2518579E95",
+        "payer": "0x9E210daeA5b622D1BBCa3389Ac8C6e83fa960A06",
+        "paymentResource": "/api/paid-query",
+        "paymentHash": "0xb64d83a7a199defd1da999f1a553900524e81e6413f7158f0ffa521c019660ed"
+      },
+      "createdAt": "2026-06-16T14:33:00.310Z"
+    },
+    {
+      "id": "0xb005e487c45e59fe",
+      "question": "Paid source access: Gateway Nanopayments Primer",
+      "answer": "The agent paid Circle Developer Notes for direct access to \"Gateway Nanopayments Primer\" and wrote the purchase into the public attribution ledger.",
+      "queryHash": "0xd525dfc97f12df124c148426c82f2af05fbeeb66cb796b9e32ade333f8e614de",
+      "answerHash": "0x74afba901650a7eb2007c25d90da4c5d02328f9c333c28da930e35cb960303ae",
+      "totalAtomicUsdc": 2400,
+      "citations": [
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Direct x402 source purchase."
+        }
+      ],
+      "receiptHashes": [
+        "0x043623440fe8609544c99aaa1ee850b448e7ab391e3a9690720a0a160feb9664"
+      ],
+      "createdAt": "2026-06-16T14:19:19.394Z"
+    },
+    {
+      "id": "0xb358b7e0d178f93b",
+      "question": "How does Tollgate prove paid citations with x402 receipts on Arc?",
+      "answer": "The paying agent treated \"How does Tollgate prove paid citations with x402 receipts on Arc?\" as a source-backed answer, not a free scrape. LeptonWeb Lab: A builder log for Tollgate, showing paid citations, receipt hashes, x402 source access, and creator onboarding on Arc. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. Circle Developer Notes: Circle Gateway batches signed EIP-3009 authorizations so x402 payments can clear at sub-cent values without per-payment gas. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0x16f549c1c42df247fd8fd51d87a764a0c2ef0f542d64ea9c80465953327d0067",
+      "answerHash": "0xe6a65d532895b939bf9f9869ad9897a7ff3a7956a838da26e493ef90f406523e",
+      "totalAtomicUsdc": 5900,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0x22949cA9A470181c66a034E81a743E2518579E95",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Matched tollgate, citations, receipts, arc, x402 in the source registry."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched arc, x402 in the source registry."
+        },
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Matched x402 in the source registry."
+        }
+      ],
+      "receiptHashes": [
+        "0x700ef218ef6924073e4ea2c7a1834350cb14ac9a6a9c36e56f7de41ca64d9f6b",
+        "0x9996f57e16f25289e25b19802f9b504eb120ff8e56ae25198150ed955449d7b1",
+        "0x00272d1d6678cb19f46e84a8c0363b782ae9ab2d205494d28730d66c0d4c2c17"
+      ],
+      "createdAt": "2026-06-16T14:18:27.470Z"
+    },
+    {
+      "id": "0x987a971f689c6c4c",
+      "question": "Paid source access: Gateway Nanopayments Primer",
+      "answer": "The agent paid Circle Developer Notes for direct access to \"Gateway Nanopayments Primer\" and wrote the purchase into the public attribution ledger.",
+      "queryHash": "0xd525dfc97f12df124c148426c82f2af05fbeeb66cb796b9e32ade333f8e614de",
+      "answerHash": "0x74afba901650a7eb2007c25d90da4c5d02328f9c333c28da930e35cb960303ae",
+      "totalAtomicUsdc": 2400,
+      "citations": [
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Direct x402 source purchase."
+        }
+      ],
+      "receiptHashes": [
+        "0x77c6df5cf36d2ff9c5bc32fc2629a85035d573660c4bbb67c5454b4162a4da51"
+      ],
+      "createdAt": "2026-06-16T14:00:03.396Z"
+    },
+    {
+      "id": "0x3508d65c5c765591",
+      "question": "Why do x402 and Gateway make sub-cent source payments possible?",
+      "answer": "The paying agent treated \"Why do x402 and Gateway make sub-cent source payments possible?\" as a source-backed answer, not a free scrape. Circle Developer Notes: Circle Gateway batches signed EIP-3009 authorizations so x402 payments can clear at sub-cent values without per-payment gas. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. Indie Researcher: A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0xc00cac60f57b0244d637981ae7b417b462ced20e6d8fa7959bd14a8faab21847",
+      "answerHash": "0xeb61b8c28075203af255f3db1ab5e1ff4b1dbee28964a8a2c9f900aca49beba6",
+      "totalAtomicUsdc": 5400,
+      "citations": [
+        {
+          "sourceId": "circle-gateway-nano",
+          "title": "Gateway Nanopayments Primer",
+          "creator": "Circle Developer Notes",
+          "handle": "@circledev",
+          "wallet": "0x2222222222222222222222222222222222222222",
+          "url": "https://developers.circle.com/gateway/nanopayments",
+          "amountAtomicUsdc": 2400,
+          "reason": "Matched gateway, x402 in the source registry."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched x402 in the source registry."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "handle": "@sourcepaid",
+          "wallet": "0x6666666666666666666666666666666666666666",
+          "url": "https://example.com/citation-economics",
+          "amountAtomicUsdc": 1200,
+          "reason": "Selected by semantic overlap with the question and payment policy."
+        }
+      ],
+      "receiptHashes": [
+        "0xdf74779baf380444d8e291f64e10010b9c271e4a6cce032282d88a54e2725239",
+        "0xf361f9c6add2df5f181de2652636980d25c974059f30ca188c3d46a63bb222d7",
+        "0x338cb71c7d5677ea0613d3b28ef07e8e66e0b120681ecfb20e1b70964addbe12"
+      ],
+      "createdAt": "2026-06-16T13:33:08.094Z"
+    },
+    {
+      "id": "0x29722653b89c067f",
+      "question": "How should AI agents pay creators per citation on Arc?",
+      "answer": "The paying agent treated \"How should AI agents pay creators per citation on Arc?\" as a source-backed answer, not a free scrape. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. Open Feed Maintainers: RSS and open feed communities already aggregate creator work, making them strong surfaces for pay-per-citation and pay-per-read experiments. Arc Builder Desk: Arc is designed for stablecoin-native settlement with USDC gas, sub-second finality, and app kits for payment workflows. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0x3b907082b3bce923008a8e849ad5cc8daed65c38333cd6b6dc526bc11015ef3c",
+      "answerHash": "0xab67bd7d2e18e62abd9c7af9185550c38728a67a36ce36777cd62e09e5e5a1ed",
+      "totalAtomicUsdc": 4900,
+      "citations": [
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched creators, arc in the source registry."
+        },
+        {
+          "sourceId": "rsshub-distribution",
+          "title": "RSS Distribution Surface",
+          "creator": "Open Feed Maintainers",
+          "handle": "@rsshub",
+          "wallet": "0x4444444444444444444444444444444444444444",
+          "url": "https://github.com/DIYgod/RSSHub",
+          "amountAtomicUsdc": 900,
+          "reason": "Matched creators in the source registry."
+        },
+        {
+          "sourceId": "arc-finality-usdc",
+          "title": "Arc Settlement Sketch",
+          "creator": "Arc Builder Desk",
+          "handle": "@buildonarc",
+          "wallet": "0x3333333333333333333333333333333333333333",
+          "url": "https://docs.arc.network",
+          "amountAtomicUsdc": 2200,
+          "reason": "Matched arc in the source registry."
+        }
+      ],
+      "receiptHashes": [
+        "0x585a8a581bb87325d970d97e66f528a96fce70f0628dff24635b0001c1207afe",
+        "0xc2a3aa389433cca237b22bebfacd55e8dbd40abcf310650fb726d42d176bde4d",
+        "0x9ec3404a06db8505153b454b59a5bcf26dd35ec262996db45b45319732be39e3"
+      ],
+      "createdAt": "2026-06-16T13:19:39.401Z"
+    }
+  ],
+  "receipts": [
+    {
+      "id": "0x585a8a581bb87325",
+      "queryId": "0x29722653b89c067f",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "local-proof",
+      "previousHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "createdAt": "2026-06-16T13:19:39.401Z",
+      "receiptHash": "0x585a8a581bb87325d970d97e66f528a96fce70f0628dff24635b0001c1207afe"
+    },
+    {
+      "id": "0xc2a3aa389433cca2",
+      "queryId": "0x29722653b89c067f",
+      "sourceId": "rsshub-distribution",
+      "creator": "Open Feed Maintainers",
+      "wallet": "0x4444444444444444444444444444444444444444",
+      "amountAtomicUsdc": 900,
+      "settlementMode": "local-proof",
+      "previousHash": "0x585a8a581bb87325d970d97e66f528a96fce70f0628dff24635b0001c1207afe",
+      "createdAt": "2026-06-16T13:19:39.401Z",
+      "receiptHash": "0xc2a3aa389433cca237b22bebfacd55e8dbd40abcf310650fb726d42d176bde4d"
+    },
+    {
+      "id": "0x9ec3404a06db8505",
+      "queryId": "0x29722653b89c067f",
+      "sourceId": "arc-finality-usdc",
+      "creator": "Arc Builder Desk",
+      "wallet": "0x3333333333333333333333333333333333333333",
+      "amountAtomicUsdc": 2200,
+      "settlementMode": "local-proof",
+      "previousHash": "0xc2a3aa389433cca237b22bebfacd55e8dbd40abcf310650fb726d42d176bde4d",
+      "createdAt": "2026-06-16T13:19:39.401Z",
+      "receiptHash": "0x9ec3404a06db8505153b454b59a5bcf26dd35ec262996db45b45319732be39e3"
+    },
+    {
+      "id": "0xdf74779baf380444",
+      "queryId": "0x3508d65c5c765591",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "local-proof",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "previousHash": "0x9ec3404a06db8505153b454b59a5bcf26dd35ec262996db45b45319732be39e3",
+      "createdAt": "2026-06-16T13:33:08.094Z",
+      "receiptHash": "0xdf74779baf380444d8e291f64e10010b9c271e4a6cce032282d88a54e2725239"
+    },
+    {
+      "id": "0xf361f9c6add2df5f",
+      "queryId": "0x3508d65c5c765591",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "local-proof",
+      "paymentResource": "/api/sources/canteen-lepton-rfb",
+      "previousHash": "0xdf74779baf380444d8e291f64e10010b9c271e4a6cce032282d88a54e2725239",
+      "createdAt": "2026-06-16T13:33:08.094Z",
+      "receiptHash": "0xf361f9c6add2df5f181de2652636980d25c974059f30ca188c3d46a63bb222d7"
+    },
+    {
+      "id": "0x338cb71c7d5677ea",
+      "queryId": "0x3508d65c5c765591",
+      "sourceId": "creator-citation-economics",
+      "creator": "Indie Researcher",
+      "wallet": "0x6666666666666666666666666666666666666666",
+      "amountAtomicUsdc": 1200,
+      "settlementMode": "local-proof",
+      "paymentResource": "/api/sources/creator-citation-economics",
+      "previousHash": "0xf361f9c6add2df5f181de2652636980d25c974059f30ca188c3d46a63bb222d7",
+      "createdAt": "2026-06-16T13:33:08.094Z",
+      "receiptHash": "0x338cb71c7d5677ea0613d3b28ef07e8e66e0b120681ecfb20e1b70964addbe12"
+    },
+    {
+      "id": "0x77c6df5cf36d2ff9",
+      "queryId": "0x987a971f689c6c4c",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "x402-verified",
+      "payer": "0xb48169146BF764161B6DFee09b58E8dBE846cb28",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "previousHash": "0x338cb71c7d5677ea0613d3b28ef07e8e66e0b120681ecfb20e1b70964addbe12",
+      "createdAt": "2026-06-16T14:00:03.396Z",
+      "receiptHash": "0x77c6df5cf36d2ff9c5bc32fc2629a85035d573660c4bbb67c5454b4162a4da51"
+    },
+    {
+      "id": "0x700ef218ef692407",
+      "queryId": "0xb358b7e0d178f93b",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0x22949cA9A470181c66a034E81a743E2518579E95",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "local-proof",
+      "previousHash": "0x77c6df5cf36d2ff9c5bc32fc2629a85035d573660c4bbb67c5454b4162a4da51",
+      "createdAt": "2026-06-16T14:18:27.470Z",
+      "paymentResource": "/api/sources/leptonweb-build-log",
+      "receiptHash": "0x700ef218ef6924073e4ea2c7a1834350cb14ac9a6a9c36e56f7de41ca64d9f6b"
+    },
+    {
+      "id": "0x9996f57e16f25289",
+      "queryId": "0xb358b7e0d178f93b",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "local-proof",
+      "previousHash": "0x700ef218ef6924073e4ea2c7a1834350cb14ac9a6a9c36e56f7de41ca64d9f6b",
+      "createdAt": "2026-06-16T14:18:27.470Z",
+      "paymentResource": "/api/sources/canteen-lepton-rfb",
+      "receiptHash": "0x9996f57e16f25289e25b19802f9b504eb120ff8e56ae25198150ed955449d7b1"
+    },
+    {
+      "id": "0x00272d1d6678cb19",
+      "queryId": "0xb358b7e0d178f93b",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "local-proof",
+      "previousHash": "0x9996f57e16f25289e25b19802f9b504eb120ff8e56ae25198150ed955449d7b1",
+      "createdAt": "2026-06-16T14:18:27.470Z",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "receiptHash": "0x00272d1d6678cb19f46e84a8c0363b782ae9ab2d205494d28730d66c0d4c2c17"
+    },
+    {
+      "id": "0x043623440fe86095",
+      "queryId": "0xb005e487c45e59fe",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "x402-verified",
+      "previousHash": "0x00272d1d6678cb19f46e84a8c0363b782ae9ab2d205494d28730d66c0d4c2c17",
+      "createdAt": "2026-06-16T14:19:19.394Z",
+      "payer": "0x111238304020a6555098Bc289fC83Ea183B4150c",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "receiptHash": "0x043623440fe8609544c99aaa1ee850b448e7ab391e3a9690720a0a160feb9664"
+    },
+    {
+      "id": "0xeaa7464726a3dd31",
+      "queryId": "0x0de551f54c696b47",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0x22949cA9A470181c66a034E81a743E2518579E95",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "local-proof",
+      "previousHash": "0x043623440fe8609544c99aaa1ee850b448e7ab391e3a9690720a0a160feb9664",
+      "createdAt": "2026-06-16T14:33:00.310Z",
+      "paymentResource": "/api/sources/leptonweb-build-log",
+      "queryPaymentHash": "0xb64d83a7a199defd1da999f1a553900524e81e6413f7158f0ffa521c019660ed",
+      "receiptHash": "0xeaa7464726a3dd315518f722c863638c3c2345d127dbdd512ebefdb5703f16ff"
+    },
+    {
+      "id": "0x70dff21149c147c7",
+      "queryId": "0x0de551f54c696b47",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "local-proof",
+      "previousHash": "0xeaa7464726a3dd315518f722c863638c3c2345d127dbdd512ebefdb5703f16ff",
+      "createdAt": "2026-06-16T14:33:00.310Z",
+      "paymentResource": "/api/sources/canteen-lepton-rfb",
+      "queryPaymentHash": "0xb64d83a7a199defd1da999f1a553900524e81e6413f7158f0ffa521c019660ed",
+      "receiptHash": "0x70dff21149c147c71d9f610055eeacd23713ac91c24d5478fe5b97d8951a948b"
+    },
+    {
+      "id": "0x6e77feadd3d50f63",
+      "queryId": "0x0de551f54c696b47",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "local-proof",
+      "previousHash": "0x70dff21149c147c71d9f610055eeacd23713ac91c24d5478fe5b97d8951a948b",
+      "createdAt": "2026-06-16T14:33:00.310Z",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "queryPaymentHash": "0xb64d83a7a199defd1da999f1a553900524e81e6413f7158f0ffa521c019660ed",
+      "receiptHash": "0x6e77feadd3d50f63563a8c34506bec7a5464573097bc536fcd96eee277048a77"
+    },
+    {
+      "id": "0x1c220cd626a120e0",
+      "queryId": "0x612dd1485e3ece9f",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0x22949cA9A470181c66a034E81a743E2518579E95",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "local-proof",
+      "previousHash": "0x6e77feadd3d50f63563a8c34506bec7a5464573097bc536fcd96eee277048a77",
+      "createdAt": "2026-06-16T14:34:13.725Z",
+      "paymentResource": "/api/sources/leptonweb-build-log",
+      "queryPaymentHash": "0x41aa96d3c90527cfa97eacd8d56231d85260ddea7047e5c80d532b1fe38514d4",
+      "receiptHash": "0x1c220cd626a120e000b0bc7da51ac45b2a6690bfbc9d55cc0571d65d5ba4dc62"
+    },
+    {
+      "id": "0x1c77afce753204c1",
+      "queryId": "0x612dd1485e3ece9f",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "local-proof",
+      "previousHash": "0x1c220cd626a120e000b0bc7da51ac45b2a6690bfbc9d55cc0571d65d5ba4dc62",
+      "createdAt": "2026-06-16T14:34:13.725Z",
+      "paymentResource": "/api/sources/canteen-lepton-rfb",
+      "queryPaymentHash": "0x41aa96d3c90527cfa97eacd8d56231d85260ddea7047e5c80d532b1fe38514d4",
+      "receiptHash": "0x1c77afce753204c125108e2c88bc35a7087b3a21e1730936e492a3c023afaaf4"
+    },
+    {
+      "id": "0x21dea428cdd697ae",
+      "queryId": "0x612dd1485e3ece9f",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "local-proof",
+      "previousHash": "0x1c77afce753204c125108e2c88bc35a7087b3a21e1730936e492a3c023afaaf4",
+      "createdAt": "2026-06-16T14:34:13.725Z",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "queryPaymentHash": "0x41aa96d3c90527cfa97eacd8d56231d85260ddea7047e5c80d532b1fe38514d4",
+      "receiptHash": "0x21dea428cdd697aec1d75e3c47db4cbe64dd9f0c983ddf1106c03a5b388e3573"
+    },
+    {
+      "id": "0x3964974e58d57e85",
+      "queryId": "0x659278c7cb0ba7f1",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "x402-verified",
+      "previousHash": "0x21dea428cdd697aec1d75e3c47db4cbe64dd9f0c983ddf1106c03a5b388e3573",
+      "createdAt": "2026-06-20T14:35:49.196Z",
+      "payer": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      "paymentResource": "/api/sources/leptonweb-build-log",
+      "receiptHash": "0x3964974e58d57e85a0dbc84dc3cfa144ae6757a93459fbaf158ff4c2ddb675ad"
+    },
+    {
+      "id": "0x232baada4b66d02d",
+      "queryId": "0x4c7a72d2e044f208",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "local-proof",
+      "previousHash": "0x3964974e58d57e85a0dbc84dc3cfa144ae6757a93459fbaf158ff4c2ddb675ad",
+      "createdAt": "2026-06-20T14:36:12.433Z",
+      "paymentResource": "/api/sources/leptonweb-build-log",
+      "queryPaymentHash": "0x9513aaf404e1da4f8b68a440af403ba4ffb22cf31c9842407fa506ca1d50802a",
+      "receiptHash": "0x232baada4b66d02de30780f2e355061fce6e9fc2cdcc3a74bf82d30c9c95ad24"
+    },
+    {
+      "id": "0x0f64e16633bf38c2",
+      "queryId": "0x4c7a72d2e044f208",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "local-proof",
+      "previousHash": "0x232baada4b66d02de30780f2e355061fce6e9fc2cdcc3a74bf82d30c9c95ad24",
+      "createdAt": "2026-06-20T14:36:12.433Z",
+      "paymentResource": "/api/sources/canteen-lepton-rfb",
+      "queryPaymentHash": "0x9513aaf404e1da4f8b68a440af403ba4ffb22cf31c9842407fa506ca1d50802a",
+      "receiptHash": "0x0f64e16633bf38c2db58ead6337a98ce06d4b178cb03c58da744f36155670308"
+    },
+    {
+      "id": "0x1ecf222f59d2ef67",
+      "queryId": "0x4c7a72d2e044f208",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "local-proof",
+      "previousHash": "0x0f64e16633bf38c2db58ead6337a98ce06d4b178cb03c58da744f36155670308",
+      "createdAt": "2026-06-20T14:36:12.433Z",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "queryPaymentHash": "0x9513aaf404e1da4f8b68a440af403ba4ffb22cf31c9842407fa506ca1d50802a",
+      "receiptHash": "0x1ecf222f59d2ef67de20f74ca22c237a28eec4eb2870e7fa58d262fbd2aaa78a"
+    },
+    {
+      "id": "0x73a7f2cabb2ec2d1",
+      "queryId": "0x4e2614245dc002ce",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "local-proof",
+      "previousHash": "0x1ecf222f59d2ef67de20f74ca22c237a28eec4eb2870e7fa58d262fbd2aaa78a",
+      "createdAt": "2026-06-21T13:36:28.264Z",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "receiptHash": "0x73a7f2cabb2ec2d196212fe8a41745c932d8005327046a32f16c862b2b4744c4"
+    },
+    {
+      "id": "0xfed612a112ec9d40",
+      "queryId": "0x4e2614245dc002ce",
+      "sourceId": "creator-citation-economics",
+      "creator": "Indie Researcher",
+      "wallet": "0x6666666666666666666666666666666666666666",
+      "amountAtomicUsdc": 1200,
+      "settlementMode": "local-proof",
+      "previousHash": "0x73a7f2cabb2ec2d196212fe8a41745c932d8005327046a32f16c862b2b4744c4",
+      "createdAt": "2026-06-21T13:36:28.264Z",
+      "paymentResource": "/api/sources/creator-citation-economics",
+      "receiptHash": "0xfed612a112ec9d40b1863cd5313f43e315fbd041994516c1f3d10e5eae13f5b7"
+    },
+    {
+      "id": "0x175d362a524f607d",
+      "queryId": "0x4e2614245dc002ce",
+      "sourceId": "forum-mandates",
+      "creator": "Forum Protocol",
+      "wallet": "0x5555555555555555555555555555555555555555",
+      "amountAtomicUsdc": 1500,
+      "settlementMode": "local-proof",
+      "previousHash": "0xfed612a112ec9d40b1863cd5313f43e315fbd041994516c1f3d10e5eae13f5b7",
+      "createdAt": "2026-06-21T13:36:28.264Z",
+      "paymentResource": "/api/sources/forum-mandates",
+      "receiptHash": "0x175d362a524f607dea0c8c6b257c0aa623fa8ab86078ec13d5f543d9b137e6c9"
+    },
+    {
+      "id": "0xdb3b37c8f6badbff",
+      "queryId": "0x521b07453475f115",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "local-proof",
+      "previousHash": "0x175d362a524f607dea0c8c6b257c0aa623fa8ab86078ec13d5f543d9b137e6c9",
+      "createdAt": "2026-06-21T14:30:52.676Z",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "receiptHash": "0xdb3b37c8f6badbfff7bbc2197bb533f5c60d163aecf698940e4727d865cc2a8b"
+    },
+    {
+      "id": "0x3fefc542edb44710",
+      "queryId": "0x521b07453475f115",
+      "sourceId": "creator-citation-economics",
+      "creator": "Indie Researcher",
+      "wallet": "0x6666666666666666666666666666666666666666",
+      "amountAtomicUsdc": 1200,
+      "settlementMode": "local-proof",
+      "previousHash": "0xdb3b37c8f6badbfff7bbc2197bb533f5c60d163aecf698940e4727d865cc2a8b",
+      "createdAt": "2026-06-21T14:30:52.676Z",
+      "paymentResource": "/api/sources/creator-citation-economics",
+      "receiptHash": "0x3fefc542edb44710d89d24c0f9d92db842d6580cc0c93d1a52df36cfd059a523"
+    },
+    {
+      "id": "0x290ada126e7b5064",
+      "queryId": "0x521b07453475f115",
+      "sourceId": "forum-mandates",
+      "creator": "Forum Protocol",
+      "wallet": "0x5555555555555555555555555555555555555555",
+      "amountAtomicUsdc": 1500,
+      "settlementMode": "local-proof",
+      "previousHash": "0x3fefc542edb44710d89d24c0f9d92db842d6580cc0c93d1a52df36cfd059a523",
+      "createdAt": "2026-06-21T14:30:52.676Z",
+      "paymentResource": "/api/sources/forum-mandates",
+      "receiptHash": "0x290ada126e7b50646ad4780d645e8ff9683b8dc0c3004403996d303ae9f9514c"
+    },
+    {
+      "id": "0x41cee47cbc1529ce",
+      "queryId": "0xa3372a7b6e38b61a",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "local-proof",
+      "previousHash": "0x290ada126e7b50646ad4780d645e8ff9683b8dc0c3004403996d303ae9f9514c",
+      "createdAt": "2026-06-21T14:30:54.832Z",
+      "paymentResource": "/api/sources/leptonweb-build-log",
+      "queryPaymentHash": "0x87a53fcb4afdcb265c62262cafc53069e2542de79169bbf11a447738db8f174d",
+      "receiptHash": "0x41cee47cbc1529ce0ac947e054d4eae537133fb5368a321b06b94441fd07716a"
+    },
+    {
+      "id": "0x562279aadd2b9a26",
+      "queryId": "0xa3372a7b6e38b61a",
+      "sourceId": "creator-citation-economics",
+      "creator": "Indie Researcher",
+      "wallet": "0x6666666666666666666666666666666666666666",
+      "amountAtomicUsdc": 1200,
+      "settlementMode": "local-proof",
+      "previousHash": "0x41cee47cbc1529ce0ac947e054d4eae537133fb5368a321b06b94441fd07716a",
+      "createdAt": "2026-06-21T14:30:54.832Z",
+      "paymentResource": "/api/sources/creator-citation-economics",
+      "queryPaymentHash": "0x87a53fcb4afdcb265c62262cafc53069e2542de79169bbf11a447738db8f174d",
+      "receiptHash": "0x562279aadd2b9a2628e5852e76208fa48c0551bfeff6b5157b416706f282ad25"
+    },
+    {
+      "id": "0x2e6e050a6c7cad06",
+      "queryId": "0xa3372a7b6e38b61a",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "local-proof",
+      "previousHash": "0x562279aadd2b9a2628e5852e76208fa48c0551bfeff6b5157b416706f282ad25",
+      "createdAt": "2026-06-21T14:30:54.832Z",
+      "paymentResource": "/api/sources/canteen-lepton-rfb",
+      "queryPaymentHash": "0x87a53fcb4afdcb265c62262cafc53069e2542de79169bbf11a447738db8f174d",
+      "receiptHash": "0x2e6e050a6c7cad06a4294a5cf211c8b405badac68f74ba287cc2efaf46daa44b"
+    },
+    {
+      "id": "0x7859f61e2f5118d0",
+      "queryId": "0x2145324494a0560b",
+      "sourceId": "circle-gateway-nano",
+      "creator": "Circle Developer Notes",
+      "wallet": "0x2222222222222222222222222222222222222222",
+      "amountAtomicUsdc": 2400,
+      "settlementMode": "x402-verified",
+      "previousHash": "0x2e6e050a6c7cad06a4294a5cf211c8b405badac68f74ba287cc2efaf46daa44b",
+      "createdAt": "2026-06-21T14:30:57.214Z",
+      "payer": "0xa90d7374447B64D180E70C296F5DeccE1049CD30",
+      "paymentResource": "/api/sources/circle-gateway-nano",
+      "receiptHash": "0x7859f61e2f5118d04225b875f23687521a4bca2eaf1a50169215cb8128eab962"
+    },
+    {
+      "id": "0xefb8f15cccc5b115",
+      "queryId": "0x5b01b925de62232c",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "local-proof",
+      "previousHash": "0x7859f61e2f5118d04225b875f23687521a4bca2eaf1a50169215cb8128eab962",
+      "createdAt": "2026-06-21T15:15:49.284Z",
+      "paymentResource": "/api/sources/leptonweb-build-log",
+      "queryPaymentHash": "0x835c5ae04f829df85a6833dd47165bb8768ce1bef428639a6abdfb8ecb4abf77",
+      "receiptHash": "0xefb8f15cccc5b1157880dc516e3aa3f560ce125c1574c67cbd04c5d20b070f6e"
+    },
+    {
+      "id": "0x1633d1625b071d09",
+      "queryId": "0x5b01b925de62232c",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "local-proof",
+      "previousHash": "0xefb8f15cccc5b1157880dc516e3aa3f560ce125c1574c67cbd04c5d20b070f6e",
+      "createdAt": "2026-06-21T15:15:49.284Z",
+      "paymentResource": "/api/sources/canteen-lepton-rfb",
+      "queryPaymentHash": "0x835c5ae04f829df85a6833dd47165bb8768ce1bef428639a6abdfb8ecb4abf77",
+      "receiptHash": "0x1633d1625b071d097b9a1f0141570b6209161ca5f2ec4551228b36103100e892"
+    },
+    {
+      "id": "0xcf0239674ed77b1d",
+      "queryId": "0x5b01b925de62232c",
+      "sourceId": "creator-citation-economics",
+      "creator": "Indie Researcher",
+      "wallet": "0x6666666666666666666666666666666666666666",
+      "amountAtomicUsdc": 1200,
+      "settlementMode": "local-proof",
+      "previousHash": "0x1633d1625b071d097b9a1f0141570b6209161ca5f2ec4551228b36103100e892",
+      "createdAt": "2026-06-21T15:15:49.284Z",
+      "paymentResource": "/api/sources/creator-citation-economics",
+      "queryPaymentHash": "0x835c5ae04f829df85a6833dd47165bb8768ce1bef428639a6abdfb8ecb4abf77",
+      "receiptHash": "0xcf0239674ed77b1d7c796eafeedee5720b85e7a4ca4836db61a86d1cbe1a7ea5"
+    },
+    {
+      "id": "0xe7d40c49f2af0557",
+      "queryId": "0x946d60370424484f",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "x402-settled",
+      "previousHash": "0xcf0239674ed77b1d7c796eafeedee5720b85e7a4ca4836db61a86d1cbe1a7ea5",
+      "createdAt": "2026-06-21T15:16:01.262Z",
+      "payer": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      "transaction": "0x53730c34f61288e74daa0b212ef3360ec1c8ebe4396d9a8b08abdd3af0675c76",
+      "paymentResource": "/api/sources/leptonweb-build-log",
+      "receiptHash": "0xe7d40c49f2af0557984809e40325cba236d27f28514fbad877a9f14a2285e154"
+    }
+  ]
+}

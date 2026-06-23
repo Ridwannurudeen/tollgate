@@ -1,0 +1,42 @@
+{
+  "name": "leptonweb",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LeptonWeb is a paid knowledge network for AI agents. The first wedge is Tollgate: an answer engine that pays creators per cited source and writes attribution receipts.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify:ledger": "node scripts/verify-ledger.mjs",
+    "prove:x402": "node scripts/prove-x402-source.mjs",
+    "prove:paid-query": "node scripts/prove-paid-query.mjs",
+    "prove:wallet-source": "node scripts/prove-wallet-source.mjs",
+    "prove:wallet-paid-query": "node scripts/prove-wallet-paid-query.mjs",
+    "prove:settled-paid-query": "node scripts/prove-settled-paid-query.mjs",
+    "seed:judge-demo": "node scripts/seed-judge-demo.mjs",
+    "check:facilitator": "node scripts/check-facilitator.mjs",
+    "check:wallet-funding": "node scripts/check-wallet-funding.mjs",
+    "create:wallets": "node scripts/create-wallets.mjs",
+    "wallets:list": "node scripts/list-wallets.mjs",
+    "start:settle-server": "node scripts/start-settle-server.mjs"
+  },
+  "dependencies": {
+    "@x402/core": "^2.13.0",
+    "@x402/evm": "^2.13.0",
+    "@x402/fetch": "^2.13.0",
+    "buffer": "^6.0.3",
+    "next": "^15.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "viem": "^2.52.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
+  }
+}

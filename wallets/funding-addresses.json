@@ -1,0 +1,37 @@
+{
+  "createdAt": "2026-06-16T14:53:45.951Z",
+  "chain": "Arc testnet",
+  "chainId": 5042002,
+  "wallets": [
+    {
+      "id": "tollgate-agent-payee",
+      "label": "Tollgate agent payee",
+      "purpose": "Receives reader payments from /api/paid-query.",
+      "address": "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836"
+    },
+    {
+      "id": "x402-facilitator",
+      "label": "x402 facilitator",
+      "purpose": "Signs/verifies settlement attempts when FACILITATOR_PRIVATE_KEY is configured.",
+      "address": "0xD25345D27E1409D2ace25e348Bd9dDb30B72b82B"
+    },
+    {
+      "id": "demo-payer",
+      "label": "Demo payer",
+      "purpose": "Funds and signs x402 paid-query/source-purchase demos.",
+      "address": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03"
+    },
+    {
+      "id": "creator-primary",
+      "label": "Creator primary",
+      "purpose": "Receives paid-source purchases for the primary demo creator source.",
+      "address": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c"
+    },
+    {
+      "id": "creator-secondary",
+      "label": "Creator secondary",
+      "purpose": "Reserve creator payee for a second onboarded source.",
+      "address": "0x645b8cc3A35A204D0cd025cccbd61618Ab9e139C"
+    }
+  ]
+}

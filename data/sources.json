@@ -1,0 +1,13 @@
+[
+  {
+    "id": "leptonweb-build-log",
+    "title": "LeptonWeb Build Log",
+    "creator": "LeptonWeb Lab",
+    "handle": "@ggudman",
+    "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+    "url": "https://forum.gudman.xyz/",
+    "summary": "A builder log for Tollgate, showing paid citations, receipt hashes, x402 source access, and creator onboarding on Arc.",
+    "tags": ["leptonweb", "tollgate", "citations", "receipts", "arc", "x402"],
+    "priceAtomicUsdc": 1700
+  }
+]
