@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { readRsshubSources } from "./sources/rsshub";
 import type { CreatorSource, SourceRegistrationInput } from "./types";
 
 export class SourceRegistryError extends Error {
@@ -242,16 +243,18 @@ async function writeCustomSources(sources: CreatorSource[]): Promise<void> {
 }
 
 export async function readSources(): Promise<CreatorSource[]> {
-  const customSources = await readCustomSources();
-  const seen = new Set(DEFAULT_CREATOR_SOURCES.map((source) => source.id));
-  return [
-    ...DEFAULT_CREATOR_SOURCES,
-    ...customSources.filter((source) => {
+  const [customSources, liveSources] = await Promise.all([
+    readCustomSources(),
+    readRsshubSources(),
+  ]);
+  const seen = new Set<string>();
+  return [...liveSources, ...DEFAULT_CREATOR_SOURCES, ...customSources].filter(
+    (source) => {
       if (seen.has(source.id)) return false;
       seen.add(source.id);
       return true;
-    }),
-  ];
+    },
+  );
 }
 
 export async function appendSource(
