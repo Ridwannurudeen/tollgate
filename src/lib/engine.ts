@@ -9,7 +9,7 @@ import type {
   SourceDecision,
 } from "./types";
 
-const DEFAULT_SOURCE_BUDGET_ATOMIC_USDC = 6_500;
+export const DEFAULT_SOURCE_BUDGET_ATOMIC_USDC = 6_500;
 
 const STOP_WORDS = new Set([
   "a",
@@ -253,6 +253,9 @@ export function createQueryRecord(
     answerHash,
     totalAtomicUsdc,
     citations,
+    agentMode: "deterministic",
+    agentRationale:
+      "Deterministic keyword scoring selected sources by relevance and source budget.",
     sourceDecisions: citationMarket.decisions,
     agentBudget: citationMarket.budget,
     receiptHashes: [],

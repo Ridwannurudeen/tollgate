@@ -96,6 +96,8 @@ export type QueryRecord = {
   answerHash: string;
   totalAtomicUsdc: number;
   citations: Citation[];
+  agentMode?: "deterministic" | "llm";
+  agentRationale?: string;
   sourceDecisions?: SourceDecision[];
   agentBudget?: AgentBudget;
   receiptHashes: string[];

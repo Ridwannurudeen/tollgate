@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertQueryRateLimit } from "@/lib/rate-limit";
 import { settleQuestion } from "@/lib/settlement";
 
 export const runtime = "nodejs";
@@ -16,6 +17,11 @@ function readQuestion(body: unknown): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitKey =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("x-real-ip") ??
+      "local";
+    assertQueryRateLimit(rateLimitKey);
     const body = (await request.json()) as unknown;
     const question = readQuestion(body);
     const result = await settleQuestion(question);

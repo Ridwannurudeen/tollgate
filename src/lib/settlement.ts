@@ -1,5 +1,5 @@
 import { readSources } from "./catalog";
-import { createQueryRecord } from "./engine";
+import { createAgentQueryRecord } from "./agent";
 import { sha256Hex } from "./hash";
 import { appendSettlement } from "./ledger";
 import type { QueryPaymentEvidence, SettlementResult } from "./types";
@@ -29,7 +29,7 @@ export async function settleQuestion(
   const normalized = validateQuestion(question);
   const createdAt = new Date().toISOString();
   const sources = await readSources();
-  const query = createQueryRecord(normalized, createdAt, sources);
+  const query = await createAgentQueryRecord(normalized, createdAt, sources);
   return appendSettlement(query);
 }
 
@@ -60,7 +60,7 @@ export async function settlePaidQuestion(
   const createdAt = new Date().toISOString();
   const sources = await readSources();
   const readerPayment = createQueryPaymentEvidence(payment);
-  const query = createQueryRecord(
+  const query = await createAgentQueryRecord(
     normalized,
     createdAt,
     sources,
