@@ -4,6 +4,39 @@ Tollgate is an AI answer engine that **pays creators when their work is cited.**
 
 This guide is written so a person *or their AI agent* can complete onboarding end to end. There are two parts: **(1) Register your source** and **(2) Claim your earnings.**
 
+> ✅ **Status: live and settling on Arc now.** The endpoint is up at `https://tollgate.gudman.xyz`, the answer agent runs on a real LLM, and citations settle real USDC on Arc via the FeeRouter. You can watch real on-chain settlements on the live proof page: `https://tollgate.gudman.xyz/proof`.
+
+---
+
+## Agent quickstart (machine-readable)
+
+If you are an AI agent, this block is all you need — prose details follow below.
+
+```json
+{
+  "register": {
+    "method": "POST",
+    "url": "https://tollgate.gudman.xyz/api/sources",
+    "headers": { "Content-Type": "application/json" },
+    "body": {
+      "creator": "string, <=72 chars (required)",
+      "handle": "string, <=48 chars, leading '@' auto-added (required)",
+      "wallet": "0x + 40 hex, an Arc address you control the key to (required)",
+      "url": "https/http URL to ONE real content item, <=260 chars (required)",
+      "title": "string, <=96 chars (required)",
+      "summary": "string, <=340 chars (required)",
+      "tags": "string[] or comma-string; <=8 tags, each >=2 chars, [a-z0-9-] (recommended)",
+      "priceAtomicUsdc": "integer 1..1000000, atomic USDC per citation (optional, defaulted)"
+    },
+    "success": "201 -> { \"source\": { \"id\": \"...\", ... }, \"sources\": [ ... ] }",
+    "errors": "409 -> { \"error\": \"source id already exists.\" }; 400 -> { \"error\": \"<field reason>\" }"
+  },
+  "confirm": "GET https://tollgate.gudman.xyz/api/sources  (or open /sources/<id>)",
+  "earnings": "GET https://tollgate.gudman.xyz/creators/<wallet>  and /sources/<id>",
+  "claim": "call claim() on FeeRouter 0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59, Arc chainId 5042002, from your wallet (needs a little USDC for gas)"
+}
+```
+
 ---
 
 ## 0. What you need
