@@ -8,6 +8,7 @@ import {
   buildPaymentRequirements,
   paymentRequiredBody,
   paymentRequiredHeaders,
+  publicOrigin,
 } from "./x402-server";
 import { ARC_CAIP2, ARC_GATEWAY_WALLET, ARC_USDC } from "./chain";
 
@@ -63,6 +64,22 @@ describe("x402 source gateway helpers", () => {
     expect(decoded.accepts[0]).toEqual(requirements);
     expect(decoded.resource.url).toBe(
       "https://example.com/api/sources/circle-gateway-nano",
+    );
+  });
+
+  it("derives the public origin from host and x-forwarded-proto", () => {
+    const headers = new Headers({
+      host: "tollgate.gudman.xyz",
+      "x-forwarded-proto": "https",
+    });
+    expect(publicOrigin(headers, "http://127.0.0.1:3091")).toBe(
+      "https://tollgate.gudman.xyz",
+    );
+  });
+
+  it("falls back to the bind origin when no host header is present", () => {
+    expect(publicOrigin(new Headers(), "http://127.0.0.1:3091")).toBe(
+      "http://127.0.0.1:3091",
     );
   });
 });

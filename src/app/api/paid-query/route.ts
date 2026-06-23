@@ -10,6 +10,7 @@ import {
   buildPaymentRequirements,
   paymentRequiredBody,
   paymentRequiredHeaders,
+  publicOrigin,
   settleX402,
 } from "@/lib/x402-server";
 
@@ -34,7 +35,9 @@ export async function POST(request: NextRequest) {
       tollgateAgentWallet(),
       PAID_QUERY_PRICE_ATOMIC_USDC,
     );
-    const resourceUrl = request.nextUrl.origin + request.nextUrl.pathname;
+    const resourceUrl =
+      publicOrigin(request.headers, request.nextUrl.origin) +
+      request.nextUrl.pathname;
     const required = paymentRequiredBody(
       requirements,
       resourceUrl,

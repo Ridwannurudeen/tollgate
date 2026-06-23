@@ -102,6 +102,15 @@ export function buildGatewayPaymentRequirements(
   };
 }
 
+export function publicOrigin(headers: Headers, fallbackOrigin: string): string {
+  const host = headers.get("host");
+  if (!host) return fallbackOrigin;
+  const proto =
+    headers.get("x-forwarded-proto") ??
+    new URL(fallbackOrigin).protocol.replace(":", "");
+  return `${proto}://${host}`;
+}
+
 export function paymentRequiredBody(
   requirements: PaymentRequirements,
   resourceUrl: string,
@@ -226,7 +235,8 @@ export async function settleX402(
       return {
         ok: false,
         status: 402,
-        reason: verifyRes.invalidReason ?? "Gateway payment verification failed",
+        reason:
+          verifyRes.invalidReason ?? "Gateway payment verification failed",
       };
     }
     const settleRes = await facilitator.settle(

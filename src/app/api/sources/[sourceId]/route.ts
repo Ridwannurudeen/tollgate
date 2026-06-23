@@ -9,6 +9,7 @@ import {
   buildPaymentRequirements,
   paymentRequiredBody,
   paymentRequiredHeaders,
+  publicOrigin,
   settleX402,
 } from "@/lib/x402-server";
 
@@ -29,7 +30,9 @@ export async function GET(request: NextRequest, context: Context) {
     source.wallet as Address,
     source.priceAtomicUsdc,
   );
-  const resourceUrl = request.nextUrl.origin + request.nextUrl.pathname;
+  const resourceUrl =
+    publicOrigin(request.headers, request.nextUrl.origin) +
+    request.nextUrl.pathname;
   const required = paymentRequiredBody(
     requirements,
     resourceUrl,
