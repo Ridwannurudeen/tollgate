@@ -1,0 +1,22 @@
+{
+  "createdAt": "2026-06-23T11:27:13.508Z",
+  "role": "demo-payer",
+  "caller": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+  "address": "0x174b10e4892bb66433babb0df41ab6d7a3333029",
+  "deployTx": "0x39e3053c0820af40e5391b02c393b7257cbbde5d9996fab52c795a14b69fea91",
+  "approveTx": "0x5c819b1a8d6157ed7b51784fb9944b9cbd296f10a72a2d41a0ca9f600c216cd8",
+  "bondTx": "0x3f0c0b73925e244bf01ccc7b454c64f5dd755fce9d25dfd9c7a352328fa4353f",
+  "slashTx": "0x764d76e205ab01b2200bd3ed0d729171e45cf0813d96968cd5b3f81f9d7e85c4",
+  "reasonHash": "0xd3da6a4ef85bb35636c0ba38964a0dc02c51e6b639d51f13153ca28e614ef270",
+  "botId": "0x434f104d66bd47acc44e9a77f3653075cbd18071da675682189101e96f316223",
+  "bondAmountAtomicUsdc": "1000",
+  "slashAmountAtomicUsdc": "1",
+  "statusBeforeSlash": {
+    "bondBalance": "1000",
+    "totalSlashed": "0"
+  },
+  "statusAfterSlash": {
+    "bondBalance": "999",
+    "totalSlashed": "1"
+  }
+}

@@ -15,6 +15,8 @@ export const FORUM_ADDRESSES = {
   slashBondV1_1: "0xe6c8c31477a1d88fbdad6e7b4fc83ab8e6e34939",
   trackRecordV2: "0x8f1c8fbf569146f32ddfb5b817bf2bd213840a66",
   covenantVaultFactory: "0xc9bbafd02d22dd75a9f043f50f126ac2fe22ca26",
+  covenantVaultFactoryV2: "0x4766e3c506a5ff543d12f672ed5f167fabe26fe0",
+  riskKernelV3: "0x554cdad3cac1f640b39816193310166afc2bde06",
 } as const satisfies Record<string, Address>;
 
 const feeRouterV1ReadAbi = [

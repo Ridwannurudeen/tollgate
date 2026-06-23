@@ -1,10 +1,15 @@
 import Link from "next/link";
-import { formatUsdc, shortHash } from "@/lib/format";
+import { readCovenantEnvelope } from "@/lib/covenant";
+import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
 import {
   getJudgeDemoEvidence,
   readLedger,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
+import {
+  readDemoSlashBondEvidence,
+  readSlashBondStatus,
+} from "@/lib/slash-bond";
 import type { AnswerEvidence, Ledger, PaymentReceipt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +43,14 @@ function settlementLabel(mode: string): string {
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   return "local proof";
+}
+
+function arcscanTxUrl(tx: string): string {
+  return `https://testnet.arcscan.app/tx/${tx}`;
+}
+
+function formatAtomicUsdc(value: bigint | string): string {
+  return formatUsdc(Number(value));
 }
 
 function sourcePurchaseReceipt(
@@ -79,7 +92,12 @@ function StepCard({ step }: { step: DemoStep }) {
 }
 
 export default async function DemoPage() {
-  const ledger = await readLedger();
+  const [ledger, covenant, slashBond, demoSlash] = await Promise.all([
+    readLedger(),
+    readCovenantEnvelope().catch(() => null),
+    readSlashBondStatus().catch(() => null),
+    readDemoSlashBondEvidence().catch(() => null),
+  ]);
   const verification = verifyLedgerIntegrity(ledger);
   const demo = getJudgeDemoEvidence(ledger);
   const sourceReceipt = sourcePurchaseReceipt(demo.sourcePurchase);
@@ -89,6 +107,14 @@ export default async function DemoPage() {
   const forumRoutedReceiptCount = ledger.receipts.filter(
     (receipt) => receipt.settlementMode === "forum-routed",
   ).length;
+  const settledReceiptCount = ledger.receipts.filter(
+    (receipt) => receipt.settlementMode === "x402-settled",
+  ).length;
+  const trackRecordQueries = ledger.queries.filter(
+    (query) => query.trackRecord,
+  );
+  const latestTrackRecordQuery = trackRecordQueries[0] ?? null;
+  const latestTrackRecord = latestTrackRecordQuery?.trackRecord;
   const latestReceipt = ledger.receipts.at(-1);
 
   const steps: DemoStep[] = [
@@ -154,6 +180,21 @@ export default async function DemoPage() {
         : undefined,
       linkText: "Open receipt",
     },
+    {
+      number: "05",
+      label: "Forum TrackRecord",
+      title: latestTrackRecordQuery?.question ?? "answer anchor evidence",
+      detail: latestTrackRecord
+        ? `seq ${latestTrackRecord.seq} / ${shortHash(
+            latestTrackRecord.transaction,
+          )}`
+        : "no TrackRecord",
+      value: latestTrackRecord ? shortHash(latestTrackRecord.recordHash) : "missing",
+      href: latestTrackRecordQuery
+        ? `/answers/${latestTrackRecordQuery.id}`
+        : undefined,
+      linkText: "Open anchor",
+    },
   ];
 
   return (
@@ -202,8 +243,16 @@ export default async function DemoPage() {
           <strong>{verifiedReceiptCount}</strong>
         </div>
         <div className="metric">
+          <span>x402 settled</span>
+          <strong>{settledReceiptCount}</strong>
+        </div>
+        <div className="metric">
           <span>Forum routed</span>
           <strong>{forumRoutedReceiptCount}</strong>
+        </div>
+        <div className="metric">
+          <span>track records</span>
+          <strong>{trackRecordQueries.length}</strong>
         </div>
         <div className="metric">
           <span>reader paid</span>
@@ -213,11 +262,120 @@ export default async function DemoPage() {
           <span>issues</span>
           <strong>{verification.issues.length}</strong>
         </div>
+        <div className="metric">
+          <span>slashed</span>
+          <strong>
+            {demoSlash
+              ? formatAtomicUsdc(demoSlash.statusAfterSlash.totalSlashed)
+              : slashBond
+                ? formatAtomicUsdc(slashBond.totalSlashed)
+                : "0.000000"}
+          </strong>
+        </div>
         <div className="metric wide">
           <span>latest hash</span>
           <strong>
             {latestReceipt ? shortHash(latestReceipt.receiptHash) : "none"}
           </strong>
+        </div>
+      </section>
+
+      <section className="receipt-context profile-section">
+        <div className="panel-heading">
+          <p className="eyebrow">Forum proof stack</p>
+          <h3>Live surfaces</h3>
+        </div>
+        <div className="source-list">
+          {latestTrackRecord && latestTrackRecordQuery ? (
+            <article className="source-card">
+              <div>
+                <p>TrackRecordV2 answer anchor</p>
+                <span>
+                  seq {latestTrackRecord.seq} /{" "}
+                  {shortHash(latestTrackRecord.recordHash)}
+                </span>
+              </div>
+              <div className="source-action">
+                <strong>{shortHash(latestTrackRecord.transaction)}</strong>
+                <Link
+                  className="receipt-link"
+                  href={`/answers/${latestTrackRecordQuery.id}`}
+                >
+                  Answer
+                </Link>
+                <a
+                  className="receipt-link"
+                  href={arcscanTxUrl(latestTrackRecord.transaction)}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Arcscan
+                </a>
+              </div>
+            </article>
+          ) : (
+            <div className="empty-state compact">
+              <strong>No TrackRecord evidence.</strong>
+              <span>Run a gateway-enabled answer to publish one.</span>
+            </div>
+          )}
+
+          {covenant?.latestVault ? (
+            <article className="source-card">
+              <div>
+                <p>CovenantVault budget envelope</p>
+                <span>
+                  {covenant.latestVault.state} /{" "}
+                  {shortWallet(covenant.latestVault.mandate.operator)}
+                </span>
+              </div>
+              <div className="source-action">
+                <strong>
+                  {formatAtomicUsdc(covenant.latestVault.mandate.budgetUsdc)}{" "}
+                  USDC
+                </strong>
+                <span className="receipt-link">
+                  {shortWallet(covenant.latestVault.address)}
+                </span>
+              </div>
+            </article>
+          ) : (
+            <div className="empty-state compact">
+              <strong>No CovenantVault evidence.</strong>
+              <span>Run the covenant proof script to create one.</span>
+            </div>
+          )}
+
+          {demoSlash ? (
+            <article className="source-card">
+              <div>
+                <p>SlashBond bad citation slash</p>
+                <span>
+                  {formatAtomicUsdc(demoSlash.slashAmountAtomicUsdc)} USDC /{" "}
+                  {shortWallet(demoSlash.address)}
+                </span>
+              </div>
+              <div className="source-action">
+                <strong>
+                  {formatAtomicUsdc(demoSlash.statusAfterSlash.totalSlashed)}{" "}
+                  slashed
+                </strong>
+                <a
+                  className="receipt-link"
+                  href={arcscanTxUrl(demoSlash.slashTx)}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Slash tx
+                </a>
+              </div>
+            </article>
+          ) : (
+            <div className="empty-state compact">
+              <strong>No demo slash evidence.</strong>
+              <span>Run npm run prove:slashbond-demo.</span>
+            </div>
+          )}
         </div>
       </section>
 

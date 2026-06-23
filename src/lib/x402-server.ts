@@ -12,6 +12,8 @@ import {
   encodePaymentResponseHeader,
 } from "@x402/core/http";
 import { x402Facilitator } from "@x402/core/facilitator";
+import { supportsBatching } from "@circle-fin/x402-batching";
+import { BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
 import type {
   PaymentPayload,
   PaymentRequired,
@@ -23,6 +25,8 @@ import { toFacilitatorEvmSigner, type FacilitatorEvmSigner } from "@x402/evm";
 import {
   ARC_CAIP2,
   ARC_CHAIN_ID,
+  ARC_GATEWAY_API_URL,
+  ARC_GATEWAY_WALLET,
   ARC_RPC_URL,
   ARC_USDC,
   USDC_DECIMALS,
@@ -32,6 +36,13 @@ import {
 export const PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE";
 export const PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED";
 export const PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE";
+export const GATEWAY_BATCHING_NAME = "GatewayWalletBatched";
+export const GATEWAY_BATCHING_VERSION = "1";
+
+type GatewayPaymentPayload = Parameters<BatchFacilitatorClient["verify"]>[0];
+type GatewayPaymentRequirements = Parameters<
+  BatchFacilitatorClient["verify"]
+>[1];
 
 export type X402Settlement =
   | {
@@ -51,6 +62,16 @@ export function buildPaymentRequirements(
   payTo: Address,
   amountAtomicUsdc: number,
 ): PaymentRequirements {
+  if (process.env.LEPTONWEB_GATEWAY_ENABLED === "1") {
+    return buildGatewayPaymentRequirements(payTo, amountAtomicUsdc);
+  }
+  return buildExactPaymentRequirements(payTo, amountAtomicUsdc);
+}
+
+export function buildExactPaymentRequirements(
+  payTo: Address,
+  amountAtomicUsdc: number,
+): PaymentRequirements {
   return {
     scheme: "exact",
     network: ARC_CAIP2,
@@ -59,6 +80,25 @@ export function buildPaymentRequirements(
     payTo,
     maxTimeoutSeconds: 120,
     extra: { name: "USDC", version: "2" },
+  };
+}
+
+export function buildGatewayPaymentRequirements(
+  payTo: Address,
+  amountAtomicUsdc: number,
+): PaymentRequirements {
+  return {
+    scheme: "exact",
+    network: ARC_CAIP2,
+    asset: ARC_USDC,
+    amount: amountAtomicUsdc.toString(),
+    payTo,
+    maxTimeoutSeconds: 345_600,
+    extra: {
+      name: GATEWAY_BATCHING_NAME,
+      version: GATEWAY_BATCHING_VERSION,
+      verifyingContract: ARC_GATEWAY_WALLET,
+    },
   };
 }
 
@@ -107,6 +147,12 @@ function makeFacilitator() {
     ARC_CAIP2,
     new ExactEvmFacilitator(signer),
   );
+}
+
+function makeGatewayFacilitator() {
+  return new BatchFacilitatorClient({
+    url: process.env.LEPTONWEB_GATEWAY_API_URL ?? ARC_GATEWAY_API_URL,
+  });
 }
 
 async function verifyOnly(
@@ -165,6 +211,48 @@ export async function settleX402(
     payload = decodePaymentSignatureHeader(signatureHeader);
   } catch {
     return { ok: false, status: 400, reason: "malformed payment header" };
+  }
+
+  if (supportsBatching(requirements)) {
+    const facilitator = makeGatewayFacilitator();
+    const gatewayPayload = payload as unknown as GatewayPaymentPayload;
+    const gatewayRequirements =
+      requirements as unknown as GatewayPaymentRequirements;
+    const verifyRes = await facilitator.verify(
+      gatewayPayload,
+      gatewayRequirements,
+    );
+    if (!verifyRes.isValid) {
+      return {
+        ok: false,
+        status: 402,
+        reason: verifyRes.invalidReason ?? "Gateway payment verification failed",
+      };
+    }
+    const settleRes = await facilitator.settle(
+      gatewayPayload,
+      gatewayRequirements,
+    );
+    if (!settleRes.success) {
+      return {
+        ok: false,
+        status: 402,
+        reason: settleRes.errorReason ?? "Gateway settlement failed",
+      };
+    }
+    const response: SettleResponse = {
+      success: true,
+      transaction: settleRes.transaction ?? "",
+      network: ARC_CAIP2,
+      payer: settleRes.payer ?? verifyRes.payer,
+    };
+    return {
+      ok: true,
+      mode: "x402-settled",
+      payer: settleRes.payer ?? verifyRes.payer,
+      transaction: settleRes.transaction,
+      responseHeader: encodePaymentResponseHeader(response),
+    };
   }
 
   if (process.env.FACILITATOR_PRIVATE_KEY) {

@@ -9,6 +9,9 @@ export const ARC_CAIP2 = `eip155:${ARC_CHAIN_ID}` as const;
 
 export const ARC_USDC = "0x3600000000000000000000000000000000000000";
 export const USDC_DECIMALS = 6;
+export const ARC_GATEWAY_WALLET =
+  "0x0077777d7EBA4688BDeF3E311b846F25870A19B9";
+export const ARC_GATEWAY_API_URL = "https://gateway-api-testnet.circle.com";
 
 export const arcTestnet = defineChain({
   id: ARC_CHAIN_ID,

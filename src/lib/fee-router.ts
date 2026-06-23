@@ -30,6 +30,41 @@ export const feeRouterV1Abi = [
   },
   {
     type: "function",
+    name: "claimableOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "splitId", type: "uint256" },
+      { name: "recipient", type: "address" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "claim",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [{ name: "amount", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "splitAt",
+    stateMutability: "view",
+    inputs: [{ name: "splitId", type: "uint256" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "creator", type: "address" },
+          { name: "recipients", type: "address[]" },
+          { name: "bps", type: "uint16[]" },
+          { name: "totalRouted", type: "uint256" },
+          { name: "createdAt", type: "uint64" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "function",
     name: "createSplit",
     stateMutability: "nonpayable",
     inputs: [
@@ -85,6 +120,14 @@ export type FeeRouterReadiness = {
   payerAssetBalance: bigint;
   payerAllowance: bigint;
   recipientClaimable: bigint;
+};
+
+export type FeeRouterSplitView = {
+  creator: Address;
+  recipients: readonly Address[];
+  bps: readonly number[];
+  totalRouted: bigint;
+  createdAt: bigint;
 };
 
 export type FeeRouterRouteOptions = {
@@ -152,6 +195,38 @@ export async function readFeeRouterReadiness(
     payerAssetBalance,
     payerAllowance,
     recipientClaimable,
+  };
+}
+
+export async function readFeeRouterClaimable(
+  recipient: Address,
+  publicClient: PublicClient = createFeeRouterPublicClient(),
+): Promise<bigint> {
+  return publicClient.readContract({
+    address: FEE_ROUTER_ADDRESS,
+    abi: feeRouterV1Abi,
+    functionName: "totalClaimableOf",
+    args: [recipient],
+  });
+}
+
+export async function readFeeRouterSplit(
+  splitId: bigint,
+  publicClient: PublicClient = createFeeRouterPublicClient(),
+): Promise<FeeRouterSplitView> {
+  const split = await publicClient.readContract({
+    address: FEE_ROUTER_ADDRESS,
+    abi: feeRouterV1Abi,
+    functionName: "splitAt",
+    args: [splitId],
+  });
+
+  return {
+    creator: split.creator,
+    recipients: split.recipients,
+    bps: split.bps.map((value) => Number(value)),
+    totalRouted: split.totalRouted,
+    createdAt: split.createdAt,
   };
 }
 

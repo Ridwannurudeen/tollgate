@@ -37,6 +37,16 @@
 
 ## 2. Verified current state
 
+### June 23 closeout update
+
+- Automatic TrackRecord publishing is now in the runtime settlement path. A fresh `/api/query` call on the gateway-enabled server published TrackRecordV2 seq `2`, tx `0xe51a5d44e31cfb6afff5f6307a2e78a9bf2cbcb2ba49c2b14d903f964d9a113e`, record hash `0xff9b90778f8e89554d0117b05df33bf10b1b6bcbf55ed94982b101ff59aff723`.
+- Circle Gateway batching is implemented with `@circle-fin/x402-batching`. `npm run start:gateway-server` starts the Gateway/TrackRecord runtime; `npm run prove:gateway-source` deposited `0.05` USDC into Gateway and bought `circle-gateway-nano`, producing receipt `0xe0f5d2d3af8926360e6506e96711afca7ef509540325d73ae1b82807dbe86f12` with Gateway transaction id `dd6856ac-fbf0-4723-b439-6e20f84dbee2`.
+- A fresh SlashBond demo contract was deployed at `0x174b10e4892bb66433babb0df41ab6d7a3333029`, bonded with `1000` atomic USDC, and slashed by `1` atomic USDC in tx `0x764d76e205ab01b2200bd3ed0d729171e45cf0813d96968cd5b3f81f9d7e85c4`. The UI reads `data/slashbond-demo.json`.
+- `/demo` now surfaces TrackRecord, CovenantVault, SlashBond demo slash, and Gateway-settled source proof directly.
+- ARC CLI is installed as `arc-canteen` via `uv tool install git+https://github.com/the-canteen-dev/ARC-cli`; Windows Application Control blocks the generated exe shim, but the installed Typer app works through `"$env:APPDATA\uv\tools\arc-canteen\Scripts\python.exe" -c "from arc_canteen.cli import app; app()" -- --help`. Circle CLI is installed as `circle.ps1`, version `0.0.6`.
+- TestMint `https://testmint.myproceeds.xyz` is live. Verified client flow: pay mainnet Base USDC via x402, POST `/api/transfer`, choose `destinationChain: "arc-testnet"`, then stream the mint tx via `/api/tx-stream?token=<deliveryToken>`. No TestMint purchase was submitted.
+- Latest local verification: `npm run typecheck`, `npm test -- --run`, `npm run build`, and `npm run verify:ledger` pass. Ledger after live proofs: 19 queries, 45 receipts, latest hash `0xe0f5d2d3af8926360e6506e96711afca7ef509540325d73ae1b82807dbe86f12`.
+
 ### leptonweb (verified this session)
 - Node **v24.15.0**, npm **11.12.1**.
 - Deps: `next@^15.5.4`, `react@19`, `viem@^2.52`, `@x402/core@2.13.0` + `@x402/evm` + `@x402/fetch` (present in `node_modules/@x402`, working). Dev: `vitest@3.2`, `typescript@^5.7`.

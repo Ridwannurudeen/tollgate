@@ -12,6 +12,7 @@ import type {
   QueryRecord,
   ReceiptEvidence,
   SettlementResult,
+  TrackRecordEvidence,
   SourceEarnings,
   SourceEvidence,
 } from "./types";
@@ -235,6 +236,26 @@ export async function appendSettlement(
   };
   await writeLedger(nextLedger);
   return { query: queryWithReceipts, receipts, ledger: nextLedger };
+}
+
+export async function attachTrackRecordEvidence(
+  queryId: string,
+  trackRecord: TrackRecordEvidence,
+): Promise<Ledger> {
+  const ledger = await readLedger();
+  const queryExists = ledger.queries.some((query) => query.id === queryId);
+  if (!queryExists) {
+    throw new Error(`Cannot attach TrackRecord evidence to missing query ${queryId}.`);
+  }
+
+  const nextLedger: Ledger = {
+    ...ledger,
+    queries: ledger.queries.map((query) =>
+      query.id === queryId ? { ...query, trackRecord } : query,
+    ),
+  };
+  await writeLedger(nextLedger);
+  return nextLedger;
 }
 
 export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {

@@ -15,17 +15,26 @@
     "prove:wallet-source": "node scripts/prove-wallet-source.mjs",
     "prove:wallet-paid-query": "node scripts/prove-wallet-paid-query.mjs",
     "prove:settled-paid-query": "node scripts/prove-settled-paid-query.mjs",
+    "prove:gateway-source": "node scripts/prove-gateway-source.mjs",
     "prove:fee-router": "node scripts/prove-fee-router.mjs",
     "prove:fee-router-query": "node scripts/prove-fee-router-query.mjs",
+    "prove:fee-router-claim": "node scripts/prove-fee-router-claim.mjs",
+    "prove:track-record": "node scripts/prove-track-record.mjs",
+    "prove:covenant": "node scripts/prove-covenant-envelope.mjs",
+    "prove:slashbond": "node scripts/prove-slashbond-status.mjs",
+    "prove:slashbond-demo": "node scripts/prove-demo-slashbond.mjs",
+    "run:demand-engine": "node scripts/demand-engine.mjs",
     "seed:judge-demo": "node scripts/seed-judge-demo.mjs",
     "check:facilitator": "node scripts/check-facilitator.mjs",
     "check:forum": "node scripts/check-forum.mjs",
     "check:wallet-funding": "node scripts/check-wallet-funding.mjs",
     "create:wallets": "node scripts/create-wallets.mjs",
     "wallets:list": "node scripts/list-wallets.mjs",
-    "start:settle-server": "node scripts/start-settle-server.mjs"
+    "start:settle-server": "node scripts/start-settle-server.mjs",
+    "start:gateway-server": "node scripts/start-gateway-server.mjs"
   },
   "dependencies": {
+    "@circle-fin/x402-batching": "^3.2.0",
     "@x402/core": "^2.13.0",
     "@x402/evm": "^2.13.0",
     "@x402/fetch": "^2.13.0",
@@ -34,6 +43,7 @@
     "next": "^15.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "solc": "^0.8.35",
     "viem": "^2.52.0"
   },
   "devDependencies": {

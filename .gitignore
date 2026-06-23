@@ -10,4 +10,8 @@ next-env.d.ts
 .DS_Store
 npm-debug.log*
 .next-dev.*
+.next-dev-*.log
+.next-gateway.*
+.next-gateway-*.log
+.next-start-*.log
 wallets/local-keystore.dpapi.json

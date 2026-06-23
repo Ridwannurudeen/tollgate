@@ -16,6 +16,10 @@ function settlementLabel(mode: string): string {
   return "local proof";
 }
 
+function arcscanTxUrl(tx: string): string {
+  return `https://testnet.arcscan.app/tx/${tx}`;
+}
+
 function EvidenceRow({
   label,
   value,
@@ -134,6 +138,44 @@ export default async function AnswerPage({ params }: Props) {
           <div>
             <span>payment hash</span>
             <strong>{shortHash(query.readerPayment.paymentHash)}</strong>
+          </div>
+        </section>
+      )}
+
+      {query.trackRecord && (
+        <section className="receipt-context profile-section">
+          <div className="panel-heading">
+            <p className="eyebrow">Forum TrackRecordV2</p>
+            <h3>On-chain attribution anchor</h3>
+          </div>
+          <div className="evidence-grid">
+            <EvidenceRow label="bot id" value={query.trackRecord.botId} />
+            <EvidenceRow label="sequence" value={query.trackRecord.seq} />
+            <EvidenceRow
+              label="record hash"
+              value={query.trackRecord.recordHash}
+            />
+            <EvidenceRow
+              label="evidence hash"
+              value={query.trackRecord.evidenceHash}
+            />
+            <EvidenceRow
+              label="evidence uri"
+              value={query.trackRecord.evidenceUri}
+            />
+            <div className="evidence-row">
+              <span>publish tx</span>
+              <strong>
+                <a
+                  className="receipt-link inline-link"
+                  href={arcscanTxUrl(query.trackRecord.transaction)}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {query.trackRecord.transaction}
+                </a>
+              </strong>
+            </div>
           </div>
         </section>
       )}

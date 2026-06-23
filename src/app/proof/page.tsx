@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { readSources } from "@/lib/catalog";
+import { readCovenantEnvelope } from "@/lib/covenant";
 import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
 import {
   readLedger,
   summarizeCreators,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
+import { readSlashBondStatus } from "@/lib/slash-bond";
 import type { Ledger } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -62,8 +64,21 @@ function settlementLabel(mode: string): string {
   return "local proof";
 }
 
+function arcscanTxUrl(tx: string): string {
+  return `https://testnet.arcscan.app/tx/${tx}`;
+}
+
+function formatAtomicUsdc(value: bigint): string {
+  return formatUsdc(Number(value));
+}
+
 export default async function ProofPage() {
-  const [ledger, sources] = await Promise.all([readLedger(), readSources()]);
+  const [ledger, sources, covenant, slashBond] = await Promise.all([
+    readLedger(),
+    readSources(),
+    readCovenantEnvelope().catch(() => null),
+    readSlashBondStatus().catch(() => null),
+  ]);
   const creators = summarizeCreators(ledger);
   const verification = verifyLedgerIntegrity(ledger);
   const sourceLeaders = sourceStats(ledger);
@@ -77,6 +92,10 @@ export default async function ProofPage() {
   const forumRoutedReceiptCount = ledger.receipts.filter(
     (receipt) => receipt.settlementMode === "forum-routed",
   ).length;
+  const trackRecordQueries = ledger.queries.filter(
+    (query) => query.trackRecord,
+  );
+  const latestTrackRecord = trackRecordQueries[0]?.trackRecord;
 
   return (
     <main className="shell receipt-page">
@@ -126,6 +145,20 @@ export default async function ProofPage() {
           <span>reader paid</span>
           <strong>{formatUsdc(totalReaderPaid(ledger))}</strong>
         </div>
+        <div className="metric">
+          <span>track records</span>
+          <strong>{trackRecordQueries.length}</strong>
+        </div>
+        <div className="metric">
+          <span>covenant vaults</span>
+          <strong>{covenant?.botVaults.length ?? 0}</strong>
+        </div>
+        <div className="metric">
+          <span>bond at stake</span>
+          <strong>
+            {slashBond ? formatAtomicUsdc(slashBond.bondBalance) : "0.000000"}
+          </strong>
+        </div>
         <div className="metric wide">
           <span>latest hash</span>
           <strong>
@@ -156,10 +189,167 @@ export default async function ProofPage() {
           <strong>{forumRoutedReceiptCount}</strong>
         </div>
         <div className="evidence-row">
+          <span>latest TrackRecord</span>
+          <strong>
+            {latestTrackRecord
+              ? shortHash(latestTrackRecord.recordHash)
+              : "none"}
+          </strong>
+        </div>
+        <div className="evidence-row">
+          <span>covenant budget</span>
+          <strong>
+            {covenant?.latestVault
+              ? `${formatAtomicUsdc(
+                  covenant.latestVault.mandate.budgetUsdc,
+                )} USDC`
+              : "none"}
+          </strong>
+        </div>
+        <div className="evidence-row">
+          <span>total slashed</span>
+          <strong>
+            {slashBond
+              ? `${formatAtomicUsdc(slashBond.totalSlashed)} USDC`
+              : "none"}
+          </strong>
+        </div>
+        <div className="evidence-row">
           <span>latest previous hash</span>
           <strong>{latestReceipt?.previousHash ?? "none"}</strong>
         </div>
       </section>
+
+      {trackRecordQueries.length > 0 && (
+        <section className="receipt-ledger">
+          <div className="panel-heading">
+            <p className="eyebrow">Forum TrackRecordV2</p>
+            <h3>On-chain answer anchors</h3>
+          </div>
+          {trackRecordQueries.slice(0, 8).map((query) => {
+            const trackRecord = query.trackRecord;
+            if (!trackRecord) return null;
+            return (
+              <article className="receipt-row" key={trackRecord.recordHash}>
+                <div>
+                  <strong>{query.question}</strong>
+                  <span>
+                    seq {trackRecord.seq} / {shortHash(trackRecord.botId)}
+                  </span>
+                </div>
+                <div className="numeric-cell">
+                  <strong>{shortHash(trackRecord.recordHash)}</strong>
+                  <Link className="receipt-link" href={`/answers/${query.id}`}>
+                    Open answer
+                  </Link>
+                  <a
+                    className="receipt-link"
+                    href={arcscanTxUrl(trackRecord.transaction)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Arcscan tx
+                  </a>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
+
+      {covenant?.latestVault && (
+        <section className="receipt-ledger">
+          <div className="panel-heading">
+            <p className="eyebrow">Forum CovenantVault</p>
+            <h3>Budget envelope</h3>
+          </div>
+          <div className="evidence-grid">
+            <div className="evidence-row">
+              <span>vault</span>
+              <strong>{covenant.latestVault.address}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>operator</span>
+              <strong>{covenant.latestVault.mandate.operator}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>state</span>
+              <strong>{covenant.latestVault.state}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>budget</span>
+              <strong>
+                {formatAtomicUsdc(covenant.latestVault.mandate.budgetUsdc)}{" "}
+                USDC
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>available credit</span>
+              <strong>
+                {formatAtomicUsdc(covenant.latestVault.availableCredit)} USDC
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>outstanding</span>
+              <strong>
+                {formatAtomicUsdc(covenant.latestVault.operatorOutstanding)}{" "}
+                USDC
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>risk kernel</span>
+              <strong>{covenant.latestVault.mandate.riskKernel}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>bond contract</span>
+              <strong>{covenant.latestVault.mandate.bondContract}</strong>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {slashBond && (
+        <section className="receipt-ledger">
+          <div className="panel-heading">
+            <p className="eyebrow">Forum SlashBond</p>
+            <h3>Reputation collateral</h3>
+          </div>
+          <div className="evidence-grid">
+            <div className="evidence-row">
+              <span>bond contract</span>
+              <strong>{slashBond.address}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>operator</span>
+              <strong>{slashBond.operator}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>attestor</span>
+              <strong>{slashBond.attestor}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>bot id</span>
+              <strong>{slashBond.botId}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>bond balance</span>
+              <strong>{formatAtomicUsdc(slashBond.bondBalance)} USDC</strong>
+            </div>
+            <div className="evidence-row">
+              <span>total slashed</span>
+              <strong>{formatAtomicUsdc(slashBond.totalSlashed)} USDC</strong>
+            </div>
+            <div className="evidence-row">
+              <span>unbond amount</span>
+              <strong>{formatAtomicUsdc(slashBond.unbondAmount)} USDC</strong>
+            </div>
+            <div className="evidence-row">
+              <span>recipient</span>
+              <strong>{slashBond.recipient}</strong>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="lower-grid">
         <div className="creator-table">

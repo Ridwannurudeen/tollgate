@@ -2,7 +2,8 @@ import { readSources } from "./catalog";
 import { createAgentQueryRecord } from "./agent";
 import { routeCitationPayments } from "./fee-router";
 import { sha256Hex } from "./hash";
-import { appendSettlement } from "./ledger";
+import { appendSettlement, attachTrackRecordEvidence } from "./ledger";
+import { publishTrackRecordForAnswer } from "./track-record";
 import type { QueryPaymentEvidence, SettlementResult } from "./types";
 
 const MAX_QUESTION_LENGTH = 280;
@@ -32,7 +33,7 @@ export async function settleQuestion(
   const sources = await readSources();
   const query = await createAgentQueryRecord(normalized, createdAt, sources);
   const receiptEvidence = await routeCitationPayments(query);
-  return appendSettlement(query, receiptEvidence);
+  return settleAndAnchorTrackRecord(query, receiptEvidence);
 }
 
 export function createQueryPaymentEvidence(
@@ -69,5 +70,25 @@ export async function settlePaidQuestion(
     readerPayment,
   );
   const receiptEvidence = await routeCitationPayments(query);
-  return appendSettlement(query, receiptEvidence);
+  return settleAndAnchorTrackRecord(query, receiptEvidence);
+}
+
+async function settleAndAnchorTrackRecord(
+  query: Awaited<ReturnType<typeof createAgentQueryRecord>>,
+  receiptEvidence: Parameters<typeof appendSettlement>[1],
+): Promise<SettlementResult> {
+  const settlement = await appendSettlement(query, receiptEvidence);
+  const trackRecord = await publishTrackRecordForAnswer(
+    settlement.query,
+    settlement.receipts,
+    { publicUrl: process.env.LEPTONWEB_PUBLIC_URL },
+  );
+  if (!trackRecord) return settlement;
+
+  const ledger = await attachTrackRecordEvidence(settlement.query.id, trackRecord);
+  return {
+    ...settlement,
+    query: { ...settlement.query, trackRecord },
+    ledger,
+  };
 }

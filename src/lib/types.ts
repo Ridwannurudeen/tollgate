@@ -98,6 +98,16 @@ export type QueryPaymentEvidence = {
   paymentHash: string;
 };
 
+export type TrackRecordEvidence = {
+  botId: `0x${string}`;
+  seq: number;
+  recordHash: `0x${string}`;
+  transaction: `0x${string}`;
+  evidenceUri: string;
+  evidenceHash: `0x${string}`;
+  publishedAt: string;
+};
+
 export type QueryRecord = {
   id: string;
   question: string;
@@ -112,6 +122,7 @@ export type QueryRecord = {
   agentBudget?: AgentBudget;
   receiptHashes: string[];
   readerPayment?: QueryPaymentEvidence;
+  trackRecord?: TrackRecordEvidence;
   createdAt: string;
 };
 
