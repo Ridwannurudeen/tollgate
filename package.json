@@ -17,6 +17,7 @@
     "prove:settled-paid-query": "node scripts/prove-settled-paid-query.mjs",
     "seed:judge-demo": "node scripts/seed-judge-demo.mjs",
     "check:facilitator": "node scripts/check-facilitator.mjs",
+    "check:forum": "node scripts/check-forum.mjs",
     "check:wallet-funding": "node scripts/check-wallet-funding.mjs",
     "create:wallets": "node scripts/create-wallets.mjs",
     "wallets:list": "node scripts/list-wallets.mjs",
