@@ -44,6 +44,7 @@ type SourceRegistryResponse = {
 type SettlementStatusResponse = {
   mode: "verify-only" | "settle-enabled";
   facilitatorConfigured: boolean;
+  forumRouterConfigured: boolean;
   paidQueryPriceAtomicUsdc: number;
   tollgateAgentWallet: string;
   readerPaymentTotalAtomicUsdc: number;
@@ -58,6 +59,7 @@ type SettlementStatusResponse = {
   } | null;
   latestVerifiedReceipt: string | null;
   latestSettledReceipt: string | null;
+  latestForumRoutedReceipt: string | null;
   verification: LedgerVerification;
 };
 
@@ -105,6 +107,7 @@ function latestHash(ledger: Ledger): string {
 }
 
 function settlementLabel(mode: string): string {
+  if (mode === "forum-routed") return "forum routed";
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   return "local proof";
@@ -353,6 +356,11 @@ export function LeptonWebApp({
           <div className="network-pill" aria-label="Settlement mode">
             <span className="live-dot" />
             x402 {settlementMode}
+          </div>
+          <div className="network-pill" aria-label="Forum routing">
+            <span className="live-dot" />
+            Forum{" "}
+            {settlementStatus?.forumRouterConfigured ? "routing" : "ready"}
           </div>
           <div className="network-pill" aria-label="Ledger verification">
             <span className={proofOk ? "live-dot" : "live-dot alert-dot"} />

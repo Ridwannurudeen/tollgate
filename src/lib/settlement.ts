@@ -1,5 +1,6 @@
 import { readSources } from "./catalog";
 import { createAgentQueryRecord } from "./agent";
+import { routeCitationPayments } from "./fee-router";
 import { sha256Hex } from "./hash";
 import { appendSettlement } from "./ledger";
 import type { QueryPaymentEvidence, SettlementResult } from "./types";
@@ -30,7 +31,8 @@ export async function settleQuestion(
   const createdAt = new Date().toISOString();
   const sources = await readSources();
   const query = await createAgentQueryRecord(normalized, createdAt, sources);
-  return appendSettlement(query);
+  const receiptEvidence = await routeCitationPayments(query);
+  return appendSettlement(query, receiptEvidence);
 }
 
 export function createQueryPaymentEvidence(
@@ -66,5 +68,6 @@ export async function settlePaidQuestion(
     sources,
     readerPayment,
   );
-  return appendSettlement(query);
+  const receiptEvidence = await routeCitationPayments(query);
+  return appendSettlement(query, receiptEvidence);
 }

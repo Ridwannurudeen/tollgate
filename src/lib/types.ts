@@ -1,4 +1,8 @@
-export type SettlementMode = "local-proof" | "x402-verified" | "x402-settled";
+export type SettlementMode =
+  | "local-proof"
+  | "x402-verified"
+  | "x402-settled"
+  | "forum-routed";
 
 export type CreatorSource = {
   id: string;

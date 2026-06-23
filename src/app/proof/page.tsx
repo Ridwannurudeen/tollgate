@@ -56,6 +56,7 @@ function sourceStats(ledger: Ledger): SourceStat[] {
 }
 
 function settlementLabel(mode: string): string {
+  if (mode === "forum-routed") return "forum routed";
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   return "local proof";
@@ -72,6 +73,9 @@ export default async function ProofPage() {
   ).length;
   const settledReceiptCount = ledger.receipts.filter(
     (receipt) => receipt.settlementMode === "x402-settled",
+  ).length;
+  const forumRoutedReceiptCount = ledger.receipts.filter(
+    (receipt) => receipt.settlementMode === "forum-routed",
   ).length;
 
   return (
@@ -146,6 +150,10 @@ export default async function ProofPage() {
         <div className="evidence-row">
           <span>x402 settled receipts</span>
           <strong>{settledReceiptCount}</strong>
+        </div>
+        <div className="evidence-row">
+          <span>Forum routed receipts</span>
+          <strong>{forumRoutedReceiptCount}</strong>
         </div>
         <div className="evidence-row">
           <span>latest previous hash</span>

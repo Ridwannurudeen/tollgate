@@ -34,6 +34,7 @@ function totalReaderPaid(ledger: Ledger): number {
 }
 
 function settlementLabel(mode: string): string {
+  if (mode === "forum-routed") return "forum routed";
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   return "local proof";
@@ -84,6 +85,9 @@ export default async function DemoPage() {
   const sourceReceipt = sourcePurchaseReceipt(demo.sourcePurchase);
   const verifiedReceiptCount = ledger.receipts.filter(
     (receipt) => receipt.settlementMode === "x402-verified",
+  ).length;
+  const forumRoutedReceiptCount = ledger.receipts.filter(
+    (receipt) => receipt.settlementMode === "forum-routed",
   ).length;
   const latestReceipt = ledger.receipts.at(-1);
 
@@ -138,7 +142,7 @@ export default async function DemoPage() {
       label: "direct source purchase",
       title:
         demo.sourcePurchase?.query.citations[0]?.title ??
-        "x402 source purchase evidence",
+        "source purchase evidence",
       detail: sourceReceipt
         ? `${settlementLabel(sourceReceipt.settlementMode)} / ${formatUsdc(
             sourceReceipt.amountAtomicUsdc,
@@ -196,6 +200,10 @@ export default async function DemoPage() {
         <div className="metric">
           <span>x402 verified</span>
           <strong>{verifiedReceiptCount}</strong>
+        </div>
+        <div className="metric">
+          <span>Forum routed</span>
+          <strong>{forumRoutedReceiptCount}</strong>
         </div>
         <div className="metric">
           <span>reader paid</span>
@@ -262,7 +270,7 @@ export default async function DemoPage() {
         <div className="source-registry">
           <div className="panel-heading">
             <p className="eyebrow">source purchase</p>
-            <h3>Direct x402 proof</h3>
+            <h3>Direct source proof</h3>
           </div>
           {demo.sourcePurchase && sourceReceipt ? (
             <article className="source-card">

@@ -10,6 +10,7 @@ type Props = {
 };
 
 function settlementLabel(mode: string): string {
+  if (mode === "forum-routed") return "forum routed";
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   return "local proof";

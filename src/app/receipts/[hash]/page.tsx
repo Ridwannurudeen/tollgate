@@ -10,6 +10,7 @@ type Props = {
 };
 
 function settlementLabel(mode: string): string {
+  if (mode === "forum-routed") return "forum routed";
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   return "local proof";
@@ -98,6 +99,26 @@ export default async function ReceiptPage({ params }: Props) {
             receipt.transaction
               ? shortHash(receipt.transaction)
               : "pending settlement"
+          }
+        />
+        <EvidenceRow
+          label="FeeRouter split"
+          value={receipt.feeRouterSplitId ?? "not FeeRouter-routed"}
+        />
+        <EvidenceRow
+          label="FeeRouter createSplit"
+          value={
+            receipt.feeRouterCreateSplitTx
+              ? shortHash(receipt.feeRouterCreateSplitTx)
+              : "not FeeRouter-routed"
+          }
+        />
+        <EvidenceRow
+          label="FeeRouter pay"
+          value={
+            receipt.feeRouterPayTx
+              ? shortHash(receipt.feeRouterPayTx)
+              : "not FeeRouter-routed"
           }
         />
       </section>

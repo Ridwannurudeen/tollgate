@@ -19,6 +19,10 @@ export async function GET() {
     .slice()
     .reverse()
     .find((receipt) => receipt.settlementMode === "x402-settled");
+  const latestForumRoutedReceipt = ledger.receipts
+    .slice()
+    .reverse()
+    .find((receipt) => receipt.settlementMode === "forum-routed");
   const latestReaderPayment = ledger.queries.find(
     (query) => query.readerPayment,
   )?.readerPayment;
@@ -32,6 +36,10 @@ export async function GET() {
       ? "settle-enabled"
       : "verify-only",
     facilitatorConfigured: Boolean(process.env.FACILITATOR_PRIVATE_KEY),
+    forumRouterConfigured: Boolean(
+      process.env.LEPTONWEB_FEE_ROUTER_ENABLED === "1" &&
+      process.env.LEPTONWEB_FEE_ROUTER_PRIVATE_KEY,
+    ),
     network: ARC_CAIP2,
     asset: ARC_USDC,
     rpcConfigured: Boolean(ARC_RPC_URL),
@@ -41,6 +49,7 @@ export async function GET() {
     readerPaymentTotalAtomicUsdc,
     latestVerifiedReceipt: latestVerifiedReceipt?.receiptHash ?? null,
     latestSettledReceipt: latestSettledReceipt?.receiptHash ?? null,
+    latestForumRoutedReceipt: latestForumRoutedReceipt?.receiptHash ?? null,
     verification,
   });
 }

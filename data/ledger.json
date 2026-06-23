@@ -1,6 +1,123 @@
 {
   "queries": [
     {
+      "id": "0xa3d80bbd28ae5ea2",
+      "question": "How does LeptonWeb use Forum FeeRouter to route paid creator citation receipts on Arc?",
+      "answer": "The paying agent treated \"How does LeptonWeb use Forum FeeRouter to route paid creator citation receipts on Arc?\" as a source-backed answer, not a free scrape. LeptonWeb Lab: A builder log for Tollgate, showing paid citations, receipt hashes, x402 source access, and creator onboarding on Arc. Forum Protocol: Forum-style mandates bound an agent budget, publish receipts, and make spend controls enforceable instead of advisory. Canteen Research: Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation. It bought the minimum useful bundle of sources, paid each cited creator in USDC atomic units, and wrote a receipt chain that ties the answer to the citations that earned.",
+      "queryHash": "0x17d9b64ff2a4e468c641bdd1e0967e8b30e90b4817198e39adfd4b42fb6ec614",
+      "answerHash": "0xa10b4e613875c6bbec6e0178bf5e17b8990cf0c849b0c753bbf271a3a5b2eede",
+      "totalAtomicUsdc": 5000,
+      "citations": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "handle": "@ggudman",
+          "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+          "url": "https://forum.gudman.xyz/",
+          "amountAtomicUsdc": 1700,
+          "reason": "Matched leptonweb, receipts, arc in the source registry."
+        },
+        {
+          "sourceId": "forum-mandates",
+          "title": "Covenant Account Spend Controls",
+          "creator": "Forum Protocol",
+          "handle": "@ggudman",
+          "wallet": "0x5555555555555555555555555555555555555555",
+          "url": "https://forum.gudman.xyz",
+          "amountAtomicUsdc": 1500,
+          "reason": "Matched forum, receipts in the source registry."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "handle": "@canteen",
+          "wallet": "0x1111111111111111111111111111111111111111",
+          "url": "https://lepton.thecanteenapp.com",
+          "amountAtomicUsdc": 1800,
+          "reason": "Matched arc in the source registry."
+        }
+      ],
+      "agentMode": "deterministic",
+      "agentRationale": "No LLM planner is configured; deterministic budget policy selected the citations.",
+      "sourceDecisions": [
+        {
+          "sourceId": "leptonweb-build-log",
+          "title": "LeptonWeb Build Log",
+          "creator": "LeptonWeb Lab",
+          "priceAtomicUsdc": 1700,
+          "score": 35,
+          "valuePerAtomicUsdc": 0.020588,
+          "selected": true,
+          "reason": "Bought: relevance score 35 cleared the budget policy."
+        },
+        {
+          "sourceId": "forum-mandates",
+          "title": "Covenant Account Spend Controls",
+          "creator": "Forum Protocol",
+          "priceAtomicUsdc": 1500,
+          "score": 16,
+          "valuePerAtomicUsdc": 0.010667,
+          "selected": true,
+          "reason": "Bought: relevance score 16 cleared the budget policy."
+        },
+        {
+          "sourceId": "canteen-lepton-rfb",
+          "title": "Lepton RFB Notes",
+          "creator": "Canteen Research",
+          "priceAtomicUsdc": 1800,
+          "score": 15,
+          "valuePerAtomicUsdc": 0.008333,
+          "selected": true,
+          "reason": "Bought: relevance score 15 cleared the budget policy."
+        },
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "priceAtomicUsdc": 1200,
+          "score": 11,
+          "valuePerAtomicUsdc": 0.009167,
+          "selected": false,
+          "reason": "Skipped: lower value than the purchased source bundle."
+        },
+        {
+          "sourceId": "arc-finality-usdc",
+          "title": "Arc Settlement Sketch",
+          "creator": "Arc Builder Desk",
+          "priceAtomicUsdc": 2200,
+          "score": 8,
+          "valuePerAtomicUsdc": 0.003636,
+          "selected": false,
+          "reason": "Skipped: 2200 atomic USDC exceeded the remaining source budget."
+        },
+        {
+          "sourceId": "rsshub-distribution",
+          "title": "RSS Distribution Surface",
+          "creator": "Open Feed Maintainers",
+          "priceAtomicUsdc": 900,
+          "score": 6,
+          "valuePerAtomicUsdc": 0.006667,
+          "selected": false,
+          "reason": "Skipped: lower value than the purchased source bundle."
+        }
+      ],
+      "agentBudget": {
+        "sourceBudgetAtomicUsdc": 6500,
+        "spentAtomicUsdc": 5000,
+        "remainingAtomicUsdc": 1500,
+        "candidateCount": 6,
+        "purchasedCount": 3
+      },
+      "receiptHashes": [
+        "0xe82ba4d981b8310cf93b0590c95c4c2a01f1b571a953a0b2fd3de09240fa8e67",
+        "0x05692861abc4616ad8e7334a04bac67dcb803fa6210819703c378c05817bfd18",
+        "0x5d7b3c764bf62f8ffd7eca5f270efb4c9e5867de87fc83d2994ddc42807321cc"
+      ],
+      "createdAt": "2026-06-23T10:21:10.414Z"
+    },
+    {
       "id": "0x946d60370424484f",
       "question": "Paid source access: LeptonWeb Build Log",
       "answer": "The agent paid LeptonWeb Lab for direct access to \"LeptonWeb Build Log\" and wrote the purchase into the public attribution ledger.",
@@ -1351,6 +1468,60 @@
       "transaction": "0x53730c34f61288e74daa0b212ef3360ec1c8ebe4396d9a8b08abdd3af0675c76",
       "paymentResource": "/api/sources/leptonweb-build-log",
       "receiptHash": "0xe7d40c49f2af0557984809e40325cba236d27f28514fbad877a9f14a2285e154"
+    },
+    {
+      "id": "0xe82ba4d981b8310c",
+      "queryId": "0xa3d80bbd28ae5ea2",
+      "sourceId": "leptonweb-build-log",
+      "creator": "LeptonWeb Lab",
+      "wallet": "0xc9F2A6146cff81735925825b192ad6cdA4059c3c",
+      "amountAtomicUsdc": 1700,
+      "settlementMode": "forum-routed",
+      "previousHash": "0xe7d40c49f2af0557984809e40325cba236d27f28514fbad877a9f14a2285e154",
+      "createdAt": "2026-06-23T10:21:10.414Z",
+      "payer": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      "transaction": "0x8e5dc7af5cceaea5e98ae51c7fa6731f16834f337c29cc32b2740189f43bc4b0",
+      "paymentResource": "forum-fee-router:0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59",
+      "feeRouterSplitId": "2",
+      "feeRouterCreateSplitTx": "0xa506d3fb070752bfd6cf27850987cd93de9be73bc91e3ec2c37c24d74e25f3c6",
+      "feeRouterPayTx": "0x8e5dc7af5cceaea5e98ae51c7fa6731f16834f337c29cc32b2740189f43bc4b0",
+      "receiptHash": "0xe82ba4d981b8310cf93b0590c95c4c2a01f1b571a953a0b2fd3de09240fa8e67"
+    },
+    {
+      "id": "0x05692861abc4616a",
+      "queryId": "0xa3d80bbd28ae5ea2",
+      "sourceId": "forum-mandates",
+      "creator": "Forum Protocol",
+      "wallet": "0x5555555555555555555555555555555555555555",
+      "amountAtomicUsdc": 1500,
+      "settlementMode": "forum-routed",
+      "previousHash": "0xe82ba4d981b8310cf93b0590c95c4c2a01f1b571a953a0b2fd3de09240fa8e67",
+      "createdAt": "2026-06-23T10:21:10.414Z",
+      "payer": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      "transaction": "0x38cdebf84da2325eb407c55c7ddbecf7fa46fcbee200de69fd9c7aecf4506a7a",
+      "paymentResource": "forum-fee-router:0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59",
+      "feeRouterSplitId": "3",
+      "feeRouterCreateSplitTx": "0x763101eec9ce2691584dd45b3918c7bbb69416f8440688c1731d5a6e009a4ca5",
+      "feeRouterPayTx": "0x38cdebf84da2325eb407c55c7ddbecf7fa46fcbee200de69fd9c7aecf4506a7a",
+      "receiptHash": "0x05692861abc4616ad8e7334a04bac67dcb803fa6210819703c378c05817bfd18"
+    },
+    {
+      "id": "0x5d7b3c764bf62f8f",
+      "queryId": "0xa3d80bbd28ae5ea2",
+      "sourceId": "canteen-lepton-rfb",
+      "creator": "Canteen Research",
+      "wallet": "0x1111111111111111111111111111111111111111",
+      "amountAtomicUsdc": 1800,
+      "settlementMode": "forum-routed",
+      "previousHash": "0x05692861abc4616ad8e7334a04bac67dcb803fa6210819703c378c05817bfd18",
+      "createdAt": "2026-06-23T10:21:10.414Z",
+      "payer": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      "transaction": "0x8f5418f93eb5eab77723ef95b1488a19b3195209074d8ac306156b2cbb5b3394",
+      "paymentResource": "forum-fee-router:0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59",
+      "feeRouterSplitId": "4",
+      "feeRouterCreateSplitTx": "0x94715f5fa591131c768b8424980b69ee0105129282848bfe4b09e0894b277aca",
+      "feeRouterPayTx": "0x8f5418f93eb5eab77723ef95b1488a19b3195209074d8ac306156b2cbb5b3394",
+      "receiptHash": "0x5d7b3c764bf62f8ffd7eca5f270efb4c9e5867de87fc83d2994ddc42807321cc"
     }
   ]
 }

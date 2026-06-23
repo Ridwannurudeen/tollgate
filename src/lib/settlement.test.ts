@@ -248,6 +248,47 @@ describe("LeptonWeb settlement engine", () => {
     expect(receipts[0]?.receiptHash).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
+  it("records Forum FeeRouter evidence in receipt hashes", () => {
+    const query = createQueryRecord(
+      "How does Tollgate route citation payments through Forum?",
+      "2026-06-23T12:00:00.000Z",
+    );
+    const sourceId = query.citations[0]?.sourceId;
+    if (!sourceId) throw new Error("missing test citation");
+    const receipts = createReceipts(query, [], {
+      [sourceId]: {
+        settlementMode: "forum-routed",
+        payer: "0x7777777777777777777777777777777777777777",
+        transaction:
+          "0x0157f03ae6a0bfe8f4947274b4c12254b92a198bb620cb3d27d9233c743e9eff",
+        paymentResource:
+          "forum-fee-router:0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59",
+        feeRouterSplitId: "1",
+        feeRouterCreateSplitTx:
+          "0xa9ad8ea73dba76962974c64e4a6276acb1fcdc709370577e0663322e37118510",
+        feeRouterPayTx:
+          "0x0157f03ae6a0bfe8f4947274b4c12254b92a198bb620cb3d27d9233c743e9eff",
+      },
+    });
+
+    expect(receipts[0]?.settlementMode).toBe("forum-routed");
+    expect(receipts[0]?.feeRouterSplitId).toBe("1");
+    expect(receipts[0]?.feeRouterPayTx).toBe(
+      "0x0157f03ae6a0bfe8f4947274b4c12254b92a198bb620cb3d27d9233c743e9eff",
+    );
+    expect(
+      verifyLedgerIntegrity({
+        queries: [
+          {
+            ...query,
+            receiptHashes: receipts.map((receipt) => receipt.receiptHash),
+          },
+        ],
+        receipts,
+      }).ok,
+    ).toBe(true);
+  });
+
   it("rejects under-specified questions", () => {
     expect(() => validateQuestion("pay?")).toThrow(/at least 8/);
   });

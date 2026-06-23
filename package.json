@@ -16,6 +16,7 @@
     "prove:wallet-paid-query": "node scripts/prove-wallet-paid-query.mjs",
     "prove:settled-paid-query": "node scripts/prove-settled-paid-query.mjs",
     "prove:fee-router": "node scripts/prove-fee-router.mjs",
+    "prove:fee-router-query": "node scripts/prove-fee-router-query.mjs",
     "seed:judge-demo": "node scripts/seed-judge-demo.mjs",
     "check:facilitator": "node scripts/check-facilitator.mjs",
     "check:forum": "node scripts/check-forum.mjs",
