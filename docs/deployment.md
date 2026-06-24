@@ -2,7 +2,8 @@
 
 ## Current gates
 
-- `aperture.gudman.xyz` and `immich.gudman.xyz` must resolve to `75.119.153.252` before HTTPS can be issued.
+- Public app path is `https://tollgate.gudman.xyz/aperture`; no new DNS is required for the dashboard.
+- Public archive downloads use the same host at `https://tollgate.gudman.xyz/immich/api/download/archive`.
 - FeeRouter settlement stays disabled until Aperture has its own funded Arc payer key.
 - EXIF enrichment needs `exiftool` on the VPS.
 
@@ -18,11 +19,13 @@
 
 ```bash
 APERTURE_IMMICH_API_BASE_URL=http://127.0.0.1:2283/api
+APERTURE_BASE_PATH=/aperture
 APERTURE_ACCESS_LOG=/var/log/nginx/access.log
 APERTURE_LICENSE_FEE_ATOMIC_USDC=2500
 APERTURE_FEE_ROUTER_ENABLED=0
 APERTURE_EXIF_ENABLED=1
 APERTURE_EXIFTOOL_PATH=exiftool
+APERTURE_IMMICH_LIBRARY_ROOT=/opt/immich/library
 ```
 
 When the project payer is funded, add `APERTURE_FEE_ROUTER_PRIVATE_KEY` on the
@@ -43,7 +46,21 @@ systemctl enable --now aperture aperture-watcher
 npm run check:live
 ```
 
-After DNS resolves, issue certificates with webroot certbot:
+Mount Aperture and Immich API under the existing Tollgate host:
+
+```bash
+cp deploy/nginx/tollgate-aperture.locations.conf /etc/nginx/snippets/tollgate-aperture.locations.conf
+```
+
+Then include the snippet inside the HTTPS `server` block for
+`tollgate.gudman.xyz`, before `location /`, and reload nginx:
+
+```bash
+nginx -t
+systemctl reload nginx
+```
+
+Optional standalone subdomains can still be enabled later after DNS resolves:
 
 ```bash
 certbot certonly --webroot -w /var/www/html -d aperture.gudman.xyz -n --agree-tos

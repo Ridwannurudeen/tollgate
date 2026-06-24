@@ -39,11 +39,13 @@ export default function InstallPage() {
             Runtime settings live outside git in a root-owned environment file.
             The FeeRouter key stays absent until the payer wallet is funded.
           </p>
-          <pre className="commandBlock">{`APERTURE_IMMICH_API_BASE_URL=http://127.0.0.1:2283/api
+          <pre className="commandBlock">{`APERTURE_BASE_PATH=/aperture
+APERTURE_IMMICH_API_BASE_URL=http://127.0.0.1:2283/api
 APERTURE_ACCESS_LOG=/var/log/nginx/access.log
 APERTURE_LICENSE_FEE_ATOMIC_USDC=2500
 APERTURE_FEE_ROUTER_ENABLED=0
-APERTURE_EXIF_ENABLED=1`}</pre>
+APERTURE_EXIF_ENABLED=1
+APERTURE_IMMICH_LIBRARY_ROOT=/opt/immich/library`}</pre>
         </div>
 
         <div className="surface">
@@ -57,11 +59,11 @@ APERTURE_EXIF_ENABLED=1`}</pre>
       </section>
 
       <section className="surface wide">
-        <h2>DNS and TLS gate</h2>
+        <h2>Tollgate mount</h2>
         <p>
-          `aperture.gudman.xyz` and `immich.gudman.xyz` must resolve to the VPS
-          before certbot can issue certificates. The nginx files are staged in
-          `deploy/nginx/`; use webroot certbot, then reload nginx.
+          Aperture is served at `https://tollgate.gudman.xyz/aperture`. Tollgate
+          also exposes `/immich/api/download/archive` so public archive
+          downloads hit nginx and the watcher records the billable resolve.
         </p>
       </section>
     </main>

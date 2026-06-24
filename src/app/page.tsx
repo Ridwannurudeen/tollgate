@@ -48,6 +48,9 @@ export default async function Home() {
             <Link className="button primary" href="/proof">
               Inspect proof
             </Link>
+            <Link className="button" href="/download">
+              Download trigger
+            </Link>
             <a className="button" href="https://immich.app">
               Immich
             </a>
@@ -105,6 +108,10 @@ export default async function Home() {
           <Link href="/install">
             <span>VPS install</span>
             <small>systemd, nginx, access-log watcher</small>
+          </Link>
+          <Link href="/download">
+            <span>Public trigger</span>
+            <small>same-host Immich archive download path</small>
           </Link>
         </div>
       </section>

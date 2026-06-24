@@ -17,6 +17,17 @@ describe("parseDownloadArchiveAccessLog", () => {
     });
   });
 
+  it("parses the Tollgate-mounted Immich archive download trigger", () => {
+    const event = parseDownloadArchiveAccessLog(
+      '127.0.0.1 - - [24/Jun/2026:07:45:36 +0200] "POST /immich/api/download/archive?key=abc123 HTTP/2.0" 200 150 "-" "curl/8.5.0"',
+    );
+    expect(event).toMatchObject({
+      path: "/api/download/archive",
+      sharedLinkKey: "abc123",
+      status: 200,
+    });
+  });
+
   it("ignores thumbnail and download-info requests", () => {
     expect(
       parseDownloadArchiveAccessLog(

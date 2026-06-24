@@ -4,6 +4,8 @@ Aperture is a sidecar for Immich that pays photographers when shared photos are 
 
 It watches Immich download requests, resolves the shared-link key to asset owners, maps each owner to an Arc wallet, and writes hash-chained payout receipts. When configured with this project's own funded payer key, it routes USDC through Forum `FeeRouterV1` on Arc testnet.
 
+Public demo path: `https://tollgate.gudman.xyz/aperture`.
+
 ## Verified Immich v2.7.5 Flow
 
 The live Immich server emits this sequence for a public shared-link download:
@@ -13,7 +15,7 @@ The live Immich server emits this sequence for a public shared-link download:
 - Download click: `POST /api/download/info?key=<shareKey>`
 - Billable download: `POST /api/download/archive?key=<shareKey>`
 
-The nginx access log preserves the archive request path and query string. Aperture treats `POST /api/download/archive?key=<shareKey>` as the billable resolve event, then resolves the key through Immich's shared-link API.
+The nginx access log preserves the archive request path and query string. Aperture treats `POST /api/download/archive?key=<shareKey>` and Tollgate-mounted `POST /immich/api/download/archive?key=<shareKey>` as billable resolve events, then resolves the key through Immich's shared-link API.
 
 ## Local Development
 

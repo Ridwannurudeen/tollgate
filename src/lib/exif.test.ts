@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseExifCreditJson, readExifCredit } from "./exif";
+import {
+  hostPathForImmichOriginal,
+  parseExifCreditJson,
+  readAssetExifCredit,
+  readExifCredit,
+} from "./exif";
 
 describe("EXIF credit parsing", () => {
   it("extracts Artist and Copyright from exiftool JSON", () => {
@@ -31,5 +36,22 @@ describe("EXIF credit parsing", () => {
     });
 
     expect(credit?.artist).toBe("Backup Artist");
+  });
+
+  it("maps Immich container original paths to the host library root", () => {
+    expect(hostPathForImmichOriginal("/data/upload/owner/path/asset.png")).toBe(
+      "/opt/immich/library/upload/owner/path/asset.png",
+    );
+  });
+
+  it("fails open when asset EXIF cannot be read", async () => {
+    const credit = await readAssetExifCredit({
+      id: "asset-1",
+      ownerId: "owner-1",
+      originalFileName: "photo.png",
+      originalPath: "/data/upload/photo.png",
+    });
+
+    expect(credit).toBe(null);
   });
 });

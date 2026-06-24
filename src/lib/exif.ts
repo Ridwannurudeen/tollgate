@@ -47,6 +47,14 @@ export function parseExifCreditJson(
   return { sourcePath, artist, copyright };
 }
 
+export function hostPathForImmichOriginal(originalPath: string): string {
+  const libraryRoot =
+    process.env.APERTURE_IMMICH_LIBRARY_ROOT ?? "/opt/immich/library";
+  return originalPath.startsWith("/data/")
+    ? `${libraryRoot}${originalPath.slice("/data".length)}`
+    : originalPath;
+}
+
 export async function readExifCredit(
   sourcePath: string,
   options: { exiftoolPath?: string; runner?: ExifToolRunner } = {},
@@ -68,5 +76,9 @@ export async function readAssetExifCredit(
   asset: ImmichAsset,
 ): Promise<ExifCredit | null> {
   if (!asset.originalPath) return null;
-  return readExifCredit(asset.originalPath);
+  try {
+    return await readExifCredit(hostPathForImmichOriginal(asset.originalPath));
+  } catch {
+    return null;
+  }
 }

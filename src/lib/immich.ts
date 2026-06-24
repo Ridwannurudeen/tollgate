@@ -45,7 +45,12 @@ export function parseDownloadArchiveAccessLog(
   if (match.groups.method !== "POST") return null;
 
   const url = new URL(match.groups.target, "http://aperture.local");
-  if (url.pathname !== "/api/download/archive") return null;
+  if (
+    url.pathname !== "/api/download/archive" &&
+    url.pathname !== "/immich/api/download/archive"
+  ) {
+    return null;
+  }
 
   const sharedLinkKey = url.searchParams.get("key");
   if (!sharedLinkKey) return null;
