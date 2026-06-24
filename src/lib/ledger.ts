@@ -61,7 +61,7 @@ export async function readLedger(): Promise<Ledger> {
 
 export async function writeLedger(ledger: Ledger): Promise<void> {
   await mkdir(path.dirname(LEDGER_PATH), { recursive: true });
-  const tmpPath = `${LEDGER_PATH}.tmp`;
+  const tmpPath = `${LEDGER_PATH}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
   await writeFile(tmpPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
   await rename(tmpPath, LEDGER_PATH);
 }
@@ -245,7 +245,9 @@ export async function attachTrackRecordEvidence(
   const ledger = await readLedger();
   const queryExists = ledger.queries.some((query) => query.id === queryId);
   if (!queryExists) {
-    throw new Error(`Cannot attach TrackRecord evidence to missing query ${queryId}.`);
+    throw new Error(
+      `Cannot attach TrackRecord evidence to missing query ${queryId}.`,
+    );
   }
 
   const nextLedger: Ledger = {

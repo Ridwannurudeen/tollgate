@@ -237,7 +237,7 @@ async function readCustomSources(): Promise<CreatorSource[]> {
 
 async function writeCustomSources(sources: CreatorSource[]): Promise<void> {
   await mkdir(path.dirname(SOURCE_REGISTRY_PATH), { recursive: true });
-  const tmpPath = `${SOURCE_REGISTRY_PATH}.tmp`;
+  const tmpPath = `${SOURCE_REGISTRY_PATH}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
   await writeFile(tmpPath, `${JSON.stringify(sources, null, 2)}\n`, "utf8");
   await rename(tmpPath, SOURCE_REGISTRY_PATH);
 }
