@@ -366,6 +366,12 @@ export function LeptonWebApp({
             <span className={proofOk ? "live-dot" : "live-dot alert-dot"} />
             ledger {proofOk ? "verified" : "needs review"}
           </div>
+          <Link className="wallet-button" href="/core">
+            Core
+          </Link>
+          <a className="wallet-button" href="/aperture">
+            Photos
+          </a>
           <Link className="wallet-button" href="/proof">
             Proof
           </Link>
