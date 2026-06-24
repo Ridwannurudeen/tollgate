@@ -112,10 +112,11 @@ export function publicOrigin(headers: Headers, fallbackOrigin: string): string {
 }
 
 export function paymentRequiredBody(
-  requirements: PaymentRequirements,
+  requirements: PaymentRequirements | PaymentRequirements[],
   resourceUrl: string,
   description: string,
 ): PaymentRequired {
+  const accepts = Array.isArray(requirements) ? requirements : [requirements];
   return {
     x402Version: 2,
     error: "X-PAYMENT required",
@@ -124,8 +125,28 @@ export function paymentRequiredBody(
       description,
       mimeType: "application/json",
     },
-    accepts: [requirements],
+    accepts,
   };
+}
+
+function matchAccepted(
+  claimed: PaymentRequirements | undefined,
+  offered: PaymentRequirements[],
+): PaymentRequirements | null {
+  if (!claimed) return null;
+  return (
+    offered.find(
+      (req) =>
+        req.scheme === claimed.scheme &&
+        req.network === claimed.network &&
+        String(req.asset).toLowerCase() ===
+          String(claimed.asset).toLowerCase() &&
+        req.amount === claimed.amount &&
+        String(req.payTo).toLowerCase() ===
+          String(claimed.payTo).toLowerCase() &&
+        (req.extra?.name ?? null) === (claimed.extra?.name ?? null),
+    ) ?? null
+  );
 }
 
 export function paymentRequiredHeaders(
@@ -213,13 +234,23 @@ async function verifyOnly(
 
 export async function settleX402(
   signatureHeader: string,
-  requirements: PaymentRequirements,
+  accepted: PaymentRequirements | PaymentRequirements[],
 ): Promise<X402Settlement> {
+  const offered = Array.isArray(accepted) ? accepted : [accepted];
   let payload: PaymentPayload;
   try {
     payload = decodePaymentSignatureHeader(signatureHeader);
   } catch {
     return { ok: false, status: 400, reason: "malformed payment header" };
+  }
+
+  const requirements = matchAccepted(payload.accepted, offered);
+  if (!requirements) {
+    return {
+      ok: false,
+      status: 402,
+      reason: "payment does not match an accepted requirement",
+    };
   }
 
   if (supportsBatching(requirements)) {

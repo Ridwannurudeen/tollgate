@@ -7,7 +7,8 @@ import { settlePaidQuestion, validateQuestion } from "@/lib/settlement";
 import {
   PAYMENT_RESPONSE_HEADER,
   PAYMENT_SIGNATURE_HEADER,
-  buildPaymentRequirements,
+  buildExactPaymentRequirements,
+  buildGatewayPaymentRequirements,
   paymentRequiredBody,
   paymentRequiredHeaders,
   publicOrigin,
@@ -31,15 +32,19 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as unknown;
     const question = readQuestion(body);
-    const requirements = buildPaymentRequirements(
-      tollgateAgentWallet(),
-      PAID_QUERY_PRICE_ATOMIC_USDC,
-    );
+    const payTo = tollgateAgentWallet();
+    // Multi-accept: exact first (browser injected-wallet clients), Gateway
+    // second (autonomous agents using @circle-fin/x402-batching → batched
+    // on-chain settlement). settleX402 picks whichever the payer signed.
+    const accepts = [
+      buildExactPaymentRequirements(payTo, PAID_QUERY_PRICE_ATOMIC_USDC),
+      buildGatewayPaymentRequirements(payTo, PAID_QUERY_PRICE_ATOMIC_USDC),
+    ];
     const resourceUrl =
       publicOrigin(request.headers, request.nextUrl.origin) +
       request.nextUrl.pathname;
     const required = paymentRequiredBody(
-      requirements,
+      accepts,
       resourceUrl,
       "Paid Tollgate answer: reader pays the agent, the answer allocates citation receipts to creators.",
     );
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const settlement = await settleX402(signatureHeader, requirements);
+    const settlement = await settleX402(signatureHeader, accepts);
     if (!settlement.ok) {
       return NextResponse.json(
         { error: settlement.reason },
