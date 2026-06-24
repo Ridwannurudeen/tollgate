@@ -1,0 +1,82 @@
+import type { Address, Hex } from "viem";
+
+export type DownloadArchiveEvent = {
+  remoteAddress: string;
+  method: "POST";
+  path: "/api/download/archive";
+  sharedLinkKey: string;
+  status: number | null;
+  userAgent: string | null;
+  referer: string | null;
+  createdAt: string;
+  rawLine: string;
+};
+
+export type ImmichAsset = {
+  id: string;
+  ownerId: string;
+  originalFileName: string;
+};
+
+export type ImmichSharedLink = {
+  id: string;
+  key: string;
+  assets: ImmichAsset[];
+};
+
+export type WalletRegistryEntry = {
+  ownerId: string;
+  displayName: string;
+  wallet: Address;
+  createdAt: string;
+};
+
+export type WalletRegistry = {
+  photographers: WalletRegistryEntry[];
+};
+
+export type SettlementMode = "local-proof" | "forum-routed";
+
+export type LicenseSettlementEvidence = {
+  settlementMode: SettlementMode;
+  payer?: Address;
+  transaction?: Hex;
+  paymentResource: string;
+  feeRouterSplitId?: string;
+  feeRouterCreateSplitTx?: Hex;
+  feeRouterPayTx?: Hex;
+};
+
+export type LicenseReceipt = {
+  id: string;
+  eventId: Hex;
+  assetId: string;
+  sharedLinkId: string;
+  sharedLinkKeyHash: Hex;
+  ownerId: string;
+  photographer: string;
+  wallet: Address;
+  amountAtomicUsdc: number;
+  settlementMode: SettlementMode;
+  payer?: Address;
+  transaction?: Hex;
+  paymentResource: string;
+  feeRouterSplitId?: string;
+  feeRouterCreateSplitTx?: Hex;
+  feeRouterPayTx?: Hex;
+  rawAccessLogHash: Hex;
+  previousHash: Hex;
+  receiptHash: Hex;
+  createdAt: string;
+};
+
+export type LicenseLedger = {
+  receipts: LicenseReceipt[];
+};
+
+export type LedgerVerification = {
+  ok: boolean;
+  receiptCount: number;
+  latestHash: Hex;
+  issues: { index: number; receiptHash: Hex; reason: string }[];
+};

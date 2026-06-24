@@ -1,0 +1,30 @@
+{
+  "name": "aperture",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aperture is an Immich sidecar that pays photographers when shared photos are downloaded.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "watch:access-log": "tsx scripts/watch-access-log.ts",
+    "prove:demo-resolve": "tsx scripts/prove-demo-resolve.ts",
+    "verify:ledger": "tsx scripts/verify-ledger.ts"
+  },
+  "dependencies": {
+    "next": "^15.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "viem": "^2.52.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
+  }
+}

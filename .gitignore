@@ -1,0 +1,9 @@
+.next/
+node_modules/
+dist/
+.env*
+!.env.example
+*.tsbuildinfo
+data/*.tmp.*
+data/watcher-state.json
+.next-dev-*.log

@@ -1,0 +1,21 @@
+{
+  "receipts": [
+    {
+      "id": "0xb8a2388191efbe5a",
+      "eventId": "0xc7600fb619df92e51eaebd45fc81e5a1cfb91f08b2691f0142f701d5a56dc8e9",
+      "assetId": "d8fae882-199d-4ef9-8a5e-16a1957efda7",
+      "sharedLinkId": "c20c7fe8-1a1f-4eaa-a820-eafa88c4bd14",
+      "sharedLinkKeyHash": "0x676ed21c2efa8f1d95bcbd9320722b4b36adb1ad7946d2c871e07bd4abd0ffbf",
+      "ownerId": "751f8862-6193-4d88-bba9-71a4fd09215b",
+      "photographer": "Aperture Demo Photographer",
+      "wallet": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      "amountAtomicUsdc": 2500,
+      "settlementMode": "local-proof",
+      "paymentResource": "immich-access-log",
+      "rawAccessLogHash": "0xfeb132a4be34363c3e0e4d49e17eb1e5327871936dc5e7e7a275a3414c027253",
+      "previousHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "createdAt": "2026-06-24T05:45:36.000Z",
+      "receiptHash": "0xb8a2388191efbe5a6434a0d9629bf2e53880a3c66fe7310d337716bdd16e38a8"
+    }
+  ]
+}
