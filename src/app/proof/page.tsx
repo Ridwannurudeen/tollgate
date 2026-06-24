@@ -7,6 +7,8 @@ import {
 } from "../../lib/ledger";
 import { readWalletRegistry } from "../../lib/registry";
 
+export const dynamic = "force-dynamic";
+
 function formatUsdc(value: number) {
   return (value / 1_000_000).toLocaleString("en-US", {
     minimumFractionDigits: 6,
@@ -35,6 +37,8 @@ export default async function ProofPage() {
         </Link>
         <div className="navlinks">
           <Link href="/">Home</Link>
+          <Link href="/install">Install</Link>
+          <Link href="/onboarding">Onboarding</Link>
           <a href={ARC_EXPLORER_URL}>Arcscan</a>
         </div>
       </nav>
@@ -103,11 +107,16 @@ export default async function ProofPage() {
                   <div>
                     <strong>{receipt.photographer}</strong>
                     <small>{receipt.assetId}</small>
+                    {receipt.exifArtist ? (
+                      <small>EXIF artist: {receipt.exifArtist}</small>
+                    ) : null}
                   </div>
                   <div>
                     <span className="pill">{receipt.settlementMode}</span>
                   </div>
-                  <div className="num">{formatUsdc(receipt.amountAtomicUsdc)}</div>
+                  <div className="num">
+                    {formatUsdc(receipt.amountAtomicUsdc)}
+                  </div>
                   <div>
                     {url ? (
                       <a href={url}>tx</a>

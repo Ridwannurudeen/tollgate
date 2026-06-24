@@ -41,6 +41,7 @@ describe("parseSharedLink", () => {
           id: "asset-1",
           ownerId: "owner-1",
           originalFileName: "photo.png",
+          originalPath: "/opt/immich/library/photo.png",
         },
       ],
     });
@@ -49,6 +50,7 @@ describe("parseSharedLink", () => {
       id: "asset-1",
       ownerId: "owner-1",
       originalFileName: "photo.png",
+      originalPath: "/opt/immich/library/photo.png",
     });
   });
 });

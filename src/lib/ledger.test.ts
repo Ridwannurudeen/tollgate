@@ -2,7 +2,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { appendLicenseReceipt, readLicenseLedger, verifyLicenseLedger } from "./ledger";
+import {
+  appendLicenseReceipt,
+  readLicenseLedger,
+  verifyLicenseLedger,
+} from "./ledger";
 import type { DownloadArchiveEvent, WalletRegistryEntry } from "./types";
 
 const event: DownloadArchiveEvent = {

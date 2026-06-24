@@ -4,6 +4,7 @@ import type { Address, Hex } from "viem";
 import { sha256Hex } from "./hash";
 import type {
   DownloadArchiveEvent,
+  ExifCredit,
   LedgerVerification,
   LicenseLedger,
   LicenseReceipt,
@@ -25,6 +26,7 @@ export type LicenseReceiptInput = {
   photographer: WalletRegistryEntry;
   amountAtomicUsdc: number;
   evidence: LicenseSettlementEvidence;
+  exifCredit?: ExifCredit | null;
 };
 
 type LicenseReceiptHashPayload = Omit<LicenseReceipt, "id" | "receiptHash">;
@@ -82,6 +84,9 @@ function createReceipt(
     feeRouterSplitId: input.evidence.feeRouterSplitId,
     feeRouterCreateSplitTx: input.evidence.feeRouterCreateSplitTx,
     feeRouterPayTx: input.evidence.feeRouterPayTx,
+    exifArtist: input.exifCredit?.artist ?? undefined,
+    exifCopyright: input.exifCredit?.copyright ?? undefined,
+    exifSourcePath: input.exifCredit?.sourcePath ?? undefined,
     rawAccessLogHash: sha256Hex(input.event.rawLine),
     previousHash,
     createdAt: input.event.createdAt,
@@ -97,7 +102,11 @@ function createReceipt(
 export async function appendLicenseReceipt(
   input: LicenseReceiptInput,
   filePath: string = LEDGER_PATH,
-): Promise<{ receipt: LicenseReceipt; ledger: LicenseLedger; created: boolean }> {
+): Promise<{
+  receipt: LicenseReceipt;
+  ledger: LicenseLedger;
+  created: boolean;
+}> {
   const ledger = await readLicenseLedger(filePath);
   const existing = ledger.receipts.find(
     (receipt) => receipt.eventId === input.eventId,
@@ -111,9 +120,7 @@ export async function appendLicenseReceipt(
   return { receipt, ledger: nextLedger, created: true };
 }
 
-export function verifyLicenseLedger(
-  ledger: LicenseLedger,
-): LedgerVerification {
+export function verifyLicenseLedger(ledger: LicenseLedger): LedgerVerification {
   const issues: LedgerVerification["issues"] = [];
   let expectedPreviousHash = ZERO_HASH;
 

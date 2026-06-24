@@ -1,13 +1,12 @@
 import { buildResolveEventId } from "./dedupe";
 import { parseDownloadArchiveAccessLog, resolveSharedLink } from "./immich";
-import {
-  appendLicenseReceipt,
-  type LicenseReceiptInput,
-} from "./ledger";
+import { appendLicenseReceipt, type LicenseReceiptInput } from "./ledger";
 import { readWalletForOwner } from "./registry";
 import { routeLicensePayment } from "./fee-router";
 import type {
   DownloadArchiveEvent,
+  ExifCredit,
+  ImmichAsset,
   ImmichSharedLink,
   LicenseReceipt,
   LicenseSettlementEvidence,
@@ -29,6 +28,7 @@ export type WatcherDeps = {
   amountAtomicUsdc: number;
   resolveSharedLink?: (key: string) => Promise<ImmichSharedLink>;
   findWalletForOwner?: (ownerId: string) => Promise<WalletRegistryEntry | null>;
+  readExifCredit?: (asset: ImmichAsset) => Promise<ExifCredit | null>;
   settle?: (
     recipient: WalletRegistryEntry,
     amountAtomicUsdc: number,
@@ -78,9 +78,13 @@ export async function processAccessLogLine(
       continue;
     }
 
+    const exifCredit = deps.readExifCredit
+      ? await deps.readExifCredit(asset)
+      : null;
     const eventId = buildResolveEventId(event, sharedLink.id, asset.id);
     const evidence =
-      (await settle(photographer, deps.amountAtomicUsdc)) ?? localProofEvidence();
+      (await settle(photographer, deps.amountAtomicUsdc)) ??
+      localProofEvidence();
     const result = await appendReceipt({
       eventId,
       event,
@@ -90,6 +94,7 @@ export async function processAccessLogLine(
       photographer,
       amountAtomicUsdc: deps.amountAtomicUsdc,
       evidence,
+      exifCredit,
     });
     receipts.push(result.receipt);
   }

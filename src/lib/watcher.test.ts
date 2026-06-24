@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { processAccessLogLine } from "./watcher";
-import type { LicenseReceiptInput, } from "./ledger";
+import type { LicenseReceiptInput } from "./ledger";
 import type { LicenseReceipt, WalletRegistryEntry } from "./types";
 
 const line =
@@ -27,10 +27,16 @@ describe("processAccessLogLine", () => {
             id: "asset-1",
             ownerId: "owner-1",
             originalFileName: "photo.png",
+            originalPath: "/library/photo.png",
           },
         ],
       }),
       findWalletForOwner: async () => photographer,
+      readExifCredit: async () => ({
+        sourcePath: "/library/photo.png",
+        artist: "Photographer",
+        copyright: null,
+      }),
       settle: async () => null,
       appendReceipt: async (input) => {
         appended.push(input);
@@ -64,5 +70,6 @@ describe("processAccessLogLine", () => {
     expect(result.kind).toBe("processed");
     expect(appended).toHaveLength(1);
     expect(appended[0].assetId).toBe("asset-1");
+    expect(appended[0].exifCredit?.artist).toBe("Photographer");
   });
 });

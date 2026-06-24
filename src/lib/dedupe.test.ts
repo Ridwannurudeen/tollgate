@@ -23,7 +23,11 @@ describe("dedupe", () => {
 
   it("builds stable event ids for the same viewer window", () => {
     expect(buildResolveEventId(event, "share-1", "asset-1")).toBe(
-      buildResolveEventId({ ...event, rawLine: "different" }, "share-1", "asset-1"),
+      buildResolveEventId(
+        { ...event, rawLine: "different" },
+        "share-1",
+        "asset-1",
+      ),
     );
   });
 });

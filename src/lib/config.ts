@@ -9,6 +9,8 @@ export const APERTURE_LICENSE_FEE_ATOMIC_USDC = Number.parseInt(
   10,
 );
 
+export const APERTURE_EXIF_ENABLED = process.env.APERTURE_EXIF_ENABLED === "1";
+
 if (!Number.isFinite(APERTURE_LICENSE_FEE_ATOMIC_USDC)) {
   throw new Error("APERTURE_LICENSE_FEE_ATOMIC_USDC must be a number.");
 }

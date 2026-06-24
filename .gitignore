@@ -6,4 +6,5 @@ dist/
 *.tsbuildinfo
 data/*.tmp.*
 data/watcher-state.json
+data/proof-pack.json
 .next-dev-*.log

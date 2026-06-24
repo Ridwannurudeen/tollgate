@@ -16,12 +16,19 @@ export type ImmichAsset = {
   id: string;
   ownerId: string;
   originalFileName: string;
+  originalPath?: string;
 };
 
 export type ImmichSharedLink = {
   id: string;
   key: string;
   assets: ImmichAsset[];
+};
+
+export type ExifCredit = {
+  sourcePath: string;
+  artist: string | null;
+  copyright: string | null;
 };
 
 export type WalletRegistryEntry = {
@@ -64,6 +71,9 @@ export type LicenseReceipt = {
   feeRouterSplitId?: string;
   feeRouterCreateSplitTx?: Hex;
   feeRouterPayTx?: Hex;
+  exifArtist?: string;
+  exifCopyright?: string;
+  exifSourcePath?: string;
   rawAccessLogHash: Hex;
   previousHash: Hex;
   receiptHash: Hex;

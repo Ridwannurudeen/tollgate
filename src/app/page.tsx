@@ -3,6 +3,8 @@ import { ARC_EXPLORER_URL } from "../lib/chain";
 import { readLicenseLedger, summarizeLedger } from "../lib/ledger";
 import { readWalletRegistry } from "../lib/registry";
 
+export const dynamic = "force-dynamic";
+
 function formatUsdc(value: number) {
   return (value / 1_000_000).toLocaleString("en-US", {
     minimumFractionDigits: 4,
@@ -16,7 +18,10 @@ export default async function Home() {
     readWalletRegistry(),
   ]);
   const creators = summarizeLedger(ledger);
-  const totalEarned = creators.reduce((sum, creator) => sum + creator.earned, 0);
+  const totalEarned = creators.reduce(
+    (sum, creator) => sum + creator.earned,
+    0,
+  );
 
   return (
     <main className="shell">
@@ -24,6 +29,8 @@ export default async function Home() {
         <div className="brand">Aperture</div>
         <div className="navlinks">
           <Link href="/proof">Proof</Link>
+          <Link href="/install">Install</Link>
+          <Link href="/onboarding">Onboarding</Link>
           <a href={ARC_EXPLORER_URL}>Arcscan</a>
         </div>
       </nav>
@@ -79,6 +86,27 @@ export default async function Home() {
             <p>{body}</p>
           </div>
         ))}
+      </section>
+
+      <section className="operatorBand">
+        <div>
+          <p className="eyebrow">Operator-ready sidecar</p>
+          <h2>Install beside Immich without upstream patches.</h2>
+        </div>
+        <div className="operatorGrid">
+          <Link href="/api/health">
+            <span>Health JSON</span>
+            <small>Immich ping, ledger status, owner count</small>
+          </Link>
+          <Link href="/api/proof">
+            <span>Proof API</span>
+            <small>Hash chain, receipts, payouts, registry</small>
+          </Link>
+          <Link href="/install">
+            <span>VPS install</span>
+            <small>systemd, nginx, access-log watcher</small>
+          </Link>
+        </div>
       </section>
     </main>
   );

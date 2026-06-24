@@ -24,6 +24,15 @@ npm test -- --run
 npm run build
 ```
 
+Register an Immich owner wallet:
+
+```bash
+npm run register:owner -- \
+  --owner-id <immich-owner-id> \
+  --display-name "Photographer Name" \
+  --wallet 0x...
+```
+
 Process a single verified demo resolve:
 
 ```bash
@@ -43,6 +52,14 @@ FeeRouter settlement is disabled by default. To settle on Arc, set:
 ```bash
 APERTURE_FEE_ROUTER_ENABLED=1
 APERTURE_FEE_ROUTER_PRIVATE_KEY=<project-funded-payer-key>
+```
+
+Optional EXIF enrichment reads the original file path Immich returns for an
+asset and stores Artist/Copyright on the receipt:
+
+```bash
+APERTURE_EXIF_ENABLED=1
+APERTURE_EXIFTOOL_PATH=exiftool
 ```
 
 Never commit secrets.

@@ -8,9 +8,10 @@ const NGINX_LINE =
   /^(?<remoteAddress>\S+) \S+ \S+ \[(?<timestamp>[^\]]+)] "(?<method>[A-Z]+) (?<target>[^"]+) HTTP\/[^"]+" (?<status>\d{3}|-) \S+ "(?<referer>[^"]*)" "(?<userAgent>[^"]*)"/;
 
 function parseNginxTimestamp(value: string): string {
-  const match = /^(?<day>\d{2})\/(?<month>[A-Za-z]{3})\/(?<year>\d{4}):(?<time>\d{2}:\d{2}:\d{2}) (?<offset>[+-]\d{4})$/.exec(
-    value,
-  );
+  const match =
+    /^(?<day>\d{2})\/(?<month>[A-Za-z]{3})\/(?<year>\d{4}):(?<time>\d{2}:\d{2}:\d{2}) (?<offset>[+-]\d{4})$/.exec(
+      value,
+    );
   if (!match?.groups) return new Date().toISOString();
   const months: Record<string, string> = {
     Jan: "01",
@@ -72,6 +73,7 @@ function parseAsset(value: unknown): ImmichAsset {
   const id = value.id;
   const ownerId = value.ownerId;
   const originalFileName = value.originalFileName;
+  const originalPath = value.originalPath;
   if (typeof id !== "string") throw new Error("Immich asset id is missing.");
   if (typeof ownerId !== "string") {
     throw new Error("Immich asset ownerId is missing.");
@@ -79,7 +81,12 @@ function parseAsset(value: unknown): ImmichAsset {
   if (typeof originalFileName !== "string") {
     throw new Error("Immich asset originalFileName is missing.");
   }
-  return { id, ownerId, originalFileName };
+  return {
+    id,
+    ownerId,
+    originalFileName,
+    ...(typeof originalPath === "string" ? { originalPath } : {}),
+  };
 }
 
 export function parseSharedLink(value: unknown): ImmichSharedLink {
@@ -111,7 +118,9 @@ export async function resolveSharedLink(
 ): Promise<ImmichSharedLink> {
   const response = await fetchImpl(sharedLinkUrl(apiBaseUrl, key));
   if (!response.ok) {
-    throw new Error(`Immich shared-link resolve failed with ${response.status}.`);
+    throw new Error(
+      `Immich shared-link resolve failed with ${response.status}.`,
+    );
   }
   return parseSharedLink((await response.json()) as unknown);
 }
