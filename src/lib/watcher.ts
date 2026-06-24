@@ -1,6 +1,11 @@
+import type { Hex } from "viem";
 import { buildResolveEventId } from "./dedupe";
 import { parseDownloadArchiveAccessLog, resolveSharedLink } from "./immich";
-import { appendLicenseReceipt, type LicenseReceiptInput } from "./ledger";
+import {
+  appendLicenseReceipt,
+  readLicenseLedger,
+  type LicenseReceiptInput,
+} from "./ledger";
 import { readWalletForOwner } from "./registry";
 import { routeLicensePayment } from "./fee-router";
 import type {
@@ -29,6 +34,7 @@ export type WatcherDeps = {
   resolveSharedLink?: (key: string) => Promise<ImmichSharedLink>;
   findWalletForOwner?: (ownerId: string) => Promise<WalletRegistryEntry | null>;
   readExifCredit?: (asset: ImmichAsset) => Promise<ExifCredit | null>;
+  findExistingReceipt?: (eventId: Hex) => Promise<LicenseReceipt | null>;
   settle?: (
     recipient: WalletRegistryEntry,
     amountAtomicUsdc: number,
@@ -56,6 +62,14 @@ export async function processAccessLogLine(
     deps.resolveSharedLink ??
     ((key: string) => resolveSharedLink(deps.immichApiBaseUrl, key));
   const walletResolver = deps.findWalletForOwner ?? readWalletForOwner;
+  const findExisting =
+    deps.findExistingReceipt ??
+    (async (eventId: Hex) => {
+      const ledger = await readLicenseLedger();
+      return (
+        ledger.receipts.find((receipt) => receipt.eventId === eventId) ?? null
+      );
+    });
   const settle =
     deps.settle ??
     ((recipient: WalletRegistryEntry, amountAtomicUsdc: number) =>
@@ -78,10 +92,20 @@ export async function processAccessLogLine(
       continue;
     }
 
+    const eventId = buildResolveEventId(event, sharedLink.id, asset.id);
+
+    // Idempotency: if this resolve event was already recorded, do NOT settle
+    // again. Settling before this check caused real on-chain double-payments
+    // that were then silently discarded by receipt de-dup.
+    const existing = await findExisting(eventId);
+    if (existing) {
+      receipts.push(existing);
+      continue;
+    }
+
     const exifCredit = deps.readExifCredit
       ? await deps.readExifCredit(asset)
       : null;
-    const eventId = buildResolveEventId(event, sharedLink.id, asset.id);
     const evidence =
       (await settle(photographer, deps.amountAtomicUsdc)) ??
       localProofEvidence();
