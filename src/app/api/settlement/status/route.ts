@@ -32,9 +32,12 @@ export async function GET() {
   );
 
   return NextResponse.json({
-    mode: process.env.FACILITATOR_PRIVATE_KEY
-      ? "settle-enabled"
-      : "verify-only",
+    mode: "multi-accept",
+    readerSettlement: {
+      schemes: ["exact", "gateway-batched"],
+      gatewayBatchedSettlement: true,
+      selfFacilitator: Boolean(process.env.FACILITATOR_PRIVATE_KEY),
+    },
     facilitatorConfigured: Boolean(process.env.FACILITATOR_PRIVATE_KEY),
     forumRouterConfigured: Boolean(
       process.env.LEPTONWEB_FEE_ROUTER_ENABLED === "1" &&
