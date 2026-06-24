@@ -257,18 +257,31 @@ export async function readSources(): Promise<CreatorSource[]> {
   );
 }
 
+let registryWriteChain: Promise<unknown> = Promise.resolve();
+
+function withRegistryLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = registryWriteChain.then(task, task);
+  registryWriteChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 export async function appendSource(
   input: unknown,
 ): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
   const source = normalizeSourceInput(input);
-  const existingSources = await readSources();
-  if (existingSources.some((existing) => existing.id === source.id)) {
-    throw new SourceRegistryError("source id already exists.", 409);
-  }
-  const customSources = await readCustomSources();
-  const nextCustomSources = [...customSources, source];
-  await writeCustomSources(nextCustomSources);
-  return { source, sources: [...existingSources, source] };
+  return withRegistryLock(async () => {
+    const existingSources = await readSources();
+    if (existingSources.some((existing) => existing.id === source.id)) {
+      throw new SourceRegistryError("source id already exists.", 409);
+    }
+    const customSources = await readCustomSources();
+    const nextCustomSources = [...customSources, source];
+    await writeCustomSources(nextCustomSources);
+    return { source, sources: [...existingSources, source] };
+  });
 }
 
 export async function findSource(
