@@ -399,15 +399,13 @@ export function LeptonWebApp({
 
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
-          <p className="eyebrow">Per-citation settlement, proven on-chain</p>
-          <h2 id="hero-title">
-            A paid knowledge network for autonomous agents.
-          </h2>
+          <p className="eyebrow">For writers, publishers &amp; photographers</p>
+          <h2 id="hero-title">Get paid when AI uses your work.</h2>
           <p className="hero-text">
-            Tollgate is the first live slice: a research agent selects priced
-            sources, pays each cited creator, and writes a hash-linked receipt
-            chain for the answer. Gateway/x402 settlement plugs into the same
-            receipt boundary.
+            Register a piece of your work once. Whenever Tollgate&apos;s AI
+            cites it to answer a question, you&apos;re paid in dollars (USDC) —
+            instantly, with a receipt that proves it. No subscriptions, no
+            middlemen.
           </p>
         </div>
         <div className="signature-stat" aria-live="polite">
@@ -437,11 +435,40 @@ export function LeptonWebApp({
         </div>
       </section>
 
+      <section className="how-it-works" aria-label="How it works">
+        <ol className="step-grid">
+          <li className="step-card">
+            <span className="step-num">1</span>
+            <h3>Register your work</h3>
+            <p>
+              Add a link to one thing you&apos;ve made — an article, a photo, a
+              video. Takes a minute, no account needed.
+            </p>
+          </li>
+          <li className="step-card">
+            <span className="step-num">2</span>
+            <h3>AI cites it and pays you</h3>
+            <p>
+              When the answer agent uses your work, it pays you for that
+              citation in USDC — automatically, every time.
+            </p>
+          </li>
+          <li className="step-card">
+            <span className="step-num">3</span>
+            <h3>Withdraw anytime</h3>
+            <p>
+              Your earnings collect in your wallet. Cash out whenever you like —
+              and every payment is on the public record.
+            </p>
+          </li>
+        </ol>
+      </section>
+
       <section className="workbench" id="ask">
         <div className="ask-panel">
           <div className="panel-heading">
-            <p className="eyebrow">agent query</p>
-            <h3>Buy cited sources</h3>
+            <p className="eyebrow">live demo</p>
+            <h3>Try it — ask a question</h3>
           </div>
           <label htmlFor="question">Question</label>
           <textarea

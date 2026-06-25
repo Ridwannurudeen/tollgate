@@ -240,7 +240,7 @@ export default async function AnswerPage({ params }: Props) {
       )}
 
       {agentSteps.length > 0 && (
-        <section className="receipt-context profile-section">
+        <section className="receipt-context profile-section agent-trace">
           <div className="panel-heading">
             <p className="eyebrow">agent reasoning</p>
             <h3>How the agent reached this answer</h3>
@@ -248,24 +248,23 @@ export default async function AnswerPage({ params }: Props) {
           {query.agentRationale && (
             <p className="hero-text">{query.agentRationale}</p>
           )}
-          <div className="decision-list">
+          <ol className="trace-list">
             {agentSteps.map((step) => (
-              <article className="decision-row selected" key={step.index}>
-                <div>
-                  <strong>
-                    {step.index + 1}. {step.name}
-                  </strong>
-                  <span>
+              <li className="trace-step" key={step.index}>
+                <span className="trace-num">{step.index + 1}</span>
+                <div className="trace-body">
+                  <strong>{step.name}</strong>
+                  <span className="trace-summary">
                     {step.summary}
                     {step.spentAtomicUsdc !== undefined
-                      ? ` / spent ${formatUsdc(step.spentAtomicUsdc)} USDC`
+                      ? ` · spent ${formatUsdc(step.spentAtomicUsdc)} USDC`
                       : ""}
                   </span>
+                  <small>{step.detail}</small>
                 </div>
-                <small>{step.detail}</small>
-              </article>
+              </li>
             ))}
-          </div>
+          </ol>
         </section>
       )}
 
