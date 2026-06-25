@@ -852,6 +852,32 @@ textarea:focus {
   gap: 18px;
 }
 
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.integration-card {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper-raised);
+  box-shadow: 0 1px 2px var(--shadow), 0 16px 44px var(--shadow);
+}
+
+.integration-card .metrics-band {
+  margin: 0;
+}
+
+.integration-card .receipt-link {
+  font-size: 13px;
+}
+
 .creator-table,
 .source-registry,
 .receipt-ledger {
@@ -1167,6 +1193,7 @@ textarea:focus {
   .hero,
   .workbench,
   .lower-grid,
+  .integration-grid,
   .site-footer-inner {
     grid-template-columns: 1fr;
   }

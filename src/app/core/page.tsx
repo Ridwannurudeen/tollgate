@@ -86,8 +86,8 @@ export default async function CorePage() {
         </div>
       </section>
 
-      <section className="lower-grid">
-        <article className="source-card">
+      <section className="integration-grid">
+        <article className="integration-card">
           <div className="panel-heading">
             <p className="eyebrow">integration 01 · publishers</p>
             <h3>Citations</h3>
@@ -123,7 +123,7 @@ export default async function CorePage() {
           </Link>
         </article>
 
-        <article className="source-card">
+        <article className="integration-card">
           <div className="panel-heading">
             <p className="eyebrow">integration 02 · photographers</p>
             <h3>Photo licensing</h3>
