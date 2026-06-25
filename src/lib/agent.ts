@@ -6,6 +6,7 @@ import {
 import { sha256Hex } from "./hash";
 import type {
   AgentBudget,
+  AgentStep,
   Citation,
   CreatorSource,
   QueryPaymentEvidence,
@@ -16,6 +17,7 @@ import type {
 const MAX_AGENT_SOURCES = 3;
 const MAX_ANSWER_LENGTH = 1_600;
 const MAX_REASON_LENGTH = 220;
+const MAX_CLAIMS = 8;
 
 type ChatMessage = {
   role: "system" | "user";
@@ -28,24 +30,44 @@ export type LlmConfig = {
   model: string;
 };
 
+export type CompleteChat = (
+  messages: ChatMessage[],
+  config: LlmConfig,
+) => Promise<string>;
+
 export type AgentOptions = {
   llmConfig?: LlmConfig | null;
-  completeChat?: (
-    messages: ChatMessage[],
-    config: LlmConfig,
-  ) => Promise<string>;
+  completeChat?: CompleteChat;
 };
 
-type ModelSourceChoice = {
+type Appraisal = {
   sourceId: string;
+  verdict: "buy" | "skip";
+  relevance: number;
   reason: string;
 };
 
-type ModelPlan = {
+type DraftClaim = {
+  text: string;
+  sourceId: string;
+};
+
+type Draft = {
   answer: string;
-  buys: ModelSourceChoice[];
-  skips: ModelSourceChoice[];
+  claims: DraftClaim[];
+};
+
+type Critique = {
+  groundedAnswer: string;
+  verdict: string;
+};
+
+type AgentLoopResult = {
+  answer: string;
+  selected: CreatorSource[];
+  steps: AgentStep[];
   rationale: string;
+  appraisalReason: Map<string, string>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,7 +103,7 @@ function sourceSnapshot(source: CreatorSource) {
   };
 }
 
-function buildMessages(
+function appraiseMessages(
   question: string,
   sources: CreatorSource[],
   sourceBudgetAtomicUsdc: number,
@@ -90,21 +112,75 @@ function buildMessages(
     {
       role: "system",
       content:
-        "You are Tollgate, an autonomous source-buying answer agent. Buy only useful sources, stay inside budget, ground the answer only in bought source summaries, and return strict JSON with answer, buys, skips, and rationale.",
+        "You are Tollgate, an autonomous source-buying answer agent. STEP 1 is APPRAISAL: judge each candidate source for relevance to the question and decide buy or skip. Do not write an answer yet. Stay inside budget and return strict JSON.",
     },
     {
       role: "user",
       content: JSON.stringify({
+        stage: "appraise",
         question,
         sourceBudgetAtomicUsdc,
         maxSources: MAX_AGENT_SOURCES,
         candidateSources: sources.map(sourceSnapshot),
         responseShape: {
-          answer: "string",
-          buys: [{ sourceId: "string", reason: "string" }],
-          skips: [{ sourceId: "string", reason: "string" }],
-          rationale: "string",
+          appraisals: [
+            {
+              sourceId: "string",
+              verdict: "buy|skip",
+              relevance: "0-100",
+              reason: "string",
+            },
+          ],
         },
+      }),
+    },
+  ];
+}
+
+function draftMessages(
+  question: string,
+  purchasedSources: CreatorSource[],
+): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content:
+        "You are Tollgate. STEP 2 is DRAFTING: answer the question grounded ONLY in the purchased sources below. Every claim must cite the sourceId it came from. Return strict JSON.",
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        stage: "draft",
+        question,
+        purchasedSources: purchasedSources.map(sourceSnapshot),
+        responseShape: {
+          answer: "string",
+          claims: [{ text: "string", sourceId: "string" }],
+        },
+      }),
+    },
+  ];
+}
+
+function critiqueMessages(
+  question: string,
+  draft: Draft,
+  purchasedSourceIds: string[],
+): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content:
+        "You are Tollgate. STEP 3 is SELF-CRITIQUE: check that every claim is supported by one of the purchased sourceIds. Rewrite the answer so it only keeps claims backed by a purchased source. Return strict JSON.",
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        stage: "critique",
+        question,
+        purchasedSourceIds,
+        draft,
+        responseShape: { groundedAnswer: "string", verdict: "string" },
       }),
     },
   ];
@@ -162,70 +238,234 @@ function parseJsonObject(text: string): unknown {
   }
 }
 
-function parseChoices(value: unknown): ModelSourceChoice[] {
-  if (!Array.isArray(value)) return [];
-  return value
+function parseAppraisals(text: string): Appraisal[] {
+  const parsed = parseJsonObject(text);
+  if (!isRecord(parsed) || !Array.isArray(parsed.appraisals)) {
+    throw new Error("LLM appraisal returned no appraisals.");
+  }
+  return parsed.appraisals
     .map((item) => {
       if (!isRecord(item)) return null;
       const sourceId = cleanModelText(item.sourceId, 80);
+      if (!sourceId) return null;
       const reason = cleanModelText(item.reason, MAX_REASON_LENGTH);
-      if (!sourceId || !reason) return null;
-      return { sourceId, reason };
+      const verdict = item.verdict === "buy" ? "buy" : "skip";
+      const relevanceRaw =
+        typeof item.relevance === "number"
+          ? item.relevance
+          : Number(item.relevance);
+      const relevance = Number.isFinite(relevanceRaw)
+        ? Math.max(0, Math.min(100, Math.round(relevanceRaw)))
+        : 0;
+      return { sourceId, verdict, relevance, reason } satisfies Appraisal;
     })
-    .filter((item): item is ModelSourceChoice => item !== null);
+    .filter((item): item is Appraisal => item !== null);
 }
 
-function parseModelPlan(text: string): ModelPlan {
+function parseDraft(text: string): Draft {
   const parsed = parseJsonObject(text);
   if (!isRecord(parsed)) {
-    throw new Error("LLM planner JSON must be an object.");
+    throw new Error("LLM draft JSON must be an object.");
   }
   const answer = cleanModelText(parsed.answer, MAX_ANSWER_LENGTH);
-  const rationale = cleanModelText(parsed.rationale, MAX_REASON_LENGTH);
   if (answer.length < 40) {
-    throw new Error("LLM planner answer was too short.");
+    throw new Error("LLM draft answer was too short.");
   }
+  const claims = Array.isArray(parsed.claims)
+    ? parsed.claims
+        .map((item) => {
+          if (!isRecord(item)) return null;
+          const claimText = cleanModelText(item.text, MAX_REASON_LENGTH);
+          const sourceId = cleanModelText(item.sourceId, 80);
+          if (!claimText || !sourceId) return null;
+          return { text: claimText, sourceId } satisfies DraftClaim;
+        })
+        .filter((item): item is DraftClaim => item !== null)
+        .slice(0, MAX_CLAIMS)
+    : [];
+  return { answer, claims };
+}
+
+function parseCritique(text: string, fallbackAnswer: string): Critique {
+  const parsed = parseJsonObject(text);
+  if (!isRecord(parsed)) {
+    throw new Error("LLM critique JSON must be an object.");
+  }
+  const grounded = cleanModelText(parsed.groundedAnswer, MAX_ANSWER_LENGTH);
+  const verdict = cleanModelText(parsed.verdict, MAX_REASON_LENGTH);
   return {
-    answer,
-    rationale,
-    buys: parseChoices(parsed.buys),
-    skips: parseChoices(parsed.skips),
+    groundedAnswer: grounded.length >= 40 ? grounded : fallbackAnswer,
+    verdict,
   };
 }
 
-function enforceModelBuys(
-  plan: ModelPlan,
+function allocateFromAppraisals(
+  appraisals: Appraisal[],
   sources: CreatorSource[],
   sourceBudgetAtomicUsdc: number,
-): CreatorSource[] {
+): { selected: CreatorSource[]; remainingAtomicUsdc: number } {
   const sourceById = new Map(sources.map((source) => [source.id, source]));
-  const selectedSources: CreatorSource[] = [];
+  const buys = appraisals
+    .filter((appraisal) => appraisal.verdict === "buy")
+    .sort((a, b) => b.relevance - a.relevance);
+  const selected: CreatorSource[] = [];
   const seen = new Set<string>();
   let remainingAtomicUsdc = sourceBudgetAtomicUsdc;
 
-  for (const buy of plan.buys) {
-    if (selectedSources.length >= MAX_AGENT_SOURCES) break;
+  for (const buy of buys) {
+    if (selected.length >= MAX_AGENT_SOURCES) break;
     if (seen.has(buy.sourceId)) continue;
     const source = sourceById.get(buy.sourceId);
     if (!source) continue;
     if (source.priceAtomicUsdc > remainingAtomicUsdc) continue;
     seen.add(source.id);
-    selectedSources.push(source);
+    selected.push(source);
     remainingAtomicUsdc -= source.priceAtomicUsdc;
   }
 
-  return selectedSources;
+  return { selected, remainingAtomicUsdc };
 }
 
-function reasonBySourceId(choices: ModelSourceChoice[]): Map<string, string> {
-  return new Map(choices.map((choice) => [choice.sourceId, choice.reason]));
+function appraisalSummary(appraisals: Appraisal[]): string {
+  return (
+    appraisals
+      .filter((appraisal) => appraisal.reason)
+      .slice(0, 3)
+      .map((appraisal) => `${appraisal.sourceId}: ${appraisal.reason}`)
+      .join(" | ") || "Appraised every candidate by relevance to the question."
+  );
+}
+
+async function runAgentLoop(
+  question: string,
+  sources: CreatorSource[],
+  sourceBudgetAtomicUsdc: number,
+  completeChat: CompleteChat,
+  llmConfig: LlmConfig,
+): Promise<AgentLoopResult> {
+  const steps: AgentStep[] = [];
+
+  const appraisals = parseAppraisals(
+    await completeChat(
+      appraiseMessages(question, sources, sourceBudgetAtomicUsdc),
+      llmConfig,
+    ),
+  );
+  const buyCount = appraisals.filter(
+    (appraisal) => appraisal.verdict === "buy",
+  ).length;
+  const appraisalReason = new Map(
+    appraisals
+      .filter((appraisal) => appraisal.reason)
+      .map((appraisal) => [appraisal.sourceId, appraisal.reason]),
+  );
+  steps.push({
+    index: 0,
+    name: "appraise",
+    summary: `Appraised ${appraisals.length} candidate${
+      appraisals.length === 1 ? "" : "s"
+    }: ${buyCount} to buy, ${appraisals.length - buyCount} to skip.`,
+    detail: appraisalSummary(appraisals),
+  });
+
+  let { selected, remainingAtomicUsdc } = allocateFromAppraisals(
+    appraisals,
+    sources,
+    sourceBudgetAtomicUsdc,
+  );
+  if (selected.length === 0) {
+    throw new Error("LLM appraisal selected no affordable known source.");
+  }
+  steps.push({
+    index: 1,
+    name: "allocate",
+    summary: `Allocated the budget to ${selected.length} source${
+      selected.length === 1 ? "" : "s"
+    }.`,
+    detail: selected.map((source) => source.title).join(", "),
+    spentAtomicUsdc: sourceBudgetAtomicUsdc - remainingAtomicUsdc,
+  });
+
+  let draft = parseDraft(
+    await completeChat(draftMessages(question, selected), llmConfig),
+  );
+  steps.push({
+    index: 2,
+    name: "draft",
+    summary: `Drafted an answer with ${draft.claims.length} grounded claim${
+      draft.claims.length === 1 ? "" : "s"
+    }.`,
+    detail: "Every claim is tied to a purchased sourceId.",
+  });
+
+  let boughtIds = new Set(selected.map((source) => source.id));
+  const unsupported = draft.claims.filter(
+    (claim) => !boughtIds.has(claim.sourceId),
+  );
+  const critique = parseCritique(
+    await completeChat(
+      critiqueMessages(question, draft, [...boughtIds]),
+      llmConfig,
+    ),
+    draft.answer,
+  );
+  steps.push({
+    index: 3,
+    name: "critique",
+    summary:
+      unsupported.length === 0
+        ? "Verified every claim is backed by a purchased source."
+        : `Caught ${unsupported.length} unsupported claim${
+            unsupported.length === 1 ? "" : "s"
+          } to resolve.`,
+    detail: critique.verdict || "Self-critique complete.",
+  });
+
+  let answer = critique.groundedAnswer;
+  let rationale =
+    critique.verdict ||
+    `Bought ${selected.length} source${
+      selected.length === 1 ? "" : "s"
+    } and grounded the answer in them.`;
+
+  if (unsupported.length > 0 && selected.length < MAX_AGENT_SOURCES) {
+    const sourceById = new Map(sources.map((source) => [source.id, source]));
+    const candidate = unsupported
+      .map((claim) => sourceById.get(claim.sourceId))
+      .find(
+        (source): source is CreatorSource =>
+          source !== undefined &&
+          !boughtIds.has(source.id) &&
+          source.priceAtomicUsdc <= remainingAtomicUsdc,
+      );
+    if (candidate) {
+      selected = [...selected, candidate];
+      remainingAtomicUsdc -= candidate.priceAtomicUsdc;
+      boughtIds = new Set(selected.map((source) => source.id));
+      const reDraft = parseDraft(
+        await completeChat(draftMessages(question, selected), llmConfig),
+      );
+      draft = reDraft;
+      answer = reDraft.answer;
+      steps.push({
+        index: 4,
+        name: "reflect",
+        summary: `Bought 1 more source (${candidate.title}) to ground an unsupported claim, then redrafted.`,
+        detail: `Citation spend rose to cover ${candidate.creator}.`,
+        spentAtomicUsdc: sourceBudgetAtomicUsdc - remainingAtomicUsdc,
+      });
+      rationale = `Self-critique caught an unsupported claim; the agent bought ${candidate.title} and regrounded the answer.`;
+    }
+  }
+
+  return { answer, selected, steps, rationale, appraisalReason };
 }
 
 function buildLlmQueryRecord(
   question: string,
   createdAt: string,
   sources: CreatorSource[],
-  modelPlan: ModelPlan,
+  loop: AgentLoopResult,
   readerPayment: QueryPaymentEvidence | undefined,
 ): QueryRecord {
   const citationMarket = planCitationMarket(
@@ -234,32 +474,15 @@ function buildLlmQueryRecord(
     MAX_AGENT_SOURCES,
     DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
   );
-  const selectedSources = enforceModelBuys(
-    modelPlan,
-    sources,
-    DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
-  );
-  if (selectedSources.length === 0) {
-    throw new Error("LLM planner did not buy any affordable known source.");
-  }
-
-  const selectedIds = new Set(selectedSources.map((source) => source.id));
-  const buyReasons = reasonBySourceId(modelPlan.buys);
-  const skipReasons = reasonBySourceId(modelPlan.skips);
+  const selectedIds = new Set(loop.selected.map((source) => source.id));
   const decisions: SourceDecision[] = citationMarket.decisions.map(
-    (decision) => {
-      const selected = selectedIds.has(decision.sourceId);
-      const modelReason = selected
-        ? buyReasons.get(decision.sourceId)
-        : skipReasons.get(decision.sourceId);
-      return {
-        ...decision,
-        selected,
-        reason: modelReason ?? decision.reason,
-      };
-    },
+    (decision) => ({
+      ...decision,
+      selected: selectedIds.has(decision.sourceId),
+      reason: loop.appraisalReason.get(decision.sourceId) ?? decision.reason,
+    }),
   );
-  const spentAtomicUsdc = selectedSources.reduce(
+  const spentAtomicUsdc = loop.selected.reduce(
     (sum, source) => sum + source.priceAtomicUsdc,
     0,
   );
@@ -268,9 +491,9 @@ function buildLlmQueryRecord(
     spentAtomicUsdc,
     remainingAtomicUsdc: DEFAULT_SOURCE_BUDGET_ATOMIC_USDC - spentAtomicUsdc,
     candidateCount: citationMarket.budget.candidateCount,
-    purchasedCount: selectedSources.length,
+    purchasedCount: loop.selected.length,
   };
-  const citations: Citation[] = selectedSources.map((source) => ({
+  const citations: Citation[] = loop.selected.map((source) => ({
     sourceId: source.id,
     title: source.title,
     creator: source.creator,
@@ -279,9 +502,10 @@ function buildLlmQueryRecord(
     url: source.url,
     amountAtomicUsdc: source.priceAtomicUsdc,
     reason:
-      buyReasons.get(source.id) ??
-      "The LLM planner selected this source under the source budget.",
+      loop.appraisalReason.get(source.id) ??
+      "The agent appraised this source as worth buying under budget.",
   }));
+  const traceHash = sha256Hex(loop.steps);
   const queryHash = sha256Hex({
     question,
     citations,
@@ -290,10 +514,11 @@ function buildLlmQueryRecord(
     readerPaymentHash: readerPayment?.paymentHash,
   });
   const answerHash = sha256Hex({
-    answer: modelPlan.answer,
+    answer: loop.answer,
     citations,
     sourceDecisions: decisions,
     agentBudget: budget,
+    traceHash,
     readerPaymentHash: readerPayment?.paymentHash,
   });
   const id = sha256Hex({ createdAt, question, queryHash }).slice(0, 18);
@@ -301,17 +526,17 @@ function buildLlmQueryRecord(
   return {
     id,
     question,
-    answer: modelPlan.answer,
+    answer: loop.answer,
     queryHash,
     answerHash,
     totalAtomicUsdc: spentAtomicUsdc,
     citations,
     agentMode: "llm",
-    agentRationale:
-      modelPlan.rationale ||
-      "The LLM planner selected the source bundle under budget.",
+    agentRationale: loop.rationale,
     sourceDecisions: decisions,
     agentBudget: budget,
+    agentSteps: loop.steps,
+    traceHash,
     receiptHashes: [],
     readerPayment,
     createdAt,
@@ -353,15 +578,18 @@ export async function createAgentQueryRecord(
 
   try {
     const completeChat = options.completeChat ?? completeOpenAiCompatibleChat;
-    const text = await completeChat(
-      buildMessages(question, sources, DEFAULT_SOURCE_BUDGET_ATOMIC_USDC),
+    const loop = await runAgentLoop(
+      question,
+      sources,
+      DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
+      completeChat,
       llmConfig,
     );
     return buildLlmQueryRecord(
       question,
       createdAt,
       sources,
-      parseModelPlan(text),
+      loop,
       readerPayment,
     );
   } catch (error) {

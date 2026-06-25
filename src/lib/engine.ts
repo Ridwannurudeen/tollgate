@@ -2,6 +2,7 @@ import { DEFAULT_CREATOR_SOURCES } from "./catalog";
 import { sha256Hex } from "./hash";
 import type {
   AgentBudget,
+  AgentStep,
   Citation,
   CreatorSource,
   QueryPaymentEvidence,
@@ -206,6 +207,43 @@ function buildAnswer(
   ].join(" ");
 }
 
+function deterministicSteps(
+  selectedSources: CreatorSource[],
+  budget: AgentBudget,
+  totalAtomicUsdc: number,
+): AgentStep[] {
+  const plural = (count: number) => (count === 1 ? "" : "s");
+  return [
+    {
+      index: 0,
+      name: "appraise",
+      summary: `Ranked ${budget.candidateCount} candidate source${plural(
+        budget.candidateCount,
+      )} by keyword relevance.`,
+      detail:
+        "Deterministic scoring weighted exact term matches, tag hits, and price per source.",
+    },
+    {
+      index: 1,
+      name: "allocate",
+      summary: `Bought ${selectedSources.length} source${plural(
+        selectedSources.length,
+      )} inside the source budget.`,
+      detail:
+        selectedSources.map((source) => source.title).join(", ") ||
+        "No candidate cleared the budget policy.",
+      spentAtomicUsdc: totalAtomicUsdc,
+    },
+    {
+      index: 2,
+      name: "draft",
+      summary: "Grounded the answer in the purchased source summaries.",
+      detail:
+        "Each cited creator was paid in USDC atomic units and written into the receipt chain.",
+    },
+  ];
+}
+
 export function createQueryRecord(
   question: string,
   createdAt: string,
@@ -229,6 +267,12 @@ export function createQueryRecord(
     (sum, citation) => sum + citation.amountAtomicUsdc,
     0,
   );
+  const agentSteps = deterministicSteps(
+    selectedSources,
+    citationMarket.budget,
+    totalAtomicUsdc,
+  );
+  const traceHash = sha256Hex(agentSteps);
   const queryHash = sha256Hex({
     question,
     citations,
@@ -241,6 +285,7 @@ export function createQueryRecord(
     citations,
     sourceDecisions: citationMarket.decisions,
     agentBudget: citationMarket.budget,
+    traceHash,
     readerPaymentHash: readerPayment?.paymentHash,
   });
   const id = sha256Hex({ createdAt, question, queryHash }).slice(0, 18);
@@ -258,6 +303,8 @@ export function createQueryRecord(
       "Deterministic keyword scoring selected sources by relevance and source budget.",
     sourceDecisions: citationMarket.decisions,
     agentBudget: citationMarket.budget,
+    agentSteps,
+    traceHash,
     receiptHashes: [],
     readerPayment,
     createdAt,

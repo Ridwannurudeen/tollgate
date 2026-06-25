@@ -160,6 +160,7 @@ export function LeptonWebApp({
   const displayedQuery = activeResult?.query ?? ledger.queries[0] ?? null;
   const displayedBudget = displayedQuery?.agentBudget ?? null;
   const displayedDecisions = displayedQuery?.sourceDecisions ?? [];
+  const displayedSteps = displayedQuery?.agentSteps ?? [];
   const proofOk = verification?.ok ?? settlementStatus?.verification.ok ?? true;
   const settlementMode = settlementStatus?.mode ?? "verify-only";
 
@@ -553,6 +554,40 @@ export function LeptonWebApp({
                     <strong>
                       {shortHash(displayedQuery.readerPayment.paymentHash)}
                     </strong>
+                  </div>
+                </div>
+              )}
+              {displayedSteps.length > 0 && (
+                <div className="decision-board">
+                  <div className="decision-summary">
+                    <div>
+                      <span>agent mode</span>
+                      <strong>
+                        {displayedQuery.agentMode === "llm"
+                          ? "reasoning loop"
+                          : "deterministic"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>steps</span>
+                      <strong>{displayedSteps.length}</strong>
+                    </div>
+                  </div>
+                  <div className="decision-list">
+                    {displayedSteps.map((step) => (
+                      <article
+                        className="decision-row selected"
+                        key={step.index}
+                      >
+                        <div>
+                          <strong>
+                            {step.index + 1}. {step.name}
+                          </strong>
+                          <span>{step.summary}</span>
+                        </div>
+                        <small>{step.detail}</small>
+                      </article>
+                    ))}
                   </div>
                 </div>
               )}

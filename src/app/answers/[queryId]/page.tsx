@@ -48,6 +48,11 @@ export default async function AnswerPage({ params }: Props) {
   const latestReceipt = receipts[0];
   const agentBudget = query.agentBudget;
   const sourceDecisions = query.sourceDecisions ?? [];
+  const agentSteps = query.agentSteps ?? [];
+  const agentModeLabel =
+    query.agentMode === "llm"
+      ? "agentic reasoning loop"
+      : "deterministic policy";
 
   return (
     <main className="shell receipt-page">
@@ -68,7 +73,9 @@ export default async function AnswerPage({ params }: Props) {
           <span className="stat-unit">USDC</span>
         </div>
         <div className="proof-copy">
-          <p className="eyebrow">{query.id}</p>
+          <p className="eyebrow">
+            {agentModeLabel} / {query.id}
+          </p>
           <h2>{query.question}</h2>
           <p className="hero-text">{query.answer}</p>
         </div>
@@ -228,6 +235,36 @@ export default async function AnswerPage({ params }: Props) {
                 </article>
               ))}
             </div>
+          </div>
+        </section>
+      )}
+
+      {agentSteps.length > 0 && (
+        <section className="receipt-context profile-section">
+          <div className="panel-heading">
+            <p className="eyebrow">agent reasoning</p>
+            <h3>How the agent reached this answer</h3>
+          </div>
+          {query.agentRationale && (
+            <p className="hero-text">{query.agentRationale}</p>
+          )}
+          <div className="decision-list">
+            {agentSteps.map((step) => (
+              <article className="decision-row selected" key={step.index}>
+                <div>
+                  <strong>
+                    {step.index + 1}. {step.name}
+                  </strong>
+                  <span>
+                    {step.summary}
+                    {step.spentAtomicUsdc !== undefined
+                      ? ` / spent ${formatUsdc(step.spentAtomicUsdc)} USDC`
+                      : ""}
+                  </span>
+                </div>
+                <small>{step.detail}</small>
+              </article>
+            ))}
           </div>
         </section>
       )}

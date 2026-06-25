@@ -309,9 +309,7 @@ export function buildTrackRecordForAnswer(
 ): TrackRecordV2PublishInput {
   const queryCreatedAt = Math.floor(new Date(query.createdAt).getTime() / 1000);
   const periodStart =
-    state.lastSeq === 0
-      ? Math.max(1, queryCreatedAt)
-      : state.lastPeriodEnd + 1;
+    state.lastSeq === 0 ? Math.max(1, queryCreatedAt) : state.lastPeriodEnd + 1;
   const periodEnd = Math.max(periodStart, queryCreatedAt);
 
   return {
@@ -326,6 +324,7 @@ export function buildTrackRecordForAnswer(
       citationCount: query.citations.length,
       queryHash: query.queryHash,
       totalAtomicUsdc: query.totalAtomicUsdc,
+      traceHash: query.traceHash ?? "none",
     }),
     evidenceUri,
     evidenceHash: trackRecordHashPayload({

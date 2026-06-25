@@ -58,6 +58,14 @@ export type AgentBudget = {
   purchasedCount: number;
 };
 
+export type AgentStep = {
+  index: number;
+  name: "appraise" | "allocate" | "draft" | "critique" | "reflect";
+  summary: string;
+  detail: string;
+  spentAtomicUsdc?: number;
+};
+
 export type PaymentReceipt = {
   id: string;
   queryId: string;
@@ -120,6 +128,8 @@ export type QueryRecord = {
   agentRationale?: string;
   sourceDecisions?: SourceDecision[];
   agentBudget?: AgentBudget;
+  agentSteps?: AgentStep[];
+  traceHash?: string;
   receiptHashes: string[];
   readerPayment?: QueryPaymentEvidence;
   trackRecord?: TrackRecordEvidence;
