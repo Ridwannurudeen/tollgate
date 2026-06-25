@@ -116,6 +116,14 @@ export default async function DemoPage() {
   const latestTrackRecordQuery = trackRecordQueries[0] ?? null;
   const latestTrackRecord = latestTrackRecordQuery?.trackRecord;
   const latestReceipt = ledger.receipts.at(-1);
+  const tracedQuery =
+    ledger.queries.find(
+      (query) =>
+        query.agentMode === "llm" && (query.agentSteps?.length ?? 0) > 0,
+    ) ??
+    ledger.queries.find((query) => (query.agentSteps?.length ?? 0) > 0) ??
+    null;
+  const tracedSteps = tracedQuery?.agentSteps ?? [];
 
   const steps: DemoStep[] = [
     {
@@ -189,7 +197,9 @@ export default async function DemoPage() {
             latestTrackRecord.transaction,
           )}`
         : "no TrackRecord",
-      value: latestTrackRecord ? shortHash(latestTrackRecord.recordHash) : "missing",
+      value: latestTrackRecord
+        ? shortHash(latestTrackRecord.recordHash)
+        : "missing",
       href: latestTrackRecordQuery
         ? `/answers/${latestTrackRecordQuery.id}`
         : undefined,
@@ -279,6 +289,39 @@ export default async function DemoPage() {
           </strong>
         </div>
       </section>
+
+      {tracedQuery && tracedSteps.length > 0 && (
+        <section className="receipt-context profile-section">
+          <div className="panel-heading">
+            <p className="eyebrow">agentic reasoning</p>
+            <h3>How the agent buys and grounds an answer</h3>
+          </div>
+          <p className="hero-text">{tracedQuery.question}</p>
+          <div className="decision-list">
+            {tracedSteps.map((step) => (
+              <article className="decision-row selected" key={step.index}>
+                <div>
+                  <strong>
+                    {step.index + 1}. {step.name}
+                  </strong>
+                  <span>
+                    {step.summary}
+                    {step.spentAtomicUsdc !== undefined
+                      ? ` / spent ${formatUsdc(step.spentAtomicUsdc)} USDC`
+                      : ""}
+                  </span>
+                </div>
+                <small>{step.detail}</small>
+              </article>
+            ))}
+          </div>
+          <div className="source-action">
+            <Link className="receipt-link" href={`/answers/${tracedQuery.id}`}>
+              Open full answer
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section className="receipt-context profile-section">
         <div className="panel-heading">
