@@ -368,7 +368,7 @@ export function LeptonWebApp({
             ledger {proofOk ? "verified" : "needs review"}
           </div>
           <Link className="wallet-button" href="/core">
-            Core
+            Overview
           </Link>
           <a className="wallet-button" href="/aperture">
             Photos
@@ -749,15 +749,16 @@ export function LeptonWebApp({
 
         <div className="source-registry">
           <div className="panel-heading">
-            <p className="eyebrow">priced source registry</p>
-            <h3>Creator inventory</h3>
+            <p className="eyebrow">get listed</p>
+            <h3>Register your work</h3>
           </div>
           <form className="register-source-form" onSubmit={registerSource}>
             <div className="form-grid">
               <div>
-                <label htmlFor="source-title">Title</label>
+                <label htmlFor="source-title">Title of your work</label>
                 <input
                   id="source-title"
+                  placeholder="Agent Payments, Explained"
                   value={sourceForm.title}
                   onChange={(event) =>
                     updateSourceForm("title", event.target.value)
@@ -765,9 +766,10 @@ export function LeptonWebApp({
                 />
               </div>
               <div>
-                <label htmlFor="source-creator">Creator</label>
+                <label htmlFor="source-creator">Your name</label>
                 <input
                   id="source-creator"
+                  placeholder="Ada Rivera"
                   value={sourceForm.creator}
                   onChange={(event) =>
                     updateSourceForm("creator", event.target.value)
@@ -778,6 +780,7 @@ export function LeptonWebApp({
                 <label htmlFor="source-handle">Handle</label>
                 <input
                   id="source-handle"
+                  placeholder="@adawrites"
                   value={sourceForm.handle}
                   onChange={(event) =>
                     updateSourceForm("handle", event.target.value)
@@ -785,43 +788,55 @@ export function LeptonWebApp({
                 />
               </div>
               <div>
-                <label htmlFor="source-price">Atomic USDC</label>
+                <label htmlFor="source-price">Price per citation</label>
                 <input
                   id="source-price"
                   inputMode="numeric"
+                  placeholder="1500"
                   value={sourceForm.priceAtomicUsdc}
                   onChange={(event) =>
                     updateSourceForm("priceAtomicUsdc", event.target.value)
                   }
                 />
+                <small className="field-hint">
+                  In millionths of a dollar — e.g. 1500 = $0.0015 each time
+                  you&apos;re cited.
+                </small>
               </div>
             </div>
-            <label htmlFor="source-wallet">Wallet</label>
+            <label htmlFor="source-wallet">Payout wallet</label>
             <input
               id="source-wallet"
+              placeholder="0x…"
               value={sourceForm.wallet}
               onChange={(event) =>
                 updateSourceForm("wallet", event.target.value)
               }
             />
-            <label htmlFor="source-url">URL</label>
+            <small className="field-hint">
+              Your Arc address — where your USDC earnings are paid out.
+            </small>
+            <label htmlFor="source-url">Link to your work</label>
             <input
               id="source-url"
+              placeholder="https://yourblog.com/post"
               value={sourceForm.url}
               onChange={(event) => updateSourceForm("url", event.target.value)}
             />
-            <label htmlFor="source-summary">Summary</label>
+            <label htmlFor="source-summary">What it covers</label>
             <textarea
               id="source-summary"
+              placeholder="One line on what it's about — helps the AI know when to cite you."
               value={sourceForm.summary}
               rows={3}
               onChange={(event) =>
                 updateSourceForm("summary", event.target.value)
               }
             />
-            <label htmlFor="source-tags">Tags</label>
+            <label htmlFor="source-tags">Topics</label>
             <input
               id="source-tags"
+              placeholder="agents, payments, x402"
               value={sourceForm.tags}
               onChange={(event) => updateSourceForm("tags", event.target.value)}
             />
@@ -830,11 +845,11 @@ export function LeptonWebApp({
               className="source-register-button"
               disabled={isRegisteringSource}
             >
-              {isRegisteringSource ? "registering..." : "Register source"}
+              {isRegisteringSource ? "registering…" : "Register my work"}
             </button>
             <p className="status-line source-status" aria-live="polite">
               {sourceRegistrationStatus ||
-                "New creator sources join the same paid citation rail."}
+                "Add one link to your work — you'll be paid whenever the AI cites it."}
             </p>
           </form>
           <div className="source-list">
