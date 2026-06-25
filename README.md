@@ -40,6 +40,6 @@ chainId `5042002` · RPC `https://rpc.testnet.arc.network` · USDC `0x3600000000
 
 ## Repos
 - This repo: the settlement core + Citations integration — https://github.com/Ridwannurudeen/tollgate (private until launch).
-- Aperture (Immich photo-licensing sidecar): separate repo — **[add public URL]**.
+- Aperture (Immich photo-licensing sidecar): separate repo — https://github.com/Ridwannurudeen/aperture (private until launch).
 
 Built for the Lepton Agents Hackathon (Canteen × Circle × Arc). AI usage: see `AI_USAGE.md`.
