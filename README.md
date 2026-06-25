@@ -39,7 +39,7 @@ npm run verify:ledger
 chainId `5042002` · RPC `https://rpc.testnet.arc.network` · USDC `0x3600000000000000000000000000000000000000` · FeeRouter `0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59` · explorer `https://testnet.arcscan.app`
 
 ## Repos
-- This repo: the settlement core + Citations integration.
+- This repo: the settlement core + Citations integration — https://github.com/Ridwannurudeen/tollgate (private until launch).
 - Aperture (Immich photo-licensing sidecar): separate repo — **[add public URL]**.
 
 Built for the Lepton Agents Hackathon (Canteen × Circle × Arc). AI usage: see `AI_USAGE.md`.

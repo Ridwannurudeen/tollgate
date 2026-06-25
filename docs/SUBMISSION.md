@@ -28,7 +28,7 @@ The citation agent runs a real multi-step reasoning loop: it **appraises** every
 - Live (unified): https://tollgate.gudman.xyz/core
 - Citations: https://tollgate.gudman.xyz · Photo licensing: https://tollgate.gudman.xyz/aperture
 - Proof: https://tollgate.gudman.xyz/proof · https://tollgate.gudman.xyz/aperture (proof) · explorer: https://testnet.arcscan.app
-- Repos: **[fill in public GitHub URLs]** — Citations core (`leptonweb`) + Aperture sidecar (`aperture`).
+- Repos: Citations core (`tollgate`) — https://github.com/Ridwannurudeen/tollgate (private until launch) + Aperture sidecar (`aperture`) **[add public URL]**.
 - Video: **[fill in Loom/YouTube <3min link]**
 
 ## Pre-submit checklist
