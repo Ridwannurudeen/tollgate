@@ -349,9 +349,9 @@ export function LeptonWebApp({
         <a className="skip-link" href="#ask">
           Skip to query
         </a>
-        <div>
-          <p className="eyebrow">LeptonWeb / Tollgate v0</p>
-          <h1>AI pays the sources it cites.</h1>
+        <div className="brand">
+          <h1>Tollgate</h1>
+          <p className="eyebrow">Paid knowledge network · live on Arc</p>
         </div>
         <div className="top-actions">
           <div className="network-pill" aria-label="Settlement mode">
@@ -380,7 +380,7 @@ export function LeptonWebApp({
             Demo
           </Link>
           <button
-            className="wallet-button"
+            className="wallet-button primary"
             type="button"
             onClick={() => {
               connectWallet().catch((error: unknown) => {
@@ -399,7 +399,7 @@ export function LeptonWebApp({
 
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
-          <p className="eyebrow">RFB 06 primary / RFB 01 mechanism</p>
+          <p className="eyebrow">Per-citation settlement, proven on-chain</p>
           <h2 id="hero-title">
             A paid knowledge network for autonomous agents.
           </h2>
