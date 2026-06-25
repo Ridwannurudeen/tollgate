@@ -1,6 +1,6 @@
 # Tollgate — Lepton Agents Hackathon submission notes
 
-> Numbers below are live and growing — **refresh them right before submitting** (`/api/settlement/status`, `/aperture/api/proof`, `/api/sources`). Figures here verified on 2026-06-24.
+> Numbers below are live and growing — **refresh them right before submitting** (`/api/settlement/status`, `/aperture/api/proof`, `/api/sources`). Citation figures re-verified 2026-06-25 (61 queries, 126 forum-routed payouts, chain ok); Aperture figures verified 2026-06-24.
 
 ## One-liner
 Tollgate is a creator nanopayment **settlement core on Arc**, proven by **two live integrations** into two real communities: **Citations** (AI answers pay the sources they cite) and **Photo licensing** (a self-hosted Immich sidecar pays photographers per download).
@@ -22,7 +22,7 @@ Creators aren't paid for how their work is actually *used* — a writer earns no
 x402 · **Gateway / Nanopayments** (batched reader settlement, live on `/api/paid-query`) · USDC on Arc · on-chain Contracts (FeeRouter + Forum covenant/bond rail) · agent wallets.
 
 ## Agentic
-The citation agent makes real buy/skip/allocate decisions under a budget (LLM-backed, not keyword automation) and pays autonomously; the photo sidecar settles autonomously per real download event.
+The citation agent runs a real multi-step reasoning loop: it **appraises** every candidate source, **allocates** a fixed USDC budget across what it buys, **drafts** an answer grounded only in purchased sources, **self-critiques** that each claim traces to a source it paid for, and **reflects** — buying one more source — when a claim is unsupported. Each step is recorded as an auditable trace (`traceHash`) bound into the answer hash and the Forum TrackRecord, and shown on `/demo` and every answer page. That is full autonomy under an enforceable budget, not keyword automation. **41 of 61 live answers ran the full LLM loop** (verified 2026-06-25). The photo sidecar settles autonomously per real download event.
 
 ## Links
 - Live (unified): https://tollgate.gudman.xyz/core

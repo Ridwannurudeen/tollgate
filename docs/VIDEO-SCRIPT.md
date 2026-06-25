@@ -16,6 +16,8 @@
 ### 0:38–1:20 — Integration 1: Citations
 **Show:** `tollgate.gudman.xyz` → type a question → submit → the answer with cited sources + the receipt/decision panel.
 **Say:** "First: AI answers. Ask a question, and an autonomous agent decides which sources are worth buying, pays each cited creator, and grounds the answer only in what it paid for. These are real creators who registered — and every citation is a real USDC payment on Arc."
+**Show:** the answer page (or `/demo`) reasoning trace — the numbered appraise → allocate → draft → self-critique → reflect steps.
+**Say:** "And it checks its own work: if a claim isn't backed by something it paid for, it buys another source and re-grounds — every step recorded on-chain."
 **Show:** click a receipt → open the on-chain tx on `arcscan` (status success).
 **Say:** "Here's one settling on-chain — verifiable, not a screenshot."
 
