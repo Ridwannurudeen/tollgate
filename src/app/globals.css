@@ -14,8 +14,8 @@
   --paper-sunken: #e6dfcd;
   --ink-1: #1c1b15;
   --ink-2: #4f4b3f;
-  --ink-3: #756f5e;
-  --ink-4: #9a937f;
+  --ink-3: #6f6959;
+  --ink-4: #736e5f;
   --line: #e1d9c5;
   --line-strong: #ccc2a9;
 
@@ -23,7 +23,7 @@
   --green: #1e6a47;
   --green-deep: #134d33;
   --green-bright: #2f9e6b;
-  --gold: #a87c2e;
+  --gold: #866324;
   --gold-bright: #c2973f;
   --alert: #b8472f;
   --blue: #3f6f8f;
@@ -1214,7 +1214,7 @@ textarea:focus {
   z-index: 1;
   margin-top: 48px;
   border-top: 1px solid var(--line-strong);
-  background: var(--paper-sunken);
+  background: var(--paper);
 }
 
 .site-footer-inner {
