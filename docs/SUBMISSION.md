@@ -14,7 +14,7 @@ Creators aren't paid for how their work is actually *used* — a writer earns no
 - **Integration 2 — Photo licensing (Aperture):** a permissionless sidecar on Immich (~89k-star self-hosted photo server) watches shared-photo downloads and settles a per-download license fee to the photographer — no upstream changes.
 
 ## Traction (form: "how many users onboarded") — verified 2026-06-24
-- **Citations:** 4 distinct real creators onboarded (LeptonWeb Lab, qdee, CitePay Markets, Rising Technology); **61 queries** processed; **126 on-chain creator-payout receipts** (`forum-routed`) + reader payments (`x402-settled` + `x402-verified`). All verifiable on `testnet.arcscan.app`.
+- **Citations:** **4 externally-onboarded creators** (LeptonWeb Lab, qdee, CitePay Markets, Rising Technology) registered on top of 6 seed sources — **10 distinct creators in the live registry** (`/api/sources`); **61 queries** processed; **126 on-chain creator-payout receipts** (`forum-routed`) + reader payments (`x402-settled` + `x402-verified`). All verifiable on `testnet.arcscan.app`.
 - **Photo licensing:** live on a real Immich instance; per-download settlement proven on-chain (`forum-routed`), idempotent (no double-pay).
 - Every payout is real testnet USDC through the same FeeRouter — clickable, not screenshots.
 
