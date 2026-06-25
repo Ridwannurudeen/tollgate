@@ -26,7 +26,51 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <footer className="site-footer">
+          <div className="site-footer-inner">
+            <div className="footer-brand">
+              <p className="footer-wordmark">Tollgate</p>
+              <p className="footer-tagline">
+                A paid knowledge network for AI agents. Creators are paid per
+                cited source in USDC on Arc, with on-chain attribution receipts.
+              </p>
+            </div>
+            <nav className="footer-cols" aria-label="Footer">
+              <div className="footer-col">
+                <p className="footer-head">Product</p>
+                <a href="/">Citations</a>
+                <a href="/core">Settlement core</a>
+                <a href="/aperture">Photo licensing</a>
+              </div>
+              <div className="footer-col">
+                <p className="footer-head">Proof</p>
+                <a href="/proof">Payout ledger</a>
+                <a href="/demo">Judge demo</a>
+              </div>
+              <div className="footer-col">
+                <p className="footer-head">Network</p>
+                <a
+                  href="https://testnet.arcscan.app"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Arc testnet explorer
+                </a>
+                <span className="footer-meta">chainId 5042002</span>
+                <span className="footer-meta">USDC · 6 decimals</span>
+              </div>
+            </nav>
+          </div>
+          <div className="site-footer-bar">
+            <div className="site-footer-bar-inner">
+              <span>Settled on Arc · x402 + Circle Gateway</span>
+              <span className="footer-mono">FeeRouter 0xeff9bc35…98eabf59</span>
+            </div>
+          </div>
+        </footer>
+      </body>
     </html>
   );
 }
