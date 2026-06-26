@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { readWalletRegistry } from "../../lib/registry";
+import { RegisterCreatorForm } from "../../components/RegisterCreatorForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
   const registry = await readWalletRegistry();
+  const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
 
   return (
     <main className="shell compact">
@@ -30,15 +32,12 @@ export default async function OnboardingPage() {
 
       <section className="twoColumn">
         <div className="surface">
-          <h2>Register owner</h2>
-          <pre className="commandBlock">{`npm run register:owner -- \\
-  --owner-id <immich-owner-id> \\
-  --display-name "Photographer Name" \\
-  --wallet 0x...`}</pre>
+          <h2>Register to get paid</h2>
           <p>
-            The registry is a JSON file in `data/registry.json`; it contains
-            owner IDs, display names, and public wallet addresses only.
+            Add your Immich owner ID and name. Leave the wallet blank and we
+            create a Circle-custodied one for you — no crypto wallet needed.
           </p>
+          <RegisterCreatorForm basePath={basePath} />
         </div>
 
         <div className="surface">

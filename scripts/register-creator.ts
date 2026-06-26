@@ -10,14 +10,8 @@
  * For creators who already have a wallet, use `npm run register:owner` instead.
  */
 
-import {
-  readWalletRegistry,
-  upsertWalletRegistryEntry,
-  writeWalletRegistry,
-} from "../src/lib/registry";
-import { w3sCreateWalletSet, w3sMintWallet } from "../src/lib/circle-w3s";
-
-const BLOCKCHAIN = "ARC-TESTNET";
+import { w3sCreateWalletSet } from "../src/lib/circle-w3s";
+import { registerCreator } from "../src/lib/onboarding";
 
 function readFlag(name: string): string | null {
   const index = process.argv.indexOf(name);
@@ -43,27 +37,12 @@ async function main() {
     );
   }
 
-  const minted = await w3sMintWallet({
-    walletSetId,
-    blockchain: BLOCKCHAIN,
-    refId: `creator-${ownerId}`,
-  });
-
-  const registry = await readWalletRegistry();
-  const entry = {
-    ownerId,
-    displayName,
-    wallet: minted.address,
-    createdAt: new Date().toISOString(),
-    custody: "circle-w3s" as const,
-    walletId: minted.id,
-  };
-  await writeWalletRegistry(upsertWalletRegistryEntry(registry, entry));
+  const entry = await registerCreator({ ownerId, displayName, walletSetId });
 
   console.log(
     JSON.stringify(
       {
-        registered: { ...entry, custody: "circle-w3s" },
+        registered: entry,
         note: "Custodial wallet minted by Circle W3S; the creator brought no wallet.",
       },
       null,
