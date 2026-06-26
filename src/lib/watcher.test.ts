@@ -72,4 +72,62 @@ describe("processAccessLogLine", () => {
     expect(appended[0].assetId).toBe("asset-1");
     expect(appended[0].exifCredit?.artist).toBe("Photographer");
   });
+
+  it("does not settle again for an already-recorded event (idempotent, no double-pay)", async () => {
+    const hex = (b: string) => `0x${b.repeat(32)}` as `0x${string}`;
+    let settleCalls = 0;
+    let appendCalls = 0;
+    const existing: LicenseReceipt = {
+      id: "existing",
+      eventId: hex("11"),
+      assetId: "asset-1",
+      sharedLinkId: "share-1",
+      sharedLinkKeyHash: hex("22"),
+      ownerId: "owner-1",
+      photographer: "Photographer",
+      wallet: photographer.wallet,
+      amountAtomicUsdc: 2500,
+      settlementMode: "forum-routed",
+      paymentResource: "forum-fee-router",
+      rawAccessLogHash: hex("33"),
+      previousHash: hex("00"),
+      receiptHash: hex("44"),
+      createdAt: "2026-06-24T07:45:36.000Z",
+    };
+
+    const result = await processAccessLogLine(line, {
+      immichApiBaseUrl: "http://immich.local/api",
+      amountAtomicUsdc: 2500,
+      resolveSharedLink: async () => ({
+        id: "share-1",
+        key: "abc123",
+        assets: [
+          {
+            id: "asset-1",
+            ownerId: "owner-1",
+            originalFileName: "photo.png",
+            originalPath: "/library/photo.png",
+          },
+        ],
+      }),
+      findWalletForOwner: async () => photographer,
+      findExistingReceipt: async () => existing,
+      settle: async () => {
+        settleCalls += 1;
+        return null;
+      },
+      appendReceipt: async () => {
+        appendCalls += 1;
+        return { created: false, receipt: existing };
+      },
+    });
+
+    expect(settleCalls).toBe(0);
+    expect(appendCalls).toBe(0);
+    expect(result.kind).toBe("processed");
+    if (result.kind === "processed") {
+      expect(result.receipts).toHaveLength(1);
+      expect(result.receipts[0]).toBe(existing);
+    }
+  });
 });

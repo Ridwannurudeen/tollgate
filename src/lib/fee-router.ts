@@ -5,6 +5,7 @@ import {
   type Address,
   type Hex,
   type PublicClient,
+  type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { ARC_RPC_URL, ARC_USDC, arcTestnet } from "./chain";
@@ -77,6 +78,7 @@ export type FeeRouterRouteOptions = {
   enabled?: boolean;
   privateKey?: Hex;
   publicClient?: PublicClient;
+  walletClient?: WalletClient;
 };
 
 export function createFeeRouterPublicClient() {
@@ -114,11 +116,13 @@ export async function routeLicensePayment(
 
   const account = privateKeyToAccount(feeRouterPrivateKey(options));
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
-  const walletClient = createWalletClient({
-    account,
-    chain: arcTestnet,
-    transport: http(ARC_RPC_URL),
-  });
+  const walletClient =
+    options.walletClient ??
+    createWalletClient({
+      account,
+      chain: arcTestnet,
+      transport: http(ARC_RPC_URL),
+    });
   const amount = BigInt(amountAtomicUsdc);
 
   const [balance, allowance] = await Promise.all([
