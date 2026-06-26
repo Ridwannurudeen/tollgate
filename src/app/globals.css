@@ -378,6 +378,16 @@ h3 {
   color: var(--gold-bright);
 }
 
+.stat-sub {
+  display: block;
+  margin-top: 14px;
+  font-family: var(--font-num);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  color: rgba(239, 233, 214, 0.62);
+}
+
 .ticker {
   overflow: hidden;
   margin-bottom: 40px;

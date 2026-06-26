@@ -409,9 +409,12 @@ export function LeptonWebApp({
           </p>
         </div>
         <div className="signature-stat" aria-live="polite">
-          <span className="stat-label">creator earnings recorded</span>
-          <strong>{formatUsdc(stats.totalPaid)}</strong>
-          <span className="stat-unit">USDC</span>
+          <span className="stat-label">citation payments made</span>
+          <strong>{stats.receiptCount}</strong>
+          <span className="stat-sub">
+            to {stats.creatorCount} creators ·{" "}
+            {Number(formatUsdc(stats.totalPaid))} USDC settled on Arc
+          </span>
         </div>
       </section>
 
