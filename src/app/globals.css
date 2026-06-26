@@ -744,9 +744,23 @@ textarea:focus {
 }
 
 .citation-list,
+.source-list-label {
+  margin: 18px 0 10px;
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
 .source-list {
   display: grid;
   gap: 10px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
 }
 
 .citation-card,

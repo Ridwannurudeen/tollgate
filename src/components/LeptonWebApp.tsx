@@ -871,6 +871,9 @@ export function LeptonWebApp({
                 "Add one link to your work — you'll be paid whenever the AI cites it."}
             </p>
           </form>
+          <p className="source-list-label">
+            Priced sources · {registrySources.length} live · scroll to browse
+          </p>
           <div className="source-list">
             {registrySources.map((source) => (
               <article key={source.id} className="source-card">
