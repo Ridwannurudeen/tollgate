@@ -14,6 +14,8 @@
     "prove:paid-query": "node scripts/prove-paid-query.mjs",
     "prove:wallet-source": "node scripts/prove-wallet-source.mjs",
     "prove:wallet-paid-query": "node scripts/prove-wallet-paid-query.mjs",
+    "prove:w3s-source": "node --env-file-if-exists=.env.local scripts/prove-w3s-source.mjs",
+    "prove:w3s-paid-query": "node --env-file-if-exists=.env.local scripts/prove-w3s-paid-query.mjs",
     "prove:settled-paid-query": "node scripts/prove-settled-paid-query.mjs",
     "prove:gateway-source": "node scripts/prove-gateway-source.mjs",
     "prove:fee-router": "node scripts/prove-fee-router.mjs",
@@ -29,6 +31,7 @@
     "check:forum": "node scripts/check-forum.mjs",
     "check:wallet-funding": "node scripts/check-wallet-funding.mjs",
     "create:wallets": "node scripts/create-wallets.mjs",
+    "create:circle-wallets": "node --env-file-if-exists=.env.local scripts/circle-create-wallets.mjs",
     "wallets:list": "node scripts/list-wallets.mjs",
     "start:settle-server": "node scripts/start-settle-server.mjs",
     "start:gateway-server": "node scripts/start-gateway-server.mjs"

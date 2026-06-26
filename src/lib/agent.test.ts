@@ -244,4 +244,81 @@ describe("createAgentQueryRecord", () => {
     expect(query.agentSteps?.map((step) => step.name)).toContain("reflect");
     expect(query.answer).toContain("reflective re-buy");
   });
+
+  it("allocates by grounding-per-USDC, dropping a costlier lower-value source", async () => {
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            // Most relevant but most expensive (worst value) — should be dropped.
+            {
+              sourceId: "circle-gateway-nano",
+              verdict: "buy",
+              relevance: 95,
+              reason: "x",
+            },
+            {
+              sourceId: "arc-finality-usdc",
+              verdict: "buy",
+              relevance: 90,
+              reason: "x",
+            },
+            {
+              sourceId: "creator-citation-economics",
+              verdict: "buy",
+              relevance: 75,
+              reason: "x",
+            },
+            // Least relevant but cheapest (best value) — should be bought.
+            {
+              sourceId: "rsshub-distribution",
+              verdict: "buy",
+              relevance: 70,
+              reason: "x",
+            },
+          ],
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "Open feed distribution, citation economics, and Arc finality together explain the paid-citation flow.",
+          claims: [
+            {
+              text: "Open feeds distribute the cited work.",
+              sourceId: "rsshub-distribution",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        return JSON.stringify({
+          groundedAnswer:
+            "Open feed distribution, citation economics, and Arc finality together explain the paid-citation flow.",
+          verdict: "Grounded in the purchased sources.",
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await createAgentQueryRecord(
+      "Which distribution and finality sources give the best value?",
+      "2026-06-25T00:00:00.000Z",
+      DEFAULT_CREATOR_SOURCES,
+      undefined,
+      { llmConfig: LLM_CONFIG, completeChat },
+    );
+
+    const ids = query.citations.map((citation) => citation.sourceId).sort();
+    expect(ids).toEqual([
+      "arc-finality-usdc",
+      "creator-citation-economics",
+      "rsshub-distribution",
+    ]);
+    expect(ids).not.toContain("circle-gateway-nano");
+    expect(query.totalAtomicUsdc).toBe(4_300);
+  });
 });

@@ -305,18 +305,31 @@ function allocateFromAppraisals(
   sourceBudgetAtomicUsdc: number,
 ): { selected: CreatorSource[]; remainingAtomicUsdc: number } {
   const sourceById = new Map(sources.map((source) => [source.id, source]));
+  // Buy the most grounding per USDC: rank "buy" verdicts by relevance-per-cost,
+  // then by raw relevance, so the agent spends its budget where each atomic USDC
+  // earns the most coverage instead of just chasing the most relevant source.
   const buys = appraisals
     .filter((appraisal) => appraisal.verdict === "buy")
-    .sort((a, b) => b.relevance - a.relevance);
+    .map((appraisal) => ({
+      appraisal,
+      source: sourceById.get(appraisal.sourceId),
+    }))
+    .filter(
+      (buy): buy is { appraisal: Appraisal; source: CreatorSource } =>
+        buy.source !== undefined && buy.source.priceAtomicUsdc > 0,
+    )
+    .sort((a, b) => {
+      const valueA = a.appraisal.relevance / a.source.priceAtomicUsdc;
+      const valueB = b.appraisal.relevance / b.source.priceAtomicUsdc;
+      return valueB - valueA || b.appraisal.relevance - a.appraisal.relevance;
+    });
   const selected: CreatorSource[] = [];
   const seen = new Set<string>();
   let remainingAtomicUsdc = sourceBudgetAtomicUsdc;
 
-  for (const buy of buys) {
+  for (const { source } of buys) {
     if (selected.length >= MAX_AGENT_SOURCES) break;
-    if (seen.has(buy.sourceId)) continue;
-    const source = sourceById.get(buy.sourceId);
-    if (!source) continue;
+    if (seen.has(source.id)) continue;
     if (source.priceAtomicUsdc > remainingAtomicUsdc) continue;
     seen.add(source.id);
     selected.push(source);
@@ -381,7 +394,7 @@ async function runAgentLoop(
     name: "allocate",
     summary: `Allocated the budget to ${selected.length} source${
       selected.length === 1 ? "" : "s"
-    }.`,
+    } by best grounding-per-USDC.`,
     detail: selected.map((source) => source.title).join(", "),
     spentAtomicUsdc: sourceBudgetAtomicUsdc - remainingAtomicUsdc,
   });
