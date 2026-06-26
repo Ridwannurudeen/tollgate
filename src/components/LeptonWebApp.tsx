@@ -144,6 +144,7 @@ export function LeptonWebApp({
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRegisteringSource, setIsRegisteringSource] = useState(false);
+  const [tickerPaused, setTickerPaused] = useState(false);
 
   const stats = useMemo(
     () => ({
@@ -419,23 +420,38 @@ export function LeptonWebApp({
       </section>
 
       <section className="ticker" aria-label="Live receipt ticker">
-        <div className="ticker-track">
-          {[...ledger.receipts.slice(-8), ...ledger.receipts.slice(-8)].map(
-            (receipt, index) => (
-              <span key={`${receipt.receiptHash}-${index}`}>
-                {receipt.creator} +{formatUsdc(receipt.amountAtomicUsdc)} USDC /{" "}
-                {shortHash(receipt.receiptHash)}
-              </span>
-            ),
-          )}
-          {ledger.receipts.length === 0 && (
-            <>
-              <span>Awaiting first paid citation receipt</span>
-              <span>Registered sources ready for attribution</span>
-              <span>Gateway/x402 adapter boundary prepared</span>
-            </>
-          )}
+        <div className="ticker-viewport">
+          <div className={`ticker-track${tickerPaused ? " is-paused" : ""}`}>
+            {[...ledger.receipts.slice(-8), ...ledger.receipts.slice(-8)].map(
+              (receipt, index) => (
+                <span key={`${receipt.receiptHash}-${index}`}>
+                  {receipt.creator} +{formatUsdc(receipt.amountAtomicUsdc)} USDC
+                  / {shortHash(receipt.receiptHash)}
+                </span>
+              ),
+            )}
+            {ledger.receipts.length === 0 && (
+              <>
+                <span>Awaiting first paid citation receipt</span>
+                <span>Registered sources ready for attribution</span>
+                <span>Gateway/x402 adapter boundary prepared</span>
+              </>
+            )}
+          </div>
         </div>
+        <button
+          type="button"
+          className="ticker-pause"
+          aria-pressed={tickerPaused}
+          aria-label={
+            tickerPaused
+              ? "Resume live receipt ticker"
+              : "Pause live receipt ticker"
+          }
+          onClick={() => setTickerPaused((paused) => !paused)}
+        >
+          {tickerPaused ? "Play" : "Pause"}
+        </button>
       </section>
 
       <section className="how-it-works" aria-label="How it works">
