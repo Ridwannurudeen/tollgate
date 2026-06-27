@@ -1,17 +1,21 @@
-/node_modules
-/.next
-/out
-/build
-*.tsbuildinfo
-next-env.d.ts
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Root-level dev server strays
+/.next-*
+/*.log
+/*.pid
+/*.tsbuildinfo
+/next-env.d.ts
+
+# Env
 .env
-.env.local
-.env*.local
+.env.*
+!.env.example
+
+# OS
 .DS_Store
-npm-debug.log*
-.next-dev.*
-.next-dev-*.log
-.next-gateway.*
-.next-gateway-*.log
-.next-start-*.log
-wallets/local-keystore.dpapi.json

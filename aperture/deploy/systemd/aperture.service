@@ -1,0 +1,17 @@
+[Unit]
+Description=Aperture Immich licensing web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/aperture
+EnvironmentFile=-/etc/aperture.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start -- -H 127.0.0.1 -p 3036
+Restart=always
+RestartSec=5
+SyslogIdentifier=aperture
+
+[Install]
+WantedBy=multi-user.target

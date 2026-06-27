@@ -1,0 +1,17 @@
+[Unit]
+Description=Aperture Immich access-log watcher
+After=network-online.target aperture.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/aperture
+EnvironmentFile=-/etc/aperture.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run watch:access-log
+Restart=always
+RestartSec=5
+SyslogIdentifier=aperture-watcher
+
+[Install]
+WantedBy=multi-user.target
