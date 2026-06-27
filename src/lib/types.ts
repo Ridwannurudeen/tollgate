@@ -36,6 +36,10 @@ export type WalletRegistryEntry = {
   displayName: string;
   wallet: Address;
   createdAt: string;
+  /** "self" = creator supplied their own wallet; "circle-w3s" = we minted a custodial one. */
+  custody?: "self" | "circle-w3s";
+  /** Circle W3S wallet id, present only for custodial (circle-w3s) entries. */
+  walletId?: string;
 };
 
 export type WalletRegistry = {
