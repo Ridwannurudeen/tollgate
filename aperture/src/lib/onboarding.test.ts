@@ -26,6 +26,7 @@ describe("registerCreator", () => {
         filePath,
       });
       expect(entry.custody).toBe("self");
+      expect(entry.approvalStatus).toBe("pending");
       // address is checksummed on the way in
       expect(entry.wallet).toBe("0x12F25B721Cc21c38495e33A4c8524dd0B647ba03");
       const registry = await readWalletRegistry(filePath);

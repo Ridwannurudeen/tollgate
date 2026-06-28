@@ -4,6 +4,17 @@ export type SettlementMode =
   | "x402-settled"
   | "forum-routed";
 
+export type SourceKind = "external" | "seed" | "internal-test";
+
+export type CreatorKind = "external" | "seed" | "internal-test";
+
+export type SourceOwnershipProof = {
+  method: "wallet-signature" | "seed-demo" | "operator-approved";
+  signer?: `0x${string}`;
+  signatureHash?: string;
+  verifiedAt: string;
+};
+
 export type CreatorSource = {
   id: string;
   title: string;
@@ -14,6 +25,10 @@ export type CreatorSource = {
   summary: string;
   tags: string[];
   priceAtomicUsdc: number;
+  sourceKind: SourceKind;
+  creatorKind: CreatorKind;
+  verifiedCreator: boolean;
+  ownershipProof?: SourceOwnershipProof;
 };
 
 export type SourceRegistrationInput = {
@@ -26,6 +41,8 @@ export type SourceRegistrationInput = {
   summary?: string;
   tags?: string[] | string;
   priceAtomicUsdc?: number | string;
+  ownershipSignature?: string;
+  ownershipTimestamp?: string;
 };
 
 export type Citation = {
@@ -37,6 +54,16 @@ export type Citation = {
   url: string;
   amountAtomicUsdc: number;
   reason: string;
+  canonicalUrl?: string;
+  previewExcerpt?: string;
+  paidExcerpt?: string;
+  sourceContentHash?: string;
+  sourceExcerptHash?: string;
+  contentFetchedAt?: string;
+  sourceKind?: SourceKind;
+  creatorKind?: CreatorKind;
+  verifiedCreator?: boolean;
+  ownershipProof?: SourceOwnershipProof;
 };
 
 export type SourceDecision = {
@@ -81,6 +108,11 @@ export type PaymentReceipt = {
   feeRouterSplitId?: string;
   feeRouterCreateSplitTx?: string;
   feeRouterPayTx?: string;
+  canonicalUrl?: string;
+  sourceContentHash?: string;
+  sourceExcerptHash?: string;
+  contentFetchedAt?: string;
+  ownershipProof?: SourceOwnershipProof;
   previousHash: string;
   receiptHash: string;
   createdAt: string;
@@ -94,6 +126,11 @@ export type ReceiptEvidence = {
   feeRouterSplitId?: string;
   feeRouterCreateSplitTx?: string;
   feeRouterPayTx?: string;
+  canonicalUrl?: string;
+  sourceContentHash?: string;
+  sourceExcerptHash?: string;
+  contentFetchedAt?: string;
+  ownershipProof?: SourceOwnershipProof;
 };
 
 export type QueryPaymentEvidence = {

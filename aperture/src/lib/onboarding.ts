@@ -44,6 +44,7 @@ export async function registerCreator(
       displayName,
       wallet: getAddress(input.wallet),
       createdAt: new Date().toISOString(),
+      approvalStatus: "pending",
       custody: "self",
     };
   } else {
@@ -63,6 +64,7 @@ export async function registerCreator(
       displayName,
       wallet: minted.address,
       createdAt: new Date().toISOString(),
+      approvalStatus: "operator-approved",
       custody: "circle-w3s",
       walletId: minted.id,
     };

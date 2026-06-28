@@ -214,6 +214,9 @@ export function parseCreatorFeed(
     summary: item.summary.slice(0, 340),
     tags: normalizeTags([...registration.tags, ...item.tags, "rss", "creator"]),
     priceAtomicUsdc: registration.priceAtomicUsdc,
+    sourceKind: "external",
+    creatorKind: "external",
+    verifiedCreator: false,
   }));
 }
 

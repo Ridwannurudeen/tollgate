@@ -11,7 +11,7 @@ const ARC_CHAIN_ID = 5042002;
 const ARC_RPC_URL =
   process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network";
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
-const PAID_QUERY_PRICE_ATOMIC_USDC = 1000n;
+const PAID_QUERY_PRICE_ATOMIC_USDC = 10_000n;
 const PRIMARY_SOURCE_ID = "leptonweb-build-log";
 
 const erc20BalanceAbi = [

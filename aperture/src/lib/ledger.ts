@@ -16,6 +16,7 @@ export const ZERO_HASH = `0x${"0".repeat(64)}` as Hex;
 
 const LEDGER_PATH = path.join(process.cwd(), "data", "ledger.json");
 const EMPTY_LEDGER: LicenseLedger = { receipts: [] };
+let ledgerWriteLock: Promise<void> = Promise.resolve();
 
 export type LicenseReceiptInput = {
   eventId: Hex;
@@ -57,6 +58,15 @@ export async function writeLicenseLedger(
   const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
   await writeFile(tmpPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
   await rename(tmpPath, filePath);
+}
+
+function withLedgerWriteLock<T>(write: () => Promise<T>): Promise<T> {
+  const run = ledgerWriteLock.then(write, write);
+  ledgerWriteLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 function receiptPayload(receipt: LicenseReceipt): LicenseReceiptHashPayload {
@@ -107,17 +117,19 @@ export async function appendLicenseReceipt(
   ledger: LicenseLedger;
   created: boolean;
 }> {
-  const ledger = await readLicenseLedger(filePath);
-  const existing = ledger.receipts.find(
-    (receipt) => receipt.eventId === input.eventId,
-  );
-  if (existing) return { receipt: existing, ledger, created: false };
+  return withLedgerWriteLock(async () => {
+    const ledger = await readLicenseLedger(filePath);
+    const existing = ledger.receipts.find(
+      (receipt) => receipt.eventId === input.eventId,
+    );
+    if (existing) return { receipt: existing, ledger, created: false };
 
-  const previousHash = ledger.receipts.at(-1)?.receiptHash ?? ZERO_HASH;
-  const receipt = createReceipt(input, previousHash);
-  const nextLedger = { receipts: [...ledger.receipts, receipt] };
-  await writeLicenseLedger(nextLedger, filePath);
-  return { receipt, ledger: nextLedger, created: true };
+    const previousHash = ledger.receipts.at(-1)?.receiptHash ?? ZERO_HASH;
+    const receipt = createReceipt(input, previousHash);
+    const nextLedger = { receipts: [...ledger.receipts, receipt] };
+    await writeLicenseLedger(nextLedger, filePath);
+    return { receipt, ledger: nextLedger, created: true };
+  });
 }
 
 export function verifyLicenseLedger(ledger: LicenseLedger): LedgerVerification {

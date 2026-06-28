@@ -25,6 +25,9 @@ describe("x402-Cite helpers", () => {
       summary: "Gateway batching for tiny payments.",
       tags: ["x402", "gateway"],
       priceAtomicUsdc: 1800,
+      sourceKind: "internal-test",
+      creatorKind: "internal-test",
+      verifiedCreator: false,
     };
     const toll = buildX402CiteToll(
       source,

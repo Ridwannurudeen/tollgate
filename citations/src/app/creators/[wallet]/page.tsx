@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { readFeeRouterClaimable } from "@/lib/fee-router";
 import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
 import { getCreatorEvidence, readLedger } from "@/lib/ledger";
 
@@ -13,6 +14,10 @@ function settlementLabel(mode: string): string {
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   return "local proof";
+}
+
+function arcscanTxUrl(tx: string): string {
+  return `https://testnet.arcscan.app/tx/${tx}`;
 }
 
 export default async function CreatorPage({ params }: Props) {
@@ -52,6 +57,12 @@ export default async function CreatorPage({ params }: Props) {
   }
 
   const latestReceipt = creator.receipts[0];
+  const claimable = await readFeeRouterClaimable(creator.wallet).catch(
+    () => null,
+  );
+  const latestClaimTx = creator.receipts.find(
+    (receipt) => receipt.feeRouterPayTx,
+  )?.feeRouterPayTx;
 
   return (
     <main className="shell receipt-page">
@@ -95,10 +106,64 @@ export default async function CreatorPage({ params }: Props) {
           <span>answers</span>
           <strong>{creator.queries.length}</strong>
         </div>
+        <div className="metric">
+          <span>claimable</span>
+          <strong>
+            {claimable === null
+              ? "RPC unavailable"
+              : `${formatUsdc(Number(claimable))} USDC`}
+          </strong>
+        </div>
         <div className="metric wide">
           <span>latest receipt</span>
           <strong>
             {latestReceipt ? shortHash(latestReceipt.receiptHash) : "none"}
+          </strong>
+        </div>
+      </section>
+
+      <section className="evidence-grid">
+        <div className="evidence-row">
+          <span>total earned</span>
+          <strong>{formatUsdc(creator.earnedAtomicUsdc)} USDC</strong>
+        </div>
+        <div className="evidence-row">
+          <span>creator wallet</span>
+          <strong>{creator.wallet}</strong>
+        </div>
+        <div className="evidence-row">
+          <span>FeeRouter claimable</span>
+          <strong>
+            {claimable === null
+              ? "RPC unavailable"
+              : `${formatUsdc(Number(claimable))} USDC`}
+          </strong>
+        </div>
+        <div className="evidence-row">
+          <span>creator claim</span>
+          <strong>
+            {claimable === null
+              ? "RPC unavailable"
+              : claimable > 0n
+                ? "claimable on FeeRouter"
+                : "nothing claimable"}
+          </strong>
+        </div>
+        <div className="evidence-row">
+          <span>latest route tx</span>
+          <strong>
+            {latestClaimTx ? (
+              <a
+                className="receipt-link inline-link"
+                href={arcscanTxUrl(latestClaimTx)}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {shortHash(latestClaimTx)}
+              </a>
+            ) : (
+              "not FeeRouter-routed"
+            )}
           </strong>
         </div>
       </section>
@@ -140,6 +205,10 @@ export default async function CreatorPage({ params }: Props) {
               <strong>{receipt.sourceId}</strong>
               <span>
                 {settlementLabel(receipt.settlementMode)} / {receipt.createdAt}
+              </span>
+              <span>
+                split {receipt.feeRouterSplitId ?? "none"} / prev{" "}
+                {shortHash(receipt.previousHash)}
               </span>
             </div>
             <div className="numeric-cell">

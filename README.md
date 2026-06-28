@@ -1,22 +1,78 @@
 # Tollgate
 
-**Creators don't get paid for how their work is actually used.** A writer earns nothing when an AI cites their article; a photographer earns nothing when someone downloads their photo. Per-use payments were always too small to clear — so the world defaulted to subscriptions, or nothing. Nanopayments on Arc remove that floor.
+**Creators do not get paid for how their work is actually used.** A writer earns nothing when an AI cites their article; a photographer earns nothing when someone downloads their photo. Per-use payments were always too small to clear, so the world defaulted to subscriptions or nothing. Nanopayments on Arc remove that floor.
 
-Tollgate is one **settlement core** with **two live integrations** into two real communities. This repo holds both as independent apps:
+Tollgate turns reuse into revenue: one Arc settlement core, two integrations, and proof pages that bind each paid use to a hash-linked receipt.
+
+## Judge path: 5-minute review
+
+1. Open the unified overview: `https://tollgate.gudman.xyz/core`.
+2. Run a paid answer on `https://tollgate.gudman.xyz`, then open the generated answer proof.
+3. Inspect `https://tollgate.gudman.xyz/proof` for reader-paid, creator-payout, retained, utilization, receipt-chain, and Arc transaction evidence.
+4. Open `https://tollgate.gudman.xyz/aperture` for the Immich photo-licensing proof surface.
+5. Follow any Arc transaction link to `https://testnet.arcscan.app`.
+
+## Traction snapshot
+
+Fill these from live endpoints immediately before submission:
+
+| Metric | Live source | Value |
+| --- | --- | --- |
+| External creators | `/api/sources` after seed/internal split | user refresh |
+| Seed/internal sources | `/api/sources` after seed/internal split | user refresh |
+| Paid queries | `/api/settlement/status` | user refresh |
+| Payout receipts | `/proof` and `/api/settlement/status` | user refresh |
+| Unique payer wallets | proof pack export | user refresh |
+| Unique creator wallets | proof pack export | user refresh |
+| Total test USDC routed | proof pack export | user refresh |
+
+## Top verification commands
+
+```bash
+cd citations
+npm test
+npm run typecheck
+npm run build
+npm run verify:ledger
+npm run export:proof-pack
+
+cd ../aperture
+npm test
+npm run typecheck
+npm run build
+npm run verify:ledger
+npm run check:live
+npm run export:proof-pack
+
+cd ..
+node scripts/export-proof-pack.mjs
+```
+
+## Known limitations
+
+- Credentialed `x402-settled` runs require facilitator/Gateway credentials and are user-operated.
+- Public traction numbers must be refreshed from live endpoints before submission; do not infer them from seed data.
+- Aperture's download gate returns real x402 requirements and supports verified/local-proof unlock tests locally; settled x402 and FeeRouter payout runs need the facilitator/Gateway and funded Aperture payer credentials.
+
+## Apps
+
+Tollgate is one settlement core with two integrations. This repo holds both as independent apps:
 
 | App | What it does | Live |
 | --- | --- | --- |
 | [`citations/`](./citations) | An autonomous answer agent buys the sources it cites and pays each creator per citation. | `https://tollgate.gudman.xyz` |
-| [`aperture/`](./aperture) | A permissionless sidecar on self-hosted **Immich** pays photographers per shared-photo download, with no upstream changes. | `https://tollgate.gudman.xyz/aperture` |
+| [`aperture/`](./aperture) | A permissionless sidecar on self-hosted Immich gates shared-photo downloads with x402 and pays photographers per licensed download, with no upstream changes. | `https://tollgate.gudman.xyz/aperture` |
 
 **Unified overview + live proof:** `https://tollgate.gudman.xyz/core`
 
-## The shared core
-- **x402** for the per-request payment; **Circle Gateway** for gas-free **batched on-chain settlement**; **USDC on Arc**; a shared on-chain **FeeRouter** (Forum) that splits to every creator.
+## Shared core
+
+- x402 for per-request payment; Circle Gateway for gas-free batched on-chain settlement; USDC on Arc; a shared on-chain FeeRouter (Forum) that splits to every creator.
 - Creator payouts settle on-chain as `forum-routed` receipts in an append-only, hash-linked ledger.
-- Arc testnet: chainId `5042002` · RPC `https://rpc.testnet.arc.network` · USDC `0x3600000000000000000000000000000000000000` · FeeRouter `0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59` · explorer `https://testnet.arcscan.app`
+- Arc testnet: chainId `5042002`, RPC `https://rpc.testnet.arc.network`, USDC `0x3600000000000000000000000000000000000000`, FeeRouter `0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59`, explorer `https://testnet.arcscan.app`.
 
 ## Run either app
+
 Each app is self-contained with its own `package.json`:
 
 ```bash

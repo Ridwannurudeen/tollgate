@@ -1,5 +1,6 @@
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
 import { sha256Hex } from "./hash";
+import { buildSourceContent, type SourceContent } from "./source-content";
 import type {
   AgentBudget,
   AgentStep,
@@ -195,9 +196,13 @@ function buildReason(question: string, source: CreatorSource): string {
 function buildAnswer(
   question: string,
   selectedSources: CreatorSource[],
+  sourceContent: Map<string, SourceContent> = new Map(),
 ): string {
   const sourceSentences = selectedSources
-    .map((source) => `${source.creator}: ${source.summary}`)
+    .map((source) => {
+      const content = sourceContent.get(source.id);
+      return `${source.creator}: ${content?.paidExcerpt ?? source.summary}`;
+    })
     .join(" ");
 
   return [
@@ -252,17 +257,36 @@ export function createQueryRecord(
 ): QueryRecord {
   const citationMarket = planCitationMarket(question, sources);
   const selectedSources = citationMarket.selectedSources;
-  const citations: Citation[] = selectedSources.map((source) => ({
-    sourceId: source.id,
-    title: source.title,
-    creator: source.creator,
-    handle: source.handle,
-    wallet: source.wallet,
-    url: source.url,
-    amountAtomicUsdc: source.priceAtomicUsdc,
-    reason: buildReason(question, source),
-  }));
-  const answer = buildAnswer(question, selectedSources);
+  const contentBySourceId = new Map(
+    selectedSources.map((source) => [
+      source.id,
+      buildSourceContent(source, createdAt),
+    ]),
+  );
+  const citations: Citation[] = selectedSources.map((source) => {
+    const content = contentBySourceId.get(source.id);
+    return {
+      sourceId: source.id,
+      title: source.title,
+      creator: source.creator,
+      handle: source.handle,
+      wallet: source.wallet,
+      url: source.url,
+      amountAtomicUsdc: source.priceAtomicUsdc,
+      reason: buildReason(question, source),
+      canonicalUrl: content?.canonicalUrl,
+      previewExcerpt: content?.previewExcerpt,
+      paidExcerpt: content?.paidExcerpt,
+      sourceContentHash: content?.contentHash,
+      sourceExcerptHash: content?.excerptHash,
+      contentFetchedAt: content?.fetchedAt,
+      sourceKind: source.sourceKind,
+      creatorKind: source.creatorKind,
+      verifiedCreator: source.verifiedCreator,
+      ownershipProof: source.ownershipProof,
+    };
+  });
+  const answer = buildAnswer(question, selectedSources, contentBySourceId);
   const totalAtomicUsdc = citations.reduce(
     (sum, citation) => sum + citation.amountAtomicUsdc,
     0,
@@ -316,6 +340,7 @@ export function createSourceAccessRecord(
   createdAt: string,
 ): QueryRecord {
   const question = `Paid source access: ${source.title}`;
+  const content = buildSourceContent(source, createdAt);
   const citation: Citation = {
     sourceId: source.id,
     title: source.title,
@@ -325,8 +350,18 @@ export function createSourceAccessRecord(
     url: source.url,
     amountAtomicUsdc: source.priceAtomicUsdc,
     reason: "Direct x402 source purchase.",
+    canonicalUrl: content.canonicalUrl,
+    previewExcerpt: content.previewExcerpt,
+    paidExcerpt: content.paidExcerpt,
+    sourceContentHash: content.contentHash,
+    sourceExcerptHash: content.excerptHash,
+    contentFetchedAt: content.fetchedAt,
+    sourceKind: source.sourceKind,
+    creatorKind: source.creatorKind,
+    verifiedCreator: source.verifiedCreator,
+    ownershipProof: source.ownershipProof,
   };
-  const answer = `The agent paid ${source.creator} for direct access to "${source.title}" and wrote the purchase into the public attribution ledger.`;
+  const answer = `The agent paid ${source.creator} for direct access to "${source.title}", consumed excerpt hash ${content.excerptHash}, and wrote the purchase into the public attribution ledger.`;
   const queryHash = sha256Hex({ question, citations: [citation] });
   const answerHash = sha256Hex({ answer, citations: [citation] });
   const id = sha256Hex({ createdAt, question, queryHash }).slice(0, 18);

@@ -21,6 +21,7 @@ describe("wallet registry", () => {
           displayName: "Photographer",
           wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
           createdAt: "2026-06-24T00:00:00.000Z",
+          approvalStatus: "operator-approved",
         },
       );
       await writeWalletRegistry(registry, filePath);
@@ -44,6 +45,7 @@ describe("wallet registry", () => {
           displayName: "Jane Lens",
           wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
           createdAt: "2026-06-26T00:00:00.000Z",
+          approvalStatus: "operator-approved",
           custody: "circle-w3s",
           walletId: "wallet-abc-123",
         },

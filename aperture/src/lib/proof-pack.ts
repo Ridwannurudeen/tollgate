@@ -2,6 +2,7 @@ import {
   APERTURE_IMMICH_API_BASE_URL,
   APERTURE_LICENSE_FEE_ATOMIC_USDC,
 } from "./config";
+import { readFeeRouterSplitRegistry } from "./fee-router";
 import {
   readLicenseLedger,
   summarizeLedger,
@@ -14,6 +15,7 @@ export async function buildProofPack() {
     readLicenseLedger(),
     readWalletRegistry(),
   ]);
+  const splitRegistry = await readFeeRouterSplitRegistry();
   const creators = summarizeLedger(ledger);
   const totalEarnedAtomicUsdc = creators.reduce(
     (sum, creator) => sum + creator.earned,
@@ -34,6 +36,7 @@ export async function buildProofPack() {
       immichApiBaseUrl: APERTURE_IMMICH_API_BASE_URL,
     },
     creators,
+    feeRouterSplits: splitRegistry,
     registry,
     ledger,
   };

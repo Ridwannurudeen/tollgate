@@ -28,6 +28,12 @@ export default async function ProofPage() {
   const verification = verifyLicenseLedger(ledger);
   const creators = summarizeLedger(ledger);
   const latest = ledger.receipts.at(-1);
+  const approvedOwners = registry.photographers.filter(
+    (entry) => entry.approvalStatus !== "pending",
+  );
+  const pendingOwners = registry.photographers.filter(
+    (entry) => entry.approvalStatus === "pending",
+  );
 
   return (
     <main className="shell compact">
@@ -61,6 +67,14 @@ export default async function ProofPage() {
         <div>
           <span>{registry.photographers.length}</span>
           <small>registered owners</small>
+        </div>
+        <div>
+          <span>{approvedOwners.length}</span>
+          <small>approved owners</small>
+        </div>
+        <div>
+          <span>{pendingOwners.length}</span>
+          <small>pending owners</small>
         </div>
         <div>
           <span>{verification.latestHash.slice(0, 12)}</span>

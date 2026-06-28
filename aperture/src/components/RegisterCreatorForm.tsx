@@ -5,6 +5,7 @@ import { useState } from "react";
 type Registered = {
   displayName: string;
   wallet: string;
+  approvalStatus: "pending" | "operator-approved" | "wallet-signed";
   custody?: "self" | "circle-w3s";
 };
 
@@ -77,7 +78,7 @@ export function RegisterCreatorForm({ basePath }: { basePath: string }) {
         />
       </label>
       <button type="submit" disabled={submitting}>
-        {submitting ? "Registering…" : "Register & get paid"}
+        {submitting ? "Registering..." : "Register payout mapping"}
       </button>
       {status && <p className="formStatus">{status}</p>}
       {result && (
@@ -86,7 +87,7 @@ export function RegisterCreatorForm({ basePath }: { basePath: string }) {
           {result.custody === "circle-w3s"
             ? "wallet minted for you"
             : "your wallet"}{" "}
-          {result.wallet}
+          {result.wallet} / {result.approvalStatus}
         </p>
       )}
     </form>

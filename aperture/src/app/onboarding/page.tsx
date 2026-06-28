@@ -35,7 +35,8 @@ export default async function OnboardingPage() {
           <h2>Register to get paid</h2>
           <p>
             Add your Immich owner ID and name. Leave the wallet blank and we
-            create a Circle-custodied one for you — no crypto wallet needed.
+            create a Circle-custodied one for you. Self-custody mappings stay
+            pending until the operator approves or verifies ownership.
           </p>
           <RegisterCreatorForm basePath={basePath} />
         </div>
@@ -48,6 +49,7 @@ export default async function OnboardingPage() {
                 <div>
                   <strong>{entry.displayName}</strong>
                   <small>{entry.ownerId}</small>
+                  <small>{entry.approvalStatus}</small>
                 </div>
                 <small>{entry.wallet}</small>
               </div>

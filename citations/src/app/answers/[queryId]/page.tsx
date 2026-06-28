@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  formatBudgetUtilization,
+  queryPaymentEconomics,
+} from "@/lib/economics";
+import { readCovenantEnvelope } from "@/lib/covenant";
 import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
 import { getAnswerEvidence, readLedger } from "@/lib/ledger";
+import { readSlashBondStatus } from "@/lib/slash-bond";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +24,10 @@ function settlementLabel(mode: string): string {
 
 function arcscanTxUrl(tx: string): string {
   return `https://testnet.arcscan.app/tx/${tx}`;
+}
+
+function formatAtomicUsdc(value: bigint): string {
+  return formatUsdc(Number(value));
 }
 
 function EvidenceRow({
@@ -37,7 +47,11 @@ function EvidenceRow({
 
 export default async function AnswerPage({ params }: Props) {
   const { queryId } = await params;
-  const ledger = await readLedger();
+  const [ledger, covenant, slashBond] = await Promise.all([
+    readLedger(),
+    readCovenantEnvelope().catch(() => null),
+    readSlashBondStatus().catch(() => null),
+  ]);
   const evidence = getAnswerEvidence(ledger, queryId);
   if (!evidence) notFound();
 
@@ -49,6 +63,8 @@ export default async function AnswerPage({ params }: Props) {
   const agentBudget = query.agentBudget;
   const sourceDecisions = query.sourceDecisions ?? [];
   const agentSteps = query.agentSteps ?? [];
+  const economics = queryPaymentEconomics(query);
+  const latestChainHash = receipts.at(-1)?.receiptHash ?? "none";
   const agentModeLabel =
     query.agentMode === "llm"
       ? "agentic reasoning loop"
@@ -92,13 +108,25 @@ export default async function AnswerPage({ params }: Props) {
         </div>
         <div className="metric">
           <span>reader paid</span>
+          <strong>{formatUsdc(economics.readerPaidAtomicUsdc)}</strong>
+        </div>
+        <div className="metric">
+          <span>creator payouts</span>
+          <strong>{formatUsdc(economics.creatorPayoutsAtomicUsdc)}</strong>
+        </div>
+        <div className="metric">
+          <span>protocol retained</span>
           <strong>
-            {formatUsdc(query.readerPayment?.amountAtomicUsdc ?? 0)}
+            {query.readerPayment
+              ? formatUsdc(economics.protocolRetainedAtomicUsdc)
+              : "not reader-paid"}
           </strong>
         </div>
         <div className="metric">
-          <span>agent spent</span>
-          <strong>{formatUsdc(agentBudget?.spentAtomicUsdc ?? 0)}</strong>
+          <span>budget utilization</span>
+          <strong>
+            {query.readerPayment ? formatBudgetUtilization(economics) : "n/a"}
+          </strong>
         </div>
         <div className="metric wide">
           <span>latest receipt</span>
@@ -117,6 +145,28 @@ export default async function AnswerPage({ params }: Props) {
         <EvidenceRow
           label="reader payment hash"
           value={query.readerPayment?.paymentHash ?? "not reader-paid"}
+        />
+        <EvidenceRow
+          label="reader paid"
+          value={`${formatUsdc(economics.readerPaidAtomicUsdc)} USDC`}
+        />
+        <EvidenceRow
+          label="creator payouts"
+          value={`${formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC`}
+        />
+        <EvidenceRow
+          label="protocol retained"
+          value={
+            query.readerPayment
+              ? `${formatUsdc(economics.protocolRetainedAtomicUsdc)} USDC`
+              : "not reader-paid"
+          }
+        />
+        <EvidenceRow
+          label="budget utilization"
+          value={
+            query.readerPayment ? formatBudgetUtilization(economics) : "n/a"
+          }
         />
       </section>
 
@@ -145,6 +195,62 @@ export default async function AnswerPage({ params }: Props) {
           <div>
             <span>payment hash</span>
             <strong>{shortHash(query.readerPayment.paymentHash)}</strong>
+          </div>
+        </section>
+      )}
+
+      {agentBudget && (
+        <section className="receipt-context profile-section">
+          <div className="panel-heading">
+            <p className="eyebrow">agent accountability</p>
+            <h3>Budget envelope and proof anchors</h3>
+          </div>
+          <div className="evidence-grid">
+            <EvidenceRow
+              label="budget envelope"
+              value={`${formatUsdc(agentBudget.sourceBudgetAtomicUsdc)} USDC`}
+            />
+            <EvidenceRow
+              label="spent on sources"
+              value={`${formatUsdc(agentBudget.spentAtomicUsdc)} USDC`}
+            />
+            <EvidenceRow
+              label="unused"
+              value={`${formatUsdc(agentBudget.remainingAtomicUsdc)} USDC`}
+            />
+            <EvidenceRow
+              label="source cap"
+              value={`${agentBudget.purchasedCount}/${agentBudget.candidateCount} bought`}
+            />
+            <EvidenceRow
+              label="covenant policy"
+              value={
+                covenant?.latestVault
+                  ? `${formatAtomicUsdc(
+                      covenant.latestVault.mandate.budgetUsdc,
+                    )} USDC max`
+                  : "not published locally"
+              }
+            />
+            <EvidenceRow
+              label="allowed domains"
+              value="registered source URLs only"
+            />
+            <EvidenceRow
+              label="TrackRecord anchor"
+              value={
+                query.trackRecord ? shortHash(query.trackRecord.recordHash) : "none"
+              }
+            />
+            <EvidenceRow
+              label="SlashBond status"
+              value={
+                slashBond
+                  ? `${formatAtomicUsdc(slashBond.bondBalance)} USDC bonded`
+                  : "not published locally"
+              }
+            />
+            <EvidenceRow label="receipt chain hash" value={latestChainHash} />
           </div>
         </section>
       )}
@@ -243,7 +349,7 @@ export default async function AnswerPage({ params }: Props) {
         <section className="receipt-context profile-section agent-trace">
           <div className="panel-heading">
             <p className="eyebrow">agent reasoning</p>
-            <h3>How the agent reached this answer</h3>
+            <h3>Appraise to payout timeline</h3>
           </div>
           {query.agentRationale && (
             <p className="hero-text">{query.agentRationale}</p>
@@ -264,6 +370,27 @@ export default async function AnswerPage({ params }: Props) {
                 </div>
               </li>
             ))}
+            <li className="trace-step">
+              <span className="trace-num">{agentSteps.length + 1}</span>
+              <div className="trace-body">
+                <strong>final</strong>
+                <span className="trace-summary">
+                  Final answer is restricted to paid citation records.
+                </span>
+                <small>{query.citations.map((citation) => citation.title).join(", ")}</small>
+              </div>
+            </li>
+            <li className="trace-step">
+              <span className="trace-num">{agentSteps.length + 2}</span>
+              <div className="trace-body">
+                <strong>payouts</strong>
+                <span className="trace-summary">
+                  Wrote {receipts.length} source payment receipt
+                  {receipts.length === 1 ? "" : "s"} into the ledger.
+                </span>
+                <small>{latestChainHash}</small>
+              </div>
+            </li>
           </ol>
         </section>
       )}
@@ -287,6 +414,17 @@ export default async function AnswerPage({ params }: Props) {
                     {citation.creator} / {formatUsdc(citation.amountAtomicUsdc)}{" "}
                     USDC
                   </span>
+                  <small>
+                    {citation.verifiedCreator
+                      ? "Verified owner"
+                      : citation.sourceKind === "seed"
+                        ? "Seed/demo source"
+                        : "Unverified external source"}{" "}
+                    / excerpt{" "}
+                    {citation.sourceExcerptHash
+                      ? shortHash(citation.sourceExcerptHash)
+                      : "not recorded"}
+                  </small>
                   <small>{citation.reason}</small>
                 </div>
                 <div className="source-action">
@@ -320,12 +458,26 @@ export default async function AnswerPage({ params }: Props) {
               <div>
                 <strong>{receipt.creator}</strong>
                 <span>
-                  {settlementLabel(receipt.settlementMode)} /{" "}
-                  {receipt.createdAt}
+                  payment status: {settlementLabel(receipt.settlementMode)} /{" "}
+                  creator recipient {shortWallet(receipt.wallet)}
+                </span>
+                <span>
+                  ledger {shortHash(receipt.receiptHash)} / prev{" "}
+                  {shortHash(receipt.previousHash)}
                 </span>
               </div>
               <div className="numeric-cell">
                 <strong>{formatUsdc(receipt.amountAtomicUsdc)}</strong>
+                {receipt.transaction && (
+                  <a
+                    className="receipt-link"
+                    href={arcscanTxUrl(receipt.transaction)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Arc tx
+                  </a>
+                )}
                 <Link
                   className="receipt-link"
                   href={`/receipts/${receipt.receiptHash}`}

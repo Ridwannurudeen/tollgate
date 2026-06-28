@@ -29,6 +29,7 @@ async function main() {
     displayName,
     wallet: getAddress(wallet),
     createdAt: new Date().toISOString(),
+    approvalStatus: "operator-approved" as const,
   };
   const nextRegistry = upsertWalletRegistryEntry(registry, entry);
   await writeWalletRegistry(nextRegistry);

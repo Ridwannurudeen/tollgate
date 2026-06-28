@@ -1,8 +1,8 @@
 # Aperture
 
-Aperture is a sidecar for Immich that pays photographers when shared photos are downloaded.
+Aperture is a sidecar for Immich that gates shared-photo downloads with x402 and pays photographers when licensed downloads are unlocked.
 
-It watches Immich download requests, resolves the shared-link key to asset owners, maps each owner to an Arc wallet, and writes hash-chained payout receipts. When configured with this project's own funded payer key, it routes USDC through Forum `FeeRouterV1` on Arc testnet.
+It resolves Immich shared-link keys to asset owners, returns an x402 payment requirement for the license download, maps each approved owner to an Arc wallet, and writes hash-chained payout receipts. When configured with this project's own funded payer key, it routes USDC through Forum `FeeRouterV1` on Arc testnet.
 
 Public demo path: `https://tollgate.gudman.xyz/aperture`.
 
@@ -24,7 +24,10 @@ npm install
 npm run typecheck
 npm test -- --run
 npm run build
+npm run export:proof-pack
 ```
+
+The paid download route is `POST /aperture/api/license-download` in the mounted app. Without a `PAYMENT-SIGNATURE` header it returns HTTP 402 plus `PAYMENT-REQUIRED`. With a valid x402 payment it unlocks the archive request and appends license receipts. Local demos can set `APERTURE_LICENSE_LOCAL_PROOF=1` to use the explicit `X-APERTURE-LOCAL-PROOF: 1` path; do not label that as settled.
 
 Register an Immich owner wallet:
 
@@ -54,6 +57,7 @@ FeeRouter settlement is disabled by default. To settle on Arc, set:
 ```bash
 APERTURE_FEE_ROUTER_ENABLED=1
 APERTURE_FEE_ROUTER_PRIVATE_KEY=<project-funded-payer-key>
+APERTURE_LICENSE_COLLECTOR_ADDRESS=<collector-wallet>
 ```
 
 Optional EXIF enrichment reads the original file path Immich returns for an

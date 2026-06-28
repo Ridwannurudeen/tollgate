@@ -55,6 +55,21 @@ function receiptPayload(receipt, includeUndefinedOptionals) {
   if (receipt.feeRouterPayTx !== undefined) {
     payload.feeRouterPayTx = receipt.feeRouterPayTx;
   }
+  if (receipt.canonicalUrl !== undefined) {
+    payload.canonicalUrl = receipt.canonicalUrl;
+  }
+  if (receipt.sourceContentHash !== undefined) {
+    payload.sourceContentHash = receipt.sourceContentHash;
+  }
+  if (receipt.sourceExcerptHash !== undefined) {
+    payload.sourceExcerptHash = receipt.sourceExcerptHash;
+  }
+  if (receipt.contentFetchedAt !== undefined) {
+    payload.contentFetchedAt = receipt.contentFetchedAt;
+  }
+  if (receipt.ownershipProof !== undefined) {
+    payload.ownershipProof = receipt.ownershipProof;
+  }
   return payload;
 }
 

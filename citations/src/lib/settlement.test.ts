@@ -1,16 +1,34 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { findSource, normalizeSourceInput } from "./catalog";
-import { createQueryRecord, planCitationMarket, selectSources } from "./engine";
-import { createSourceAccessRecord } from "./engine";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
+  appendSource,
+  buildSourceOwnershipMessage,
+  findSource,
+  normalizeSourceInput,
+} from "./catalog";
+import {
+  createSourceAccessRecord,
+  createQueryRecord,
+  DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
+  planCitationMarket,
+  selectSources,
+} from "./engine";
+import { configuredPaymentEconomics } from "./economics";
+import {
+  appendSettlement,
   createReceipts,
   getAnswerEvidence,
   getCreatorEvidence,
   getJudgeDemoEvidence,
   getSourceEvidence,
+  readLedger,
   summarizeCreators,
   verifyLedgerIntegrity,
 } from "./ledger";
+import { PAID_QUERY_PRICE_ATOMIC_USDC } from "./payments";
 import type { Ledger } from "./types";
 import { createQueryPaymentEvidence, validateQuestion } from "./settlement";
 
@@ -37,6 +55,16 @@ describe("LeptonWeb settlement engine", () => {
     expect(receipts[0]?.paymentResource).toBe(
       `/api/sources/${query.citations[0]?.sourceId}`,
     );
+    expect(receipts[0]?.canonicalUrl).toBe(query.citations[0]?.canonicalUrl);
+    expect(receipts[0]?.sourceContentHash).toBe(
+      query.citations[0]?.sourceContentHash,
+    );
+    expect(receipts[0]?.sourceExcerptHash).toBe(
+      query.citations[0]?.sourceExcerptHash,
+    );
+    expect(receipts[0]?.contentFetchedAt).toBe(
+      query.citations[0]?.contentFetchedAt,
+    );
     expect(receipts[0]?.settlementMode).toBe("local-proof");
     expect(query.totalAtomicUsdc).toBeGreaterThan(0);
     expect(query.agentBudget?.spentAtomicUsdc).toBe(query.totalAtomicUsdc);
@@ -59,6 +87,9 @@ describe("LeptonWeb settlement engine", () => {
           summary: "AI agents pay creators with x402 citations.",
           tags: ["agents", "creators", "x402"],
           priceAtomicUsdc: 900,
+          sourceKind: "internal-test",
+          creatorKind: "internal-test",
+          verifiedCreator: false,
         },
         {
           id: "expensive-relevant",
@@ -70,6 +101,9 @@ describe("LeptonWeb settlement engine", () => {
           summary: "AI agents pay creators with x402 citations and budgets.",
           tags: ["agents", "creators", "x402"],
           priceAtomicUsdc: 1_900,
+          sourceKind: "internal-test",
+          creatorKind: "internal-test",
+          verifiedCreator: false,
         },
       ],
       3,
@@ -85,6 +119,18 @@ describe("LeptonWeb settlement engine", () => {
         (decision) => decision.sourceId === "expensive-relevant",
       )?.selected,
     ).toBe(false);
+  });
+
+  it("keeps the configured source budget inside the reader payment", () => {
+    const economics = configuredPaymentEconomics();
+
+    expect(DEFAULT_SOURCE_BUDGET_ATOMIC_USDC).toBeLessThanOrEqual(
+      PAID_QUERY_PRICE_ATOMIC_USDC,
+    );
+    expect(economics.readerPaidAtomicUsdc).toBe(10_000);
+    expect(economics.creatorPayoutsAtomicUsdc).toBe(6_500);
+    expect(economics.protocolRetainedAtomicUsdc).toBe(3_500);
+    expect(economics.budgetUtilizationPercent).toBe(65);
   });
 
   it("summarizes creator earnings from query citations", () => {
@@ -168,7 +214,7 @@ describe("LeptonWeb settlement engine", () => {
       "2026-06-16T12:00:00.000Z",
     );
     const readerPayment = createQueryPaymentEvidence({
-      amountAtomicUsdc: 1000,
+      amountAtomicUsdc: PAID_QUERY_PRICE_ATOMIC_USDC,
       settlementMode: "x402-verified",
       payTo: "0x22949cA9A470181c66a034E81a743E2518579E95",
       payer: "0x8888888888888888888888888888888888888888",
@@ -309,6 +355,88 @@ describe("LeptonWeb settlement engine", () => {
     expect(source.handle).toBe("@sourcelab");
     expect(source.tags).toEqual(["research", "agents"]);
     expect(source.priceAtomicUsdc).toBe(2500);
+    expect(source.sourceKind).toBe("external");
+    expect(source.verifiedCreator).toBe(false);
+  });
+
+  it("marks a source verified when ownership signature recovers the wallet", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-sources-"));
+    const filePath = path.join(dir, "sources.json");
+    const account = privateKeyToAccount(generatePrivateKey());
+    const timestamp = "2026-06-27T12:00:00.000Z";
+    const sourceUrl = "https://example.com/signed-research";
+    const signature = await account.signMessage({
+      message: buildSourceOwnershipMessage({
+        sourceUrl,
+        wallet: account.address,
+        timestamp,
+      }),
+    });
+
+    try {
+      const result = await appendSource(
+        {
+          title: "Signed Research Feed",
+          creator: "Verified Lab",
+          handle: "@verified",
+          wallet: account.address,
+          url: sourceUrl,
+          summary: "Verified owner content for agent citation tests.",
+          tags: ["verified", "agents"],
+          priceAtomicUsdc: 2500,
+          ownershipSignature: signature,
+          ownershipTimestamp: timestamp,
+        },
+        filePath,
+      );
+
+      expect(result.source.verifiedCreator).toBe(true);
+      expect(result.source.ownershipProof?.method).toBe("wallet-signature");
+      expect(result.source.ownershipProof?.signer).toBe(account.address);
+      expect(result.source.ownershipProof?.signatureHash).toMatch(
+        /^0x[0-9a-f]{64}$/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a source ownership signature from the wrong wallet", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-sources-"));
+    const filePath = path.join(dir, "sources.json");
+    const owner = privateKeyToAccount(generatePrivateKey());
+    const signer = privateKeyToAccount(generatePrivateKey());
+    const timestamp = "2026-06-27T12:00:00.000Z";
+    const sourceUrl = "https://example.com/wrong-signer";
+    const signature = await signer.signMessage({
+      message: buildSourceOwnershipMessage({
+        sourceUrl,
+        wallet: owner.address,
+        timestamp,
+      }),
+    });
+
+    try {
+      await expect(
+        appendSource(
+          {
+            title: "Wrong Signer Feed",
+            creator: "Verifier Lab",
+            handle: "@wrong",
+            wallet: owner.address,
+            url: sourceUrl,
+            summary: "This source should not verify against the wrong signer.",
+            tags: ["verified"],
+            priceAtomicUsdc: 2500,
+            ownershipSignature: signature,
+            ownershipTimestamp: timestamp,
+          },
+          filePath,
+        ),
+      ).rejects.toThrow("ownershipSignature");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("verifies the receipt hash chain and query references", () => {
@@ -334,9 +462,50 @@ describe("LeptonWeb settlement engine", () => {
     expect(verification.latestHash).toBe(receipts.at(-1)?.receiptHash);
   });
 
+  it("serializes concurrent ledger appends without dropping receipts", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-ledger-"));
+    const filePath = path.join(dir, "ledger.json");
+    try {
+      const queries = [
+        createQueryRecord(
+          "How do agents preserve creator revenue across reused sources?",
+          "2026-06-16T12:00:00.000Z",
+        ),
+        createQueryRecord(
+          "How does Tollgate prove every paid answer keeps receipts linked?",
+          "2026-06-16T12:01:00.000Z",
+        ),
+        createQueryRecord(
+          "How should x402 citation payouts stay auditable under load?",
+          "2026-06-16T12:02:00.000Z",
+        ),
+      ];
+
+      await Promise.all(
+        queries.map((query) => appendSettlement(query, {}, filePath)),
+      );
+
+      const ledger = await readLedger(filePath);
+      const expectedReceiptCount = queries.reduce(
+        (sum, query) => sum + query.citations.length,
+        0,
+      );
+      const verification = verifyLedgerIntegrity(ledger);
+
+      expect(ledger.queries).toHaveLength(queries.length);
+      expect(ledger.receipts).toHaveLength(expectedReceiptCount);
+      expect(verification.ok).toBe(true);
+      expect(verification.latestHash).toBe(
+        ledger.receipts.at(-1)?.receiptHash,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("binds paid query receipts to the reader payment hash", () => {
     const readerPayment = createQueryPaymentEvidence({
-      amountAtomicUsdc: 1000,
+      amountAtomicUsdc: PAID_QUERY_PRICE_ATOMIC_USDC,
       settlementMode: "x402-verified",
       payTo: "0x22949cA9A470181c66a034E81a743E2518579E95",
       payer: "0x8888888888888888888888888888888888888888",

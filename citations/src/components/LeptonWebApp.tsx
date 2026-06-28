@@ -269,7 +269,7 @@ export function LeptonWebApp({
       setLedger(result.ledger);
       await refreshLedger();
       await refreshSettlementStatus();
-      setStatus("Reader paid, answer settled, and citations receipted.");
+      setStatus("Reader paid, answer recorded, and citations receipted.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Paid query failed.");
     } finally {
@@ -414,7 +414,7 @@ export function LeptonWebApp({
           <strong>{stats.receiptCount}</strong>
           <span className="stat-sub">
             to {stats.creatorCount} creators ·{" "}
-            {Number(formatUsdc(stats.totalPaid))} USDC settled on Arc
+            {Number(formatUsdc(stats.totalPaid))} USDC recorded in receipts
           </span>
         </div>
       </section>
@@ -527,7 +527,7 @@ export function LeptonWebApp({
           <p className="status-line" aria-live="polite">
             {status ||
               `Paid answers cost ${formatUsdc(
-                settlementStatus?.paidQueryPriceAtomicUsdc ?? 1000,
+                settlementStatus?.paidQueryPriceAtomicUsdc ?? 10_000,
               )} USDC and append receipt-linked citations.`}
           </p>
           <p className="status-line source-status" aria-live="polite">
@@ -706,7 +706,7 @@ export function LeptonWebApp({
             </>
           ) : (
             <div className="empty-state">
-              <strong>No answer settled yet.</strong>
+              <strong>No answer recorded yet.</strong>
               <span>
                 Run a query to see the paid citations, answer hash, and receipt
                 chain.

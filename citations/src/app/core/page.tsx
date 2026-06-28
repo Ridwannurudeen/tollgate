@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { readSources } from "@/lib/catalog";
 import { formatUsdc } from "@/lib/format";
 import {
   readLedger,
@@ -40,7 +41,7 @@ async function loadAperture(): Promise<ApertureProof | null> {
 }
 
 export default async function CorePage() {
-  const ledger = await readLedger();
+  const [ledger, sources] = await Promise.all([readLedger(), readSources()]);
   const creators = summarizeCreators(ledger);
   const verification = verifyLedgerIntegrity(ledger);
   const citationRouted = ledger.receipts.reduce(
@@ -48,6 +49,15 @@ export default async function CorePage() {
     0,
   );
   const aperture = await loadAperture();
+  const paidQueries = ledger.queries.filter((query) => query.readerPayment);
+  const uniquePayers = new Set(
+    paidQueries
+      .map((query) => query.readerPayment?.payer)
+      .filter((payer): payer is string => Boolean(payer)),
+  );
+  const uniqueCreatorWallets = new Set(
+    ledger.receipts.map((receipt) => receipt.wallet.toLowerCase()),
+  );
 
   return (
     <main className="shell receipt-page">
@@ -83,6 +93,61 @@ export default async function CorePage() {
             — so a writer cited by an AI and a photographer whose photo is
             downloaded are paid by the exact same plumbing.
           </p>
+        </div>
+      </section>
+
+      <section className="receipt-proof">
+        <div className="proof-copy">
+          <p className="eyebrow">traction snapshot</p>
+          <h2>Seed/demo activity is not counted as external traction</h2>
+          <p className="hero-text">
+            These counters are derived from the live local ledgers and source
+            registry labels. Seed sources stay visible for demo reproducibility,
+            but they are separated from external and internal-test sources.
+          </p>
+        </div>
+        <div className="evidence-grid">
+          <div className="evidence-row">
+            <span>external sources</span>
+            <strong>
+              {sources.filter((source) => source.sourceKind === "external").length}
+            </strong>
+          </div>
+          <div className="evidence-row">
+            <span>seed/demo sources</span>
+            <strong>
+              {sources.filter((source) => source.sourceKind === "seed").length}
+            </strong>
+          </div>
+          <div className="evidence-row">
+            <span>internal-test sources</span>
+            <strong>
+              {
+                sources.filter((source) => source.sourceKind === "internal-test")
+                  .length
+              }
+            </strong>
+          </div>
+          <div className="evidence-row">
+            <span>paid queries</span>
+            <strong>{paidQueries.length}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>payout receipts</span>
+            <strong>{ledger.receipts.length}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>unique payer wallets</span>
+            <strong>{uniquePayers.size}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>unique creator wallets</span>
+            <strong>{uniqueCreatorWallets.size}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>total test USDC</span>
+            <strong>{formatUsdc(citationRouted)} USDC</strong>
+          </div>
         </div>
       </section>
 

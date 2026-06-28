@@ -26,6 +26,7 @@ const photographer: WalletRegistryEntry = {
   displayName: "Photographer",
   wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
   createdAt: "2026-06-24T00:00:00.000Z",
+  approvalStatus: "operator-approved",
 };
 
 describe("license ledger", () => {
@@ -72,6 +73,48 @@ describe("license ledger", () => {
       expect(second.created).toBe(false);
       expect(ledger.receipts).toHaveLength(1);
       expect(verifyLicenseLedger(ledger).ok).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes concurrent receipt appends without dropping events", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-ledger-"));
+    const filePath = path.join(dir, "ledger.json");
+    try {
+      await Promise.all(
+        ["11", "22", "33"].map((byte, index) =>
+          appendLicenseReceipt(
+            {
+              eventId: `0x${byte.repeat(32)}`,
+              event: {
+                ...event,
+                rawLine: `raw-${index}`,
+                createdAt: `2026-06-24T05:45:3${index}.000Z`,
+              },
+              sharedLinkId: "share-1",
+              assetId: `asset-${index}`,
+              ownerId: "owner-1",
+              photographer,
+              amountAtomicUsdc: 2500,
+              evidence: {
+                settlementMode: "local-proof",
+                paymentResource: "immich-access-log",
+              },
+            },
+            filePath,
+          ),
+        ),
+      );
+
+      const ledger = await readLicenseLedger(filePath);
+      const verification = verifyLicenseLedger(ledger);
+
+      expect(ledger.receipts).toHaveLength(3);
+      expect(verification.ok).toBe(true);
+      expect(verification.latestHash).toBe(
+        ledger.receipts.at(-1)?.receiptHash,
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

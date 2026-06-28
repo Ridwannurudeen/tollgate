@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { readSources } from "@/lib/catalog";
 import { readCovenantEnvelope } from "@/lib/covenant";
+import {
+  formatBudgetUtilization,
+  ledgerPaidQueryEconomics,
+} from "@/lib/economics";
 import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
 import {
   readLedger,
@@ -23,13 +27,6 @@ type SourceStat = {
 function totalReceiptPaid(ledger: Ledger): number {
   return ledger.receipts.reduce(
     (sum, receipt) => sum + receipt.amountAtomicUsdc,
-    0,
-  );
-}
-
-function totalReaderPaid(ledger: Ledger): number {
-  return ledger.queries.reduce(
-    (sum, query) => sum + (query.readerPayment?.amountAtomicUsdc ?? 0),
     0,
   );
 }
@@ -83,6 +80,24 @@ export default async function ProofPage() {
   const verification = verifyLedgerIntegrity(ledger);
   const sourceLeaders = sourceStats(ledger);
   const latestReceipt = ledger.receipts.at(-1);
+  const latestQuery = ledger.queries[0] ?? null;
+  const economics = ledgerPaidQueryEconomics(ledger);
+  const externalSources = sources.filter(
+    (source) => source.sourceKind === "external",
+  );
+  const seedSources = sources.filter((source) => source.sourceKind === "seed");
+  const internalSources = sources.filter(
+    (source) => source.sourceKind === "internal-test",
+  );
+  const paidQueries = ledger.queries.filter((query) => query.readerPayment);
+  const uniquePayers = new Set(
+    paidQueries
+      .map((query) => query.readerPayment?.payer)
+      .filter((payer): payer is string => Boolean(payer)),
+  );
+  const uniqueCreatorWallets = new Set(
+    ledger.receipts.map((receipt) => receipt.wallet.toLowerCase()),
+  );
   const verifiedReceiptCount = ledger.receipts.filter(
     (receipt) => receipt.settlementMode === "x402-verified",
   ).length;
@@ -143,7 +158,19 @@ export default async function ProofPage() {
         </div>
         <div className="metric">
           <span>reader paid</span>
-          <strong>{formatUsdc(totalReaderPaid(ledger))}</strong>
+          <strong>{formatUsdc(economics.readerPaidAtomicUsdc)}</strong>
+        </div>
+        <div className="metric">
+          <span>creator payouts</span>
+          <strong>{formatUsdc(economics.creatorPayoutsAtomicUsdc)}</strong>
+        </div>
+        <div className="metric">
+          <span>protocol retained</span>
+          <strong>{formatUsdc(economics.protocolRetainedAtomicUsdc)}</strong>
+        </div>
+        <div className="metric">
+          <span>budget utilization</span>
+          <strong>{formatBudgetUtilization(economics)}</strong>
         </div>
         <div className="metric">
           <span>track records</span>
@@ -171,6 +198,26 @@ export default async function ProofPage() {
         <div className="evidence-row">
           <span>receipt chain</span>
           <strong>{verification.ok ? "valid" : "invalid"}</strong>
+        </div>
+        <div className="evidence-row">
+          <span>paid-query reader paid</span>
+          <strong>{formatUsdc(economics.readerPaidAtomicUsdc)} USDC</strong>
+        </div>
+        <div className="evidence-row">
+          <span>paid-query creator payouts</span>
+          <strong>
+            {formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC
+          </strong>
+        </div>
+        <div className="evidence-row">
+          <span>paid-query protocol retained</span>
+          <strong>
+            {formatUsdc(economics.protocolRetainedAtomicUsdc)} USDC
+          </strong>
+        </div>
+        <div className="evidence-row">
+          <span>paid-query budget utilization</span>
+          <strong>{formatBudgetUtilization(economics)}</strong>
         </div>
         <div className="evidence-row">
           <span>verification issues</span>
@@ -219,6 +266,108 @@ export default async function ProofPage() {
           <strong>{latestReceipt?.previousHash ?? "none"}</strong>
         </div>
       </section>
+
+      <section className="receipt-ledger">
+        <div className="panel-heading">
+          <p className="eyebrow">traction quality</p>
+          <h3>Real, seed, and internal activity are separated</h3>
+        </div>
+        <div className="evidence-grid">
+          <div className="evidence-row">
+            <span>external sources</span>
+            <strong>{externalSources.length}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>seed/demo sources</span>
+            <strong>{seedSources.length}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>internal-test sources</span>
+            <strong>{internalSources.length}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>verified creators</span>
+            <strong>{sources.filter((source) => source.verifiedCreator).length}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>paid queries</span>
+            <strong>{paidQueries.length}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>payout receipts</span>
+            <strong>{ledger.receipts.length}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>unique payer wallets</span>
+            <strong>{uniquePayers.size}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>unique creator wallets</span>
+            <strong>{uniqueCreatorWallets.size}</strong>
+          </div>
+          <div className="evidence-row">
+            <span>total test USDC</span>
+            <strong>{formatUsdc(totalReceiptPaid(ledger))} USDC</strong>
+          </div>
+        </div>
+      </section>
+
+      {latestQuery?.agentBudget && (
+        <section className="receipt-ledger">
+          <div className="panel-heading">
+            <p className="eyebrow">agent accountability</p>
+            <h3>Latest answer budget envelope</h3>
+          </div>
+          <div className="evidence-grid">
+            <div className="evidence-row">
+              <span>budget envelope</span>
+              <strong>
+                {formatUsdc(latestQuery.agentBudget.sourceBudgetAtomicUsdc)}{" "}
+                USDC
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>spent on sources</span>
+              <strong>
+                {formatUsdc(latestQuery.agentBudget.spentAtomicUsdc)} USDC
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>unused</span>
+              <strong>
+                {formatUsdc(latestQuery.agentBudget.remainingAtomicUsdc)} USDC
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>source cap</span>
+              <strong>
+                {latestQuery.agentBudget.purchasedCount}/
+                {latestQuery.agentBudget.candidateCount}
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>TrackRecord anchor</span>
+              <strong>
+                {latestQuery.trackRecord
+                  ? shortHash(latestQuery.trackRecord.recordHash)
+                  : "none"}
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>SlashBond status</span>
+              <strong>
+                {slashBond
+                  ? `${formatAtomicUsdc(slashBond.bondBalance)} USDC bonded`
+                  : "not published locally"}
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>receipt chain hash</span>
+              <strong>{latestReceipt?.receiptHash ?? "none"}</strong>
+            </div>
+          </div>
+        </section>
+      )}
 
       {trackRecordQueries.length > 0 && (
         <section className="receipt-ledger">

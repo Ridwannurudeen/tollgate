@@ -1,7 +1,13 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { verifyMessage } from "viem";
+import { sha256Hex } from "./hash";
 import { readRsshubSources } from "./sources/rsshub";
-import type { CreatorSource, SourceRegistrationInput } from "./types";
+import type {
+  CreatorSource,
+  SourceOwnershipProof,
+  SourceRegistrationInput,
+} from "./types";
 
 export class SourceRegistryError extends Error {
   constructor(
@@ -12,8 +18,28 @@ export class SourceRegistryError extends Error {
   }
 }
 
+const SEED_VERIFIED_AT = "2026-06-27T00:00:00.000Z";
+
+function seedSource(
+  source: Omit<
+    CreatorSource,
+    "sourceKind" | "creatorKind" | "verifiedCreator" | "ownershipProof"
+  >,
+): CreatorSource {
+  return {
+    ...source,
+    sourceKind: "seed",
+    creatorKind: "seed",
+    verifiedCreator: false,
+    ownershipProof: {
+      method: "seed-demo",
+      verifiedAt: SEED_VERIFIED_AT,
+    },
+  };
+}
+
 export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
-  {
+  seedSource({
     id: "canteen-lepton-rfb",
     title: "Lepton RFB Notes",
     creator: "Canteen Research",
@@ -24,8 +50,8 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
       "Lepton asks builders to make sub-cent value move for agents and creators: per article, per call, per second, and per citation.",
     tags: ["lepton", "nanopayments", "creators", "arc", "x402"],
     priceAtomicUsdc: 1800,
-  },
-  {
+  }),
+  seedSource({
     id: "circle-gateway-nano",
     title: "Gateway Nanopayments Primer",
     creator: "Circle Developer Notes",
@@ -36,8 +62,8 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
       "Circle Gateway batches signed EIP-3009 authorizations so x402 payments can clear at sub-cent values without per-payment gas.",
     tags: ["circle", "gateway", "eip-3009", "x402", "usdc"],
     priceAtomicUsdc: 2400,
-  },
-  {
+  }),
+  seedSource({
     id: "arc-finality-usdc",
     title: "Arc Settlement Sketch",
     creator: "Arc Builder Desk",
@@ -48,8 +74,8 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
       "Arc is designed for stablecoin-native settlement with USDC gas, sub-second finality, and app kits for payment workflows.",
     tags: ["arc", "usdc", "settlement", "app-kit", "finality"],
     priceAtomicUsdc: 2200,
-  },
-  {
+  }),
+  seedSource({
     id: "rsshub-distribution",
     title: "RSS Distribution Surface",
     creator: "Open Feed Maintainers",
@@ -60,8 +86,8 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
       "RSS and open feed communities already aggregate creator work, making them strong surfaces for pay-per-citation and pay-per-read experiments.",
     tags: ["rss", "feeds", "distribution", "creators", "open-source"],
     priceAtomicUsdc: 900,
-  },
-  {
+  }),
+  seedSource({
     id: "forum-mandates",
     title: "Covenant Account Spend Controls",
     creator: "Forum Protocol",
@@ -72,8 +98,8 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
       "Forum-style mandates bound an agent budget, publish receipts, and make spend controls enforceable instead of advisory.",
     tags: ["forum", "receipts", "mandates", "spend-control", "agents"],
     priceAtomicUsdc: 1500,
-  },
-  {
+  }),
+  seedSource({
     id: "creator-citation-economics",
     title: "Citation Economics for AI Answers",
     creator: "Indie Researcher",
@@ -84,7 +110,7 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
       "A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work.",
     tags: ["citations", "attribution", "publishers", "answers", "economics"],
     priceAtomicUsdc: 1200,
-  },
+  }),
 ];
 
 const SOURCE_REGISTRY_PATH = path.join(process.cwd(), "data", "sources.json");
@@ -193,7 +219,14 @@ function isCreatorSource(value: unknown): value is CreatorSource {
     typeof source.summary === "string" &&
     Array.isArray(source.tags) &&
     source.tags.every((tag) => typeof tag === "string") &&
-    Number.isInteger(source.priceAtomicUsdc)
+    Number.isInteger(source.priceAtomicUsdc) &&
+    (source.sourceKind === "external" ||
+      source.sourceKind === "seed" ||
+      source.sourceKind === "internal-test") &&
+    (source.creatorKind === "external" ||
+      source.creatorKind === "seed" ||
+      source.creatorKind === "internal-test") &&
+    typeof source.verifiedCreator === "boolean"
   );
 }
 
@@ -219,12 +252,74 @@ export function normalizeSourceInput(input: unknown): CreatorSource {
     summary: cleanText(registration.summary, "summary", 340),
     tags: normalizeTags(registration.tags),
     priceAtomicUsdc: normalizePrice(registration.priceAtomicUsdc),
+    sourceKind: "external",
+    creatorKind: "external",
+    verifiedCreator: false,
   };
 }
 
-async function readCustomSources(): Promise<CreatorSource[]> {
+export function buildSourceOwnershipMessage({
+  sourceUrl,
+  wallet,
+  timestamp,
+}: {
+  sourceUrl: string;
+  wallet: `0x${string}`;
+  timestamp: string;
+}): string {
+  return [
+    "Tollgate source ownership",
+    `sourceUrl:${sourceUrl}`,
+    `wallet:${wallet}`,
+    `timestamp:${timestamp}`,
+  ].join("\n");
+}
+
+async function ownershipProofFromInput(
+  input: unknown,
+  source: CreatorSource,
+): Promise<SourceOwnershipProof | undefined> {
+  if (!isRecord(input)) return undefined;
+  const signature = input.ownershipSignature;
+  const timestamp = input.ownershipTimestamp;
+  if (signature === undefined && timestamp === undefined) return undefined;
+  if (typeof signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(signature)) {
+    throw new SourceRegistryError("ownershipSignature must be a hex string.");
+  }
+  if (typeof timestamp !== "string" || timestamp.trim().length === 0) {
+    throw new SourceRegistryError("ownershipTimestamp is required.");
+  }
+
+  const message = buildSourceOwnershipMessage({
+    sourceUrl: source.url,
+    wallet: source.wallet,
+    timestamp: timestamp.trim(),
+  });
+  const valid = await verifyMessage({
+    address: source.wallet,
+    message,
+    signature: signature as `0x${string}`,
+  });
+  if (!valid) {
+    throw new SourceRegistryError(
+      "ownershipSignature did not recover the source wallet.",
+      401,
+    );
+  }
+
+  return {
+    method: "wallet-signature",
+    signer: source.wallet,
+    signatureHash: sha256Hex(signature),
+    verifiedAt: new Date().toISOString(),
+  };
+}
+
+async function readCustomSources(
+  filePath: string = SOURCE_REGISTRY_PATH,
+): Promise<CreatorSource[]> {
   try {
-    const raw = await readFile(SOURCE_REGISTRY_PATH, "utf8");
+    const raw = await readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(isCreatorSource);
@@ -235,11 +330,14 @@ async function readCustomSources(): Promise<CreatorSource[]> {
   }
 }
 
-async function writeCustomSources(sources: CreatorSource[]): Promise<void> {
-  await mkdir(path.dirname(SOURCE_REGISTRY_PATH), { recursive: true });
-  const tmpPath = `${SOURCE_REGISTRY_PATH}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+async function writeCustomSources(
+  sources: CreatorSource[],
+  filePath: string = SOURCE_REGISTRY_PATH,
+): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
   await writeFile(tmpPath, `${JSON.stringify(sources, null, 2)}\n`, "utf8");
-  await rename(tmpPath, SOURCE_REGISTRY_PATH);
+  await rename(tmpPath, filePath);
 }
 
 export async function readSources(): Promise<CreatorSource[]> {
@@ -270,16 +368,23 @@ function withRegistryLock<T>(task: () => Promise<T>): Promise<T> {
 
 export async function appendSource(
   input: unknown,
+  filePath: string = SOURCE_REGISTRY_PATH,
 ): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
-  const source = normalizeSourceInput(input);
+  const normalized = normalizeSourceInput(input);
+  const ownershipProof = await ownershipProofFromInput(input, normalized);
+  const source: CreatorSource = {
+    ...normalized,
+    verifiedCreator: ownershipProof !== undefined,
+    ...(ownershipProof ? { ownershipProof } : {}),
+  };
   return withRegistryLock(async () => {
     const existingSources = await readSources();
     if (existingSources.some((existing) => existing.id === source.id)) {
       throw new SourceRegistryError("source id already exists.", 409);
     }
-    const customSources = await readCustomSources();
+    const customSources = await readCustomSources(filePath);
     const nextCustomSources = [...customSources, source];
-    await writeCustomSources(nextCustomSources);
+    await writeCustomSources(nextCustomSources, filePath);
     return { source, sources: [...existingSources, source] };
   });
 }

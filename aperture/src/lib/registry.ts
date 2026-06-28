@@ -14,12 +14,20 @@ function isRegistryEntry(value: unknown): value is WalletRegistryEntry {
     typeof record.displayName === "string" &&
     typeof record.wallet === "string" &&
     isAddress(record.wallet) &&
-    typeof record.createdAt === "string"
+    typeof record.createdAt === "string" &&
+    (record.approvalStatus === undefined ||
+      record.approvalStatus === "pending" ||
+      record.approvalStatus === "operator-approved" ||
+      record.approvalStatus === "wallet-signed")
   );
 }
 
 function normalizeEntry(entry: WalletRegistryEntry): WalletRegistryEntry {
-  return { ...entry, wallet: getAddress(entry.wallet) };
+  return {
+    ...entry,
+    wallet: getAddress(entry.wallet),
+    approvalStatus: entry.approvalStatus ?? "operator-approved",
+  };
 }
 
 function parseRegistry(value: unknown): WalletRegistry {

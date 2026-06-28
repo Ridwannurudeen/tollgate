@@ -1,45 +1,56 @@
-# Tollgate — a creator nanopayment settlement core on Arc
+# Tollgate Citations
 
-**Creators don't get paid for how their work is actually used.** A writer earns nothing when an AI cites their article; a photographer earns nothing when someone downloads their photo. Per-use payments were always too small to clear — so the world defaulted to subscriptions, or nothing. Nanopayments on Arc remove that floor.
+Tollgate Citations is the answer-agent integration of the Tollgate settlement core. The agent buys the sources it cites, pays each creator per citation, and writes attribution receipts on Arc testnet.
 
-Tollgate is one **settlement core** with **two live integrations** into two real communities:
+Live app: `https://tollgate.gudman.xyz`
 
-- **Citations** — an autonomous answer agent buys the sources it cites and pays each creator per citation. → `https://tollgate.gudman.xyz`
-- **Photo licensing (Aperture)** — a permissionless sidecar on self-hosted **Immich** pays photographers per shared-photo download, with no upstream changes. → `https://tollgate.gudman.xyz/aperture`
-
-**Unified overview + live proof:** `https://tollgate.gudman.xyz/core`
+Unified overview: `https://tollgate.gudman.xyz/core`
 
 ## How the core works
-- **x402** for the per-request payment; **Circle Gateway** for gas-free **batched on-chain settlement**; **USDC on Arc**; a shared on-chain **FeeRouter** (Forum) that splits to every creator.
-- The reader endpoint (`/api/paid-query`) is **multi-accept**: browser wallets pay the `exact` scheme (verified), autonomous agents pay via **Gateway batched** settlement (`x402-settled`). The server settles against whichever requirement the payer actually signed.
-- Creator payouts settle on-chain as `forum-routed` receipts in an append-only, hash-linked ledger.
 
-## Verify it's real (not screenshots)
+- x402 for reader/source payments.
+- Circle Gateway support for batched autonomous-agent settlement.
+- USDC on Arc testnet.
+- Forum FeeRouter routes creator payouts and records `forum-routed` receipt evidence.
+- The reader endpoint (`/api/paid-query`) is multi-accept: browser wallets pay the `exact` scheme, autonomous agents can pay through Gateway batching, and the server settles against whichever requirement the payer signed.
+
+## Verify it is real
+
 - Settlement status: `https://tollgate.gudman.xyz/api/settlement/status`
-- Proof pages: `/proof`, `/core`, `/answers/<queryId>`, `/creators/<wallet>`, `/sources/<sourceId>`
-- Every payout has an on-chain reference on the Arc explorer: `https://testnet.arcscan.app`
+- Proof pages: `/proof`, `/core`, `/answers/<queryId>`, `/creators/<wallet>`, `/sources/<sourceId>`, `/receipts/<hash>`
+- Arc explorer: `https://testnet.arcscan.app`
 
-## API surface (Citations)
-- `GET/POST /api/sources` — list / self-register a priced source (creator onboarding)
-- `POST /api/query` — run the agent; pay cited creators on-chain
-- `POST /api/paid-query` — reader pays (multi-accept: exact or Gateway-batched), then the answer pays creators
-- `GET /api/ledger`, `GET /api/receipts/<hash>`, `GET /api/settlement/status`
+## API surface
 
-## Run & verify locally
+- `GET /api/sources`: list priced sources.
+- `POST /api/sources`: self-register a priced source.
+- `POST /api/query`: run a local-proof answer and receipt path.
+- `POST /api/paid-query`: require reader x402 payment, then pay cited creators.
+- `GET /api/ledger`: public ledger JSON.
+- `GET /api/receipts/<hash>`: single receipt evidence.
+- `GET /api/settlement/status`: runtime settlement status.
+
+## Run and verify locally
+
 ```bash
 npm install
-npm run dev          # http://127.0.0.1:3000
-npm test             # vitest
+npm run dev
+npm test
 npm run typecheck
 npm run build
 npm run verify:ledger
 ```
 
-## Arc (testnet)
-chainId `5042002` · RPC `https://rpc.testnet.arc.network` · USDC `0x3600000000000000000000000000000000000000` · FeeRouter `0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59` · explorer `https://testnet.arcscan.app`
+## Arc testnet
 
-## Repos
-- This repo: the settlement core + Citations integration — https://github.com/Ridwannurudeen/tollgate (private until launch).
-- Aperture (Immich photo-licensing sidecar): separate repo — https://github.com/Ridwannurudeen/aperture (private until launch).
+- chainId: `5042002`
+- RPC: `https://rpc.testnet.arc.network`
+- USDC: `0x3600000000000000000000000000000000000000`
+- FeeRouter: `0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59`
 
-Built for the Lepton Agents Hackathon (Canteen × Circle × Arc). AI usage: see `AI_USAGE.md`.
+## Repo layout
+
+- This monorepo: settlement core + Citations integration in `citations/`.
+- Aperture photo licensing: Immich sidecar in `aperture/`.
+
+Built for the Lepton Agents Hackathon. AI usage: see `AI_USAGE.md`.

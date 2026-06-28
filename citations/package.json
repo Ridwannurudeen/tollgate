@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify:ledger": "node scripts/verify-ledger.mjs",
+    "export:proof-pack": "node scripts/export-proof-pack.mjs",
     "prove:x402": "node scripts/prove-x402-source.mjs",
     "prove:paid-query": "node scripts/prove-paid-query.mjs",
     "prove:wallet-source": "node scripts/prove-wallet-source.mjs",
@@ -38,9 +39,9 @@
   },
   "dependencies": {
     "@circle-fin/x402-batching": "^3.2.0",
-    "@x402/core": "^2.13.0",
-    "@x402/evm": "^2.13.0",
-    "@x402/fetch": "^2.13.0",
+    "@x402/core": "^2.17.0",
+    "@x402/evm": "^2.17.0",
+    "@x402/fetch": "^2.17.0",
     "buffer": "^6.0.3",
     "fast-xml-parser": "^5.9.3",
     "next": "^15.5.4",
@@ -55,5 +56,11 @@
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "esbuild": "0.28.1",
+    "postcss": "8.5.15",
+    "tmp": "0.2.7",
+    "ws": "8.21.0"
   }
 }

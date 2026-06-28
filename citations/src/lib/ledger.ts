@@ -21,6 +21,7 @@ const EMPTY_LEDGER: Ledger = { queries: [], receipts: [] };
 export const ZERO_HASH = `0x${"0".repeat(64)}`;
 const LEDGER_PATH = path.join(process.cwd(), "data", "ledger.json");
 const SOURCE_ACCESS_PREFIX = "Paid source access:";
+let ledgerWriteLock: Promise<void> = Promise.resolve();
 
 type ReceiptHashPayload = {
   queryId: string;
@@ -36,6 +37,11 @@ type ReceiptHashPayload = {
   feeRouterSplitId?: string;
   feeRouterCreateSplitTx?: string;
   feeRouterPayTx?: string;
+  canonicalUrl?: string;
+  sourceContentHash?: string;
+  sourceExcerptHash?: string;
+  contentFetchedAt?: string;
+  ownershipProof?: PaymentReceipt["ownershipProof"];
   previousHash: string;
   createdAt: string;
 };
@@ -46,9 +52,9 @@ function isLedger(value: unknown): value is Ledger {
   return Array.isArray(record.queries) && Array.isArray(record.receipts);
 }
 
-export async function readLedger(): Promise<Ledger> {
+export async function readLedger(filePath: string = LEDGER_PATH): Promise<Ledger> {
   try {
-    const raw = await readFile(LEDGER_PATH, "utf8");
+    const raw = await readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as unknown;
     if (!isLedger(parsed)) return EMPTY_LEDGER;
     return parsed;
@@ -59,11 +65,23 @@ export async function readLedger(): Promise<Ledger> {
   }
 }
 
-export async function writeLedger(ledger: Ledger): Promise<void> {
-  await mkdir(path.dirname(LEDGER_PATH), { recursive: true });
-  const tmpPath = `${LEDGER_PATH}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+export async function writeLedger(
+  ledger: Ledger,
+  filePath: string = LEDGER_PATH,
+): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
   await writeFile(tmpPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
-  await rename(tmpPath, LEDGER_PATH);
+  await rename(tmpPath, filePath);
+}
+
+function withLedgerWriteLock<T>(write: () => Promise<T>): Promise<T> {
+  const run = ledgerWriteLock.then(write, write);
+  ledgerWriteLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 function buildReceiptPayload(
@@ -101,6 +119,21 @@ function buildReceiptPayload(
   }
   if (evidence.feeRouterPayTx !== undefined) {
     payload.feeRouterPayTx = evidence.feeRouterPayTx;
+  }
+  if (evidence.canonicalUrl !== undefined) {
+    payload.canonicalUrl = evidence.canonicalUrl;
+  }
+  if (evidence.sourceContentHash !== undefined) {
+    payload.sourceContentHash = evidence.sourceContentHash;
+  }
+  if (evidence.sourceExcerptHash !== undefined) {
+    payload.sourceExcerptHash = evidence.sourceExcerptHash;
+  }
+  if (evidence.contentFetchedAt !== undefined) {
+    payload.contentFetchedAt = evidence.contentFetchedAt;
+  }
+  if (evidence.ownershipProof !== undefined) {
+    payload.ownershipProof = evidence.ownershipProof;
   }
   return payload;
 }
@@ -150,6 +183,21 @@ function payloadFromReceipt(
   }
   if (receipt.feeRouterPayTx !== undefined) {
     payload.feeRouterPayTx = receipt.feeRouterPayTx;
+  }
+  if (receipt.canonicalUrl !== undefined) {
+    payload.canonicalUrl = receipt.canonicalUrl;
+  }
+  if (receipt.sourceContentHash !== undefined) {
+    payload.sourceContentHash = receipt.sourceContentHash;
+  }
+  if (receipt.sourceExcerptHash !== undefined) {
+    payload.sourceExcerptHash = receipt.sourceExcerptHash;
+  }
+  if (receipt.contentFetchedAt !== undefined) {
+    payload.contentFetchedAt = receipt.contentFetchedAt;
+  }
+  if (receipt.ownershipProof !== undefined) {
+    payload.ownershipProof = receipt.ownershipProof;
   }
   return payload;
 }
@@ -203,6 +251,13 @@ export function createReceipts(
           ...evidence,
           paymentResource:
             evidence.paymentResource ?? `/api/sources/${citation.sourceId}`,
+          canonicalUrl: evidence.canonicalUrl ?? citation.canonicalUrl,
+          sourceContentHash:
+            evidence.sourceContentHash ?? citation.sourceContentHash,
+          sourceExcerptHash:
+            evidence.sourceExcerptHash ?? citation.sourceExcerptHash,
+          contentFetchedAt: evidence.contentFetchedAt ?? citation.contentFetchedAt,
+          ownershipProof: evidence.ownershipProof ?? citation.ownershipProof,
         },
         previousHash,
         query.createdAt,
@@ -223,41 +278,47 @@ export function createReceipts(
 export async function appendSettlement(
   query: QueryRecord,
   evidenceBySourceId: Record<string, ReceiptEvidence> = {},
+  filePath: string = LEDGER_PATH,
 ): Promise<SettlementResult> {
-  const ledger = await readLedger();
-  const receipts = createReceipts(query, ledger.receipts, evidenceBySourceId);
-  const queryWithReceipts: QueryRecord = {
-    ...query,
-    receiptHashes: receipts.map((receipt) => receipt.receiptHash),
-  };
-  const nextLedger: Ledger = {
-    queries: [queryWithReceipts, ...ledger.queries],
-    receipts: [...ledger.receipts, ...receipts],
-  };
-  await writeLedger(nextLedger);
-  return { query: queryWithReceipts, receipts, ledger: nextLedger };
+  return withLedgerWriteLock(async () => {
+    const ledger = await readLedger(filePath);
+    const receipts = createReceipts(query, ledger.receipts, evidenceBySourceId);
+    const queryWithReceipts: QueryRecord = {
+      ...query,
+      receiptHashes: receipts.map((receipt) => receipt.receiptHash),
+    };
+    const nextLedger: Ledger = {
+      queries: [queryWithReceipts, ...ledger.queries],
+      receipts: [...ledger.receipts, ...receipts],
+    };
+    await writeLedger(nextLedger, filePath);
+    return { query: queryWithReceipts, receipts, ledger: nextLedger };
+  });
 }
 
 export async function attachTrackRecordEvidence(
   queryId: string,
   trackRecord: TrackRecordEvidence,
+  filePath: string = LEDGER_PATH,
 ): Promise<Ledger> {
-  const ledger = await readLedger();
-  const queryExists = ledger.queries.some((query) => query.id === queryId);
-  if (!queryExists) {
-    throw new Error(
-      `Cannot attach TrackRecord evidence to missing query ${queryId}.`,
-    );
-  }
+  return withLedgerWriteLock(async () => {
+    const ledger = await readLedger(filePath);
+    const queryExists = ledger.queries.some((query) => query.id === queryId);
+    if (!queryExists) {
+      throw new Error(
+        `Cannot attach TrackRecord evidence to missing query ${queryId}.`,
+      );
+    }
 
-  const nextLedger: Ledger = {
-    ...ledger,
-    queries: ledger.queries.map((query) =>
-      query.id === queryId ? { ...query, trackRecord } : query,
-    ),
-  };
-  await writeLedger(nextLedger);
-  return nextLedger;
+    const nextLedger: Ledger = {
+      ...ledger,
+      queries: ledger.queries.map((query) =>
+        query.id === queryId ? { ...query, trackRecord } : query,
+      ),
+    };
+    await writeLedger(nextLedger, filePath);
+    return nextLedger;
+  });
 }
 
 export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {

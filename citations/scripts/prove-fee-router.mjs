@@ -232,15 +232,18 @@ if (!readiness.ok) {
     await publicClient.waitForTransactionReceipt({ hash: approveTx });
   }
 
-  const splitId = splitCountBefore;
-  const createSplitTx = await walletClient.writeContract({
+  const {
+    result: splitId,
+    request: createSplitRequest,
+  } = await publicClient.simulateContract({
     address: FEE_ROUTER,
     abi: feeRouterV1Abi,
     functionName: "createSplit",
     args: [recipients, bps],
-    account: payer.account,
+    account: payer.account.address,
     chain: arcTestnet,
   });
+  const createSplitTx = await walletClient.writeContract(createSplitRequest);
   await publicClient.waitForTransactionReceipt({ hash: createSplitTx });
 
   const payTx = await walletClient.writeContract({

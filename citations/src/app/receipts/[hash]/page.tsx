@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  formatBudgetUtilization,
+  queryPaymentEconomics,
+} from "@/lib/economics";
 import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
 import { readLedger } from "@/lib/ledger";
 
@@ -14,6 +18,10 @@ function settlementLabel(mode: string): string {
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   return "local proof";
+}
+
+function arcscanTxUrl(tx: string): string {
+  return `https://testnet.arcscan.app/tx/${tx}`;
 }
 
 function EvidenceRow({
@@ -42,6 +50,7 @@ export default async function ReceiptPage({ params }: Props) {
   const query = ledger.queries.find(
     (candidate) => candidate.id === receipt.queryId,
   );
+  const economics = query ? queryPaymentEconomics(query) : null;
   const citation = query?.citations.find(
     (candidate) => candidate.sourceId === receipt.sourceId,
   );
@@ -75,6 +84,15 @@ export default async function ReceiptPage({ params }: Props) {
       </section>
 
       <section className="evidence-grid">
+        <EvidenceRow
+          label="payment status"
+          value={settlementLabel(receipt.settlementMode)}
+        />
+        <EvidenceRow label="settlement mode" value={receipt.settlementMode} />
+        <EvidenceRow
+          label="amount"
+          value={`${formatUsdc(receipt.amountAtomicUsdc)} USDC`}
+        />
         <EvidenceRow label="receipt hash" value={receipt.receiptHash} />
         <EvidenceRow label="previous hash" value={receipt.previousHash} />
         <EvidenceRow label="query id" value={receipt.queryId} />
@@ -93,14 +111,23 @@ export default async function ReceiptPage({ params }: Props) {
           value={receipt.queryPaymentHash ?? "not reader-paid"}
         />
         <EvidenceRow label="payer" value={receipt.payer ?? "local proof"} />
-        <EvidenceRow
-          label="transaction"
-          value={
-            receipt.transaction
-              ? shortHash(receipt.transaction)
-              : "pending settlement"
-          }
-        />
+        <div className="evidence-row">
+          <span>Arc tx</span>
+          <strong>
+            {receipt.transaction ? (
+              <a
+                className="receipt-link inline-link"
+                href={arcscanTxUrl(receipt.transaction)}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {shortHash(receipt.transaction)}
+              </a>
+            ) : (
+              "pending settlement"
+            )}
+          </strong>
+        </div>
         <EvidenceRow
           label="FeeRouter split"
           value={receipt.feeRouterSplitId ?? "not FeeRouter-routed"}
@@ -120,6 +147,30 @@ export default async function ReceiptPage({ params }: Props) {
               ? shortHash(receipt.feeRouterPayTx)
               : "not FeeRouter-routed"
           }
+        />
+        <EvidenceRow
+          label="canonical URL"
+          value={receipt.canonicalUrl ?? citation?.url ?? "not recorded"}
+        />
+        <EvidenceRow
+          label="content fetched at"
+          value={receipt.contentFetchedAt ?? "not recorded"}
+        />
+        <EvidenceRow
+          label="source content hash"
+          value={receipt.sourceContentHash ?? "not recorded"}
+        />
+        <EvidenceRow
+          label="source excerpt hash"
+          value={receipt.sourceExcerptHash ?? "not recorded"}
+        />
+        <EvidenceRow
+          label="ownership proof"
+          value={receipt.ownershipProof?.method ?? "not verified"}
+        />
+        <EvidenceRow
+          label="ownership signer"
+          value={receipt.ownershipProof?.signer ?? "not verified"}
         />
       </section>
 
@@ -159,6 +210,28 @@ export default async function ReceiptPage({ params }: Props) {
                 <span>payment hash</span>
                 <strong>{shortHash(query.readerPayment.paymentHash)}</strong>
               </div>
+              <div>
+                <span>creator payouts</span>
+                <strong>
+                  {economics
+                    ? `${formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC`
+                    : "n/a"}
+                </strong>
+              </div>
+              <div>
+                <span>protocol retained</span>
+                <strong>
+                  {economics
+                    ? `${formatUsdc(economics.protocolRetainedAtomicUsdc)} USDC`
+                    : "n/a"}
+                </strong>
+              </div>
+              <div>
+                <span>budget utilization</span>
+                <strong>
+                  {economics ? formatBudgetUtilization(economics) : "n/a"}
+                </strong>
+              </div>
             </div>
           )}
           {citation && (
@@ -171,6 +244,9 @@ export default async function ReceiptPage({ params }: Props) {
                 </span>
               </div>
               <small>{citation.reason}</small>
+              <small>
+                {citation.paidExcerpt ?? "No paid excerpt recorded."}
+              </small>
             </article>
           )}
         </section>

@@ -11,9 +11,32 @@ const photographer: WalletRegistryEntry = {
   displayName: "Photographer",
   wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
   createdAt: "2026-06-24T00:00:00.000Z",
+  approvalStatus: "operator-approved",
 };
 
 describe("processAccessLogLine", () => {
+  it("ignores failed download/archive events before payout", async () => {
+    let resolveCalls = 0;
+    const result = await processAccessLogLine(
+      '127.0.0.1 - - [24/Jun/2026:07:45:36 +0200] "POST /api/download/archive?key=abc123 HTTP/2.0" 403 150 "-" "browser"',
+      {
+        immichApiBaseUrl: "http://immich.local/api",
+        amountAtomicUsdc: 2500,
+        resolveSharedLink: async () => {
+          resolveCalls += 1;
+          return {
+            id: "share-1",
+            key: "abc123",
+            assets: [],
+          };
+        },
+      },
+    );
+
+    expect(result.kind).toBe("ignored");
+    expect(resolveCalls).toBe(0);
+  });
+
   it("resolves shared-link assets and appends receipts", async () => {
     const appended: LicenseReceiptInput[] = [];
     const result = await processAccessLogLine(line, {
@@ -129,5 +152,46 @@ describe("processAccessLogLine", () => {
       expect(result.receipts).toHaveLength(1);
       expect(result.receipts[0]).toBe(existing);
     }
+  });
+
+  it("does not route payouts for pending owner-wallet mappings", async () => {
+    let settleCalls = 0;
+    let appendCalls = 0;
+    const result = await processAccessLogLine(line, {
+      immichApiBaseUrl: "http://immich.local/api",
+      amountAtomicUsdc: 2500,
+      resolveSharedLink: async () => ({
+        id: "share-1",
+        key: "abc123",
+        assets: [
+          {
+            id: "asset-1",
+            ownerId: "owner-1",
+            originalFileName: "photo.png",
+            originalPath: "/library/photo.png",
+          },
+        ],
+      }),
+      findWalletForOwner: async () => ({
+        ...photographer,
+        approvalStatus: "pending",
+      }),
+      settle: async () => {
+        settleCalls += 1;
+        return null;
+      },
+      appendReceipt: async () => {
+        appendCalls += 1;
+        throw new Error("pending owner should not append");
+      },
+    });
+
+    expect(result.kind).toBe("processed");
+    if (result.kind === "processed") {
+      expect(result.receipts).toHaveLength(0);
+      expect(result.unresolvedOwnerIds).toEqual(["owner-1"]);
+    }
+    expect(settleCalls).toBe(0);
+    expect(appendCalls).toBe(0);
   });
 });

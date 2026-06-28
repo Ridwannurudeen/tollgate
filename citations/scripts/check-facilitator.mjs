@@ -5,7 +5,7 @@ const ARC_CHAIN_ID = 5042002;
 const ARC_RPC_URL =
   process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network";
 const DEFAULT_AGENT_WALLET = "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836";
-const PAID_QUERY_PRICE_ATOMIC_USDC = 1000;
+const PAID_QUERY_PRICE_ATOMIC_USDC = 10_000;
 
 const arcTestnet = defineChain({
   id: ARC_CHAIN_ID,

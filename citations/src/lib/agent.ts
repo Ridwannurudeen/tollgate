@@ -4,6 +4,7 @@ import {
   planCitationMarket,
 } from "./engine";
 import { sha256Hex } from "./hash";
+import { buildSourceContent } from "./source-content";
 import type {
   AgentBudget,
   AgentStep,
@@ -92,12 +93,16 @@ function llmConfigFromEnv(): LlmConfig | null {
 }
 
 function sourceSnapshot(source: CreatorSource) {
+  const content = buildSourceContent(source, "agent-appraisal");
   return {
     id: source.id,
     title: source.title,
     creator: source.creator,
     url: source.url,
     summary: source.summary,
+    previewExcerpt: content.previewExcerpt,
+    sourceKind: source.sourceKind,
+    verifiedCreator: source.verifiedCreator,
     tags: source.tags,
     priceAtomicUsdc: source.priceAtomicUsdc,
   };
@@ -506,18 +511,31 @@ function buildLlmQueryRecord(
     candidateCount: citationMarket.budget.candidateCount,
     purchasedCount: loop.selected.length,
   };
-  const citations: Citation[] = loop.selected.map((source) => ({
-    sourceId: source.id,
-    title: source.title,
-    creator: source.creator,
-    handle: source.handle,
-    wallet: source.wallet,
-    url: source.url,
-    amountAtomicUsdc: source.priceAtomicUsdc,
-    reason:
-      loop.appraisalReason.get(source.id) ??
-      "The agent appraised this source as worth buying under budget.",
-  }));
+  const citations: Citation[] = loop.selected.map((source) => {
+    const content = buildSourceContent(source, createdAt);
+    return {
+      sourceId: source.id,
+      title: source.title,
+      creator: source.creator,
+      handle: source.handle,
+      wallet: source.wallet,
+      url: source.url,
+      amountAtomicUsdc: source.priceAtomicUsdc,
+      reason:
+        loop.appraisalReason.get(source.id) ??
+        "The agent appraised this source as worth buying under budget.",
+      canonicalUrl: content.canonicalUrl,
+      previewExcerpt: content.previewExcerpt,
+      paidExcerpt: content.paidExcerpt,
+      sourceContentHash: content.contentHash,
+      sourceExcerptHash: content.excerptHash,
+      contentFetchedAt: content.fetchedAt,
+      sourceKind: source.sourceKind,
+      creatorKind: source.creatorKind,
+      verifiedCreator: source.verifiedCreator,
+      ownershipProof: source.ownershipProof,
+    };
+  });
   const traceHash = sha256Hex(loop.steps);
   const queryHash = sha256Hex({
     question,

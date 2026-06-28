@@ -1,3 +1,5 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   createPublicClient,
   createWalletClient,
@@ -5,6 +7,7 @@ import {
   type Address,
   type Hex,
   type PublicClient,
+  type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { ARC_RPC_URL, ARC_USDC, arcTestnet } from "./chain";
@@ -12,6 +15,12 @@ import { FORUM_ADDRESSES } from "./forum";
 import type { QueryRecord, ReceiptEvidence } from "./types";
 
 export const FEE_ROUTER_ADDRESS = FORUM_ADDRESSES.feeRouterV1;
+const SPLIT_REGISTRY_PATH = path.join(
+  process.cwd(),
+  "data",
+  "fee-router-splits.json",
+);
+let splitRegistryLock: Promise<void> = Promise.resolve();
 
 export const feeRouterV1Abi = [
   {
@@ -133,6 +142,22 @@ export type FeeRouterSplitView = {
 export type FeeRouterRouteOptions = {
   enabled?: boolean;
   privateKey?: Hex;
+  publicClient?: PublicClient;
+  walletClient?: WalletClient;
+  splitRegistryPath?: string;
+};
+
+export type FeeRouterSplitRecord = {
+  wallet: Address;
+  splitId: string;
+  recipients: Address[];
+  bps: number[];
+  createSplitTx: Hex;
+  createdAt: string;
+};
+
+export type FeeRouterSplitRegistry = {
+  splits: FeeRouterSplitRecord[];
 };
 
 export function createFeeRouterPublicClient() {
@@ -246,6 +271,137 @@ function feeRouterPrivateKey(options: FeeRouterRouteOptions): Hex {
   return privateKey;
 }
 
+function isAddressString(value: unknown): value is Address {
+  return typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function isHexString(value: unknown): value is Hex {
+  return typeof value === "string" && /^0x[a-fA-F0-9]+$/.test(value);
+}
+
+function isFeeRouterSplitRegistry(
+  value: unknown,
+): value is FeeRouterSplitRegistry {
+  if (!value || typeof value !== "object") return false;
+  const splits = (value as Record<string, unknown>).splits;
+  return (
+    Array.isArray(splits) &&
+    splits.every((split) => {
+      if (!split || typeof split !== "object") return false;
+      const record = split as Record<string, unknown>;
+      return (
+        isAddressString(record.wallet) &&
+        typeof record.splitId === "string" &&
+        Array.isArray(record.recipients) &&
+        record.recipients.every(isAddressString) &&
+        Array.isArray(record.bps) &&
+        record.bps.every((bps) => typeof bps === "number") &&
+        isHexString(record.createSplitTx) &&
+        typeof record.createdAt === "string"
+      );
+    })
+  );
+}
+
+export async function readFeeRouterSplitRegistry(
+  filePath: string = SPLIT_REGISTRY_PATH,
+): Promise<FeeRouterSplitRegistry> {
+  try {
+    const parsed = JSON.parse(await readFile(filePath, "utf8")) as unknown;
+    return isFeeRouterSplitRegistry(parsed) ? parsed : { splits: [] };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return { splits: [] };
+    throw error;
+  }
+}
+
+export async function writeFeeRouterSplitRegistry(
+  registry: FeeRouterSplitRegistry,
+  filePath: string = SPLIT_REGISTRY_PATH,
+): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+  await writeFile(tmpPath, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+  await rename(tmpPath, filePath);
+}
+
+function withSplitRegistryLock<T>(write: () => Promise<T>): Promise<T> {
+  const run = splitRegistryLock.then(write, write);
+  splitRegistryLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function verifyCreatorSplit(
+  record: FeeRouterSplitRecord,
+  recipient: Address,
+  publicClient: PublicClient,
+): Promise<void> {
+  const split = await readFeeRouterSplit(BigInt(record.splitId), publicClient);
+  if (
+    split.recipients.length !== 1 ||
+    split.recipients[0]?.toLowerCase() !== recipient.toLowerCase() ||
+    split.bps.length !== 1 ||
+    split.bps[0] !== 10_000
+  ) {
+    throw new Error(
+      `FeeRouter split ${record.splitId} does not match creator ${recipient}.`,
+    );
+  }
+}
+
+async function ensureCreatorSplit(
+  recipient: Address,
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  account: ReturnType<typeof privateKeyToAccount>,
+  registryPath: string = SPLIT_REGISTRY_PATH,
+): Promise<FeeRouterSplitRecord> {
+  assertValidFeeRouterSplit([recipient], [10_000]);
+  return withSplitRegistryLock(async () => {
+    const registry = await readFeeRouterSplitRegistry(registryPath);
+    const existing = registry.splits.find(
+      (split) => split.wallet.toLowerCase() === recipient.toLowerCase(),
+    );
+    if (existing) {
+      await verifyCreatorSplit(existing, recipient, publicClient);
+      return existing;
+    }
+
+    const { result: splitId, request } = await publicClient.simulateContract({
+      address: FEE_ROUTER_ADDRESS,
+      abi: feeRouterV1Abi,
+      functionName: "createSplit",
+      args: [[recipient], [10_000]],
+      account: account.address,
+      chain: arcTestnet,
+    });
+    // Serialized in-process; ops should run one FeeRouter settlement worker per app instance.
+    const createSplitTx = await walletClient.writeContract({
+      ...request,
+      account,
+    });
+    await publicClient.waitForTransactionReceipt({ hash: createSplitTx });
+
+    const record: FeeRouterSplitRecord = {
+      wallet: recipient,
+      splitId: splitId.toString(),
+      recipients: [recipient],
+      bps: [10_000],
+      createSplitTx,
+      createdAt: new Date().toISOString(),
+    };
+    await writeFeeRouterSplitRegistry(
+      { splits: [...registry.splits, record] },
+      registryPath,
+    );
+    return record;
+  });
+}
+
 export async function routeCitationPayments(
   query: QueryRecord,
   options: FeeRouterRouteOptions = {},
@@ -254,12 +410,14 @@ export async function routeCitationPayments(
   if (query.citations.length === 0) return {};
 
   const account = privateKeyToAccount(feeRouterPrivateKey(options));
-  const publicClient = createFeeRouterPublicClient();
-  const walletClient = createWalletClient({
-    account,
-    chain: arcTestnet,
-    transport: http(ARC_RPC_URL),
-  });
+  const publicClient = options.publicClient ?? createFeeRouterPublicClient();
+  const walletClient =
+    options.walletClient ??
+    createWalletClient({
+      account,
+      chain: arcTestnet,
+      transport: http(ARC_RPC_URL),
+    });
   const totalAtomicUsdc = query.citations.reduce(
     (sum, citation) => sum + BigInt(citation.amountAtomicUsdc),
     0n,
@@ -297,27 +455,19 @@ export async function routeCitationPayments(
 
   const evidenceBySourceId: Record<string, ReceiptEvidence> = {};
   for (const citation of query.citations) {
-    assertValidFeeRouterSplit([citation.wallet], [10_000]);
-    const splitId = await publicClient.readContract({
-      address: FEE_ROUTER_ADDRESS,
-      abi: feeRouterV1Abi,
-      functionName: "splitCount",
-    });
-    const createSplitTx = await walletClient.writeContract({
-      address: FEE_ROUTER_ADDRESS,
-      abi: feeRouterV1Abi,
-      functionName: "createSplit",
-      args: [[citation.wallet], [10_000]],
+    const split = await ensureCreatorSplit(
+      citation.wallet,
+      publicClient,
+      walletClient,
       account,
-      chain: arcTestnet,
-    });
-    await publicClient.waitForTransactionReceipt({ hash: createSplitTx });
+      options.splitRegistryPath,
+    );
 
     const payTx = await walletClient.writeContract({
       address: FEE_ROUTER_ADDRESS,
       abi: feeRouterV1Abi,
       functionName: "pay",
-      args: [splitId, BigInt(citation.amountAtomicUsdc)],
+      args: [BigInt(split.splitId), BigInt(citation.amountAtomicUsdc)],
       account,
       chain: arcTestnet,
     });
@@ -328,8 +478,8 @@ export async function routeCitationPayments(
       payer: account.address,
       transaction: payTx,
       paymentResource: `forum-fee-router:${FEE_ROUTER_ADDRESS}`,
-      feeRouterSplitId: splitId.toString(),
-      feeRouterCreateSplitTx: createSplitTx,
+      feeRouterSplitId: split.splitId,
+      feeRouterCreateSplitTx: split.createSplitTx,
       feeRouterPayTx: payTx,
     };
   }

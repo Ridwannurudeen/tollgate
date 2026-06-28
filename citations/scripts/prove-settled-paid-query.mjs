@@ -9,7 +9,11 @@ const question =
 
 const statusResponse = await fetch(`${baseUrl}/api/settlement/status`);
 const status = await statusResponse.json();
-if (!statusResponse.ok || status.mode !== "settle-enabled") {
+if (
+  !statusResponse.ok ||
+  status.facilitatorConfigured !== true ||
+  status.readerSettlement?.selfFacilitator !== true
+) {
   console.error(
     JSON.stringify(
       {

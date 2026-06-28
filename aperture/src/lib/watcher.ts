@@ -57,6 +57,9 @@ export async function processAccessLogLine(
 ): Promise<ProcessLineResult> {
   const event = parseDownloadArchiveAccessLog(line);
   if (!event) return { kind: "ignored" };
+  if (event.status === null || event.status < 200 || event.status >= 300) {
+    return { kind: "ignored" };
+  }
 
   const linkResolver =
     deps.resolveSharedLink ??
@@ -87,7 +90,7 @@ export async function processAccessLogLine(
 
   for (const asset of sharedLink.assets) {
     const photographer = await walletResolver(asset.ownerId);
-    if (!photographer) {
+    if (!photographer || photographer.approvalStatus === "pending") {
       unresolvedOwnerIds.push(asset.ownerId);
       continue;
     }

@@ -18,6 +18,8 @@ export default async function DownloadPage({
   searchParams,
 }: DownloadPageProps) {
   const params = await searchParams;
+  const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
+  const localProofEnabled = process.env.APERTURE_LICENSE_LOCAL_PROOF === "1";
   const key = stringParam(params.key);
   const sharedLink = key
     ? await resolveSharedLink(APERTURE_IMMICH_API_BASE_URL, key).catch(
@@ -68,7 +70,12 @@ export default async function DownloadPage({
                 </div>
               ))}
             </div>
-            <DownloadArchiveButton assetIds={assetIds} sharedLinkKey={key} />
+            <DownloadArchiveButton
+              assetIds={assetIds}
+              basePath={basePath}
+              localProofEnabled={localProofEnabled}
+              sharedLinkKey={key}
+            />
           </>
         ) : (
           <div className="empty">

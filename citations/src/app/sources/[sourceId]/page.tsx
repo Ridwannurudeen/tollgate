@@ -52,6 +52,13 @@ export default async function SourcePage({ params }: Props) {
           <p className="eyebrow">{source.creator}</p>
           <h2>{source.handle}</h2>
           <p className="hero-text">{source.summary}</p>
+          <p className="eyebrow">
+            {source.verifiedCreator
+              ? "verified owner"
+              : source.sourceKind === "seed"
+                ? "seed/demo source"
+                : "unverified external source"}
+          </p>
         </div>
       </section>
 
@@ -82,6 +89,22 @@ export default async function SourcePage({ params }: Props) {
           <span>source url</span>
           <strong>{source.url}</strong>
         </div>
+        <div className="evidence-row">
+          <span>source kind</span>
+          <strong>{source.sourceKind}</strong>
+        </div>
+        <div className="evidence-row">
+          <span>creator kind</span>
+          <strong>{source.creatorKind}</strong>
+        </div>
+        <div className="evidence-row">
+          <span>ownership proof</span>
+          <strong>{source.ownershipProof?.method ?? "not verified"}</strong>
+        </div>
+        <div className="evidence-row">
+          <span>verified at</span>
+          <strong>{source.ownershipProof?.verifiedAt ?? "not verified"}</strong>
+        </div>
       </section>
 
       <section className="receipt-context profile-section">
@@ -109,6 +132,15 @@ export default async function SourcePage({ params }: Props) {
                 <span>
                   {settlementLabel(receipt.settlementMode)} /{" "}
                   {receipt.createdAt}
+                </span>
+                <span>
+                  content {receipt.sourceContentHash
+                    ? shortHash(receipt.sourceContentHash)
+                    : "not recorded"}{" "}
+                  / excerpt{" "}
+                  {receipt.sourceExcerptHash
+                    ? shortHash(receipt.sourceExcerptHash)
+                    : "not recorded"}
                 </span>
               </div>
               <div className="numeric-cell">
