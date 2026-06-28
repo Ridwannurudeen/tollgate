@@ -108,6 +108,19 @@ function sourceSnapshot(source: CreatorSource) {
   };
 }
 
+function purchasedSourceSnapshot(source: CreatorSource) {
+  const content = buildSourceContent(source, "agent-draft");
+  return {
+    id: source.id,
+    title: source.title,
+    creator: source.creator,
+    canonicalUrl: content.canonicalUrl,
+    sourceKind: source.sourceKind,
+    verifiedCreator: source.verifiedCreator,
+    paidExcerpt: content.paidExcerpt,
+  };
+}
+
 function appraiseMessages(
   question: string,
   sources: CreatorSource[],
@@ -150,14 +163,14 @@ function draftMessages(
     {
       role: "system",
       content:
-        "You are Tollgate. STEP 2 is DRAFTING: answer the question grounded ONLY in the purchased sources below. Every claim must cite the sourceId it came from. Return strict JSON.",
+        "You are Tollgate. STEP 2 is DRAFTING: answer the question grounded ONLY in the paidExcerpt of the purchased sources below. Every claim must cite the sourceId it came from. Return strict JSON.",
     },
     {
       role: "user",
       content: JSON.stringify({
         stage: "draft",
         question,
-        purchasedSources: purchasedSources.map(sourceSnapshot),
+        purchasedSources: purchasedSources.map(purchasedSourceSnapshot),
         responseShape: {
           answer: "string",
           claims: [{ text: "string", sourceId: "string" }],

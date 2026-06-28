@@ -31,6 +31,13 @@ export type ExifCredit = {
   copyright: string | null;
 };
 
+export type OwnershipProof = {
+  method: "wallet-signature";
+  signer: Address;
+  signatureHash: `0x${string}`;
+  verifiedAt: string;
+};
+
 export type WalletRegistryEntry = {
   ownerId: string;
   displayName: string;
@@ -41,6 +48,8 @@ export type WalletRegistryEntry = {
   custody?: "self" | "circle-w3s";
   /** Circle W3S wallet id, present only for custodial (circle-w3s) entries. */
   walletId?: string;
+  /** Present only when the creator proved wallet control with a signature. */
+  ownershipProof?: OwnershipProof;
 };
 
 export type WalletRegistry = {

@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const ZERO_HASH = `0x${"0".repeat(64)}`;
 
@@ -108,15 +111,16 @@ function verifyLedger(ledger) {
   };
 }
 
-const outputPath = process.argv[2] ?? path.join("data", "proof-pack.json");
-const ledger = await readJson(path.join("data", "ledger.json"), {
+const outputPath = process.argv[2] ?? path.join(appDir, "data", "proof-pack.json");
+const ledger = await readJson(path.join(appDir, "data", "ledger.json"), {
   queries: [],
   receipts: [],
 });
-const customSources = await readJson(path.join("data", "sources.json"), []);
-const splitRegistry = await readJson(path.join("data", "fee-router-splits.json"), {
-  splits: [],
-});
+const customSources = await readJson(path.join(appDir, "data", "sources.json"), []);
+const splitRegistry = await readJson(
+  path.join(appDir, "data", "fee-router-splits.json"),
+  { splits: [] },
+);
 const verification = verifyLedger(ledger);
 const paidQueries = ledger.queries.filter((query) => query.readerPayment);
 const uniquePayers = new Set(

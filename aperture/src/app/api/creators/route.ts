@@ -8,10 +8,18 @@ export async function POST(request: Request) {
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
   }
-  const { ownerId, displayName, wallet } = body as {
+  const {
+    ownerId,
+    displayName,
+    wallet,
+    ownershipSignature,
+    ownershipTimestamp,
+  } = body as {
     ownerId?: string;
     displayName?: string;
     wallet?: string;
+    ownershipSignature?: string;
+    ownershipTimestamp?: string;
   };
 
   try {
@@ -19,6 +27,8 @@ export async function POST(request: Request) {
       ownerId: ownerId ?? "",
       displayName: displayName ?? "",
       wallet,
+      ownershipSignature,
+      ownershipTimestamp,
     });
     return NextResponse.json({ registered: entry });
   } catch (error) {

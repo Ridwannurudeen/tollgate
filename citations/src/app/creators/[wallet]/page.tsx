@@ -60,7 +60,7 @@ export default async function CreatorPage({ params }: Props) {
   const claimable = await readFeeRouterClaimable(creator.wallet).catch(
     () => null,
   );
-  const latestClaimTx = creator.receipts.find(
+  const latestRouteTx = creator.receipts.find(
     (receipt) => receipt.feeRouterPayTx,
   )?.feeRouterPayTx;
 
@@ -152,14 +152,14 @@ export default async function CreatorPage({ params }: Props) {
         <div className="evidence-row">
           <span>latest route tx</span>
           <strong>
-            {latestClaimTx ? (
+            {latestRouteTx ? (
               <a
                 className="receipt-link inline-link"
-                href={arcscanTxUrl(latestClaimTx)}
+                href={arcscanTxUrl(latestRouteTx)}
                 rel="noreferrer"
                 target="_blank"
               >
-                {shortHash(latestClaimTx)}
+                {shortHash(latestRouteTx)}
               </a>
             ) : (
               "not FeeRouter-routed"

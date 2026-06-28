@@ -1,11 +1,12 @@
-import { getAddress, isAddress } from "viem";
+import { getAddress, isAddress, verifyMessage, type Address } from "viem";
 import { w3sMintWallet } from "./circle-w3s";
+import { sha256Hex } from "./hash";
 import {
   readWalletRegistry,
   upsertWalletRegistryEntry,
   writeWalletRegistry,
 } from "./registry";
-import type { WalletRegistryEntry } from "./types";
+import type { OwnershipProof, WalletRegistryEntry } from "./types";
 
 const BLOCKCHAIN = "ARC-TESTNET";
 
@@ -16,9 +17,66 @@ export type RegisterCreatorInput = {
   wallet?: string;
   /** Required only for the custodial (mint) path; falls back to CIRCLE_WALLET_SET_ID. */
   walletSetId?: string;
+  /** Optional proof of wallet control: a signature over the ownership message. */
+  ownershipSignature?: string;
+  /** Timestamp that was signed; required when ownershipSignature is provided. */
+  ownershipTimestamp?: string;
   /** Registry file path override (tests); defaults to data/registry.json. */
   filePath?: string;
 };
+
+export function buildOwnerOwnershipMessage({
+  ownerId,
+  wallet,
+  timestamp,
+}: {
+  ownerId: string;
+  wallet: Address;
+  timestamp: string;
+}): string {
+  return [
+    "Aperture owner ownership",
+    `ownerId:${ownerId}`,
+    `wallet:${wallet}`,
+    `timestamp:${timestamp}`,
+  ].join("\n");
+}
+
+async function ownershipProofFromInput(
+  input: RegisterCreatorInput,
+  ownerId: string,
+  wallet: Address,
+): Promise<OwnershipProof | undefined> {
+  const { ownershipSignature: signature, ownershipTimestamp: timestamp } =
+    input;
+  if (signature === undefined && timestamp === undefined) return undefined;
+  if (typeof signature !== "string" || !/^0x[0-9a-fA-F]+$/.test(signature)) {
+    throw new Error("ownershipSignature must be a hex string.");
+  }
+  if (typeof timestamp !== "string" || timestamp.trim().length === 0) {
+    throw new Error("ownershipTimestamp is required.");
+  }
+
+  const valid = await verifyMessage({
+    address: wallet,
+    message: buildOwnerOwnershipMessage({
+      ownerId,
+      wallet,
+      timestamp: timestamp.trim(),
+    }),
+    signature: signature as `0x${string}`,
+  });
+  if (!valid) {
+    throw new Error("ownershipSignature did not recover the owner wallet.");
+  }
+
+  return {
+    method: "wallet-signature",
+    signer: wallet,
+    signatureHash: sha256Hex(signature),
+    verifiedAt: new Date().toISOString(),
+  };
+}
 
 /**
  * Register a photographer. Self-custody when they bring a wallet; otherwise mint
@@ -39,13 +97,20 @@ export async function registerCreator(
     if (!isAddress(input.wallet)) {
       throw new Error("wallet must be a valid EVM address.");
     }
+    const wallet = getAddress(input.wallet);
+    const ownershipProof = await ownershipProofFromInput(
+      input,
+      ownerId,
+      wallet,
+    );
     entry = {
       ownerId,
       displayName,
-      wallet: getAddress(input.wallet),
+      wallet,
       createdAt: new Date().toISOString(),
-      approvalStatus: "pending",
+      approvalStatus: ownershipProof ? "wallet-signed" : "pending",
       custody: "self",
+      ...(ownershipProof ? { ownershipProof } : {}),
     };
   } else {
     const walletSetId = input.walletSetId ?? process.env.CIRCLE_WALLET_SET_ID;
