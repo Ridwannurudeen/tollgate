@@ -1,0 +1,54 @@
+# Local PeerTube for demoing peertube-plugin-tollgate.
+# Image names mirror PeerTube's official production compose
+# (support/docker/production/docker-compose.yml). This is a LOCAL test setup:
+# PeerTube is exposed directly on :9000 (no bundled nginx/TLS).
+#
+# NOTE: this compose is provided as a starting point and was NOT booted in the
+# authoring environment (no Docker there). If PeerTube fails to start, diff the
+# env against PeerTube's official compose for your image version and adjust.
+name: tollgate-peertube-demo
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: peertube
+      POSTGRES_PASSWORD: peertube
+      POSTGRES_DB: peertube_prod
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    volumes:
+      - ./data/redis:/data
+    restart: unless-stopped
+
+  peertube:
+    image: chocobozzz/peertube:production
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      PEERTUBE_DB_HOSTNAME: postgres
+      PEERTUBE_DB_USERNAME: peertube
+      PEERTUBE_DB_PASSWORD: peertube
+      PEERTUBE_DB_SSL: "false"
+      PEERTUBE_REDIS_HOSTNAME: redis
+      PEERTUBE_WEBSERVER_HOSTNAME: localhost
+      PEERTUBE_WEBSERVER_PORT: "9000"
+      PEERTUBE_WEBSERVER_HTTPS: "false"
+      PEERTUBE_TRUST_PROXY: '["127.0.0.1", "loopback"]'
+      # CHANGE THIS before any non-throwaway use.
+      PEERTUBE_SECRET: change-me-to-a-random-32char-secret
+      PEERTUBE_ADMIN_EMAIL: admin@example.com
+      NODE_ENV: production
+    ports:
+      - "9000:9000"
+      - "1935:1935"
+    volumes:
+      - ./data/peertube:/data
+      # Mount this plugin so it can be installed from a local path.
+      - ../:/plugins-local/peertube-plugin-tollgate:ro
+    restart: unless-stopped

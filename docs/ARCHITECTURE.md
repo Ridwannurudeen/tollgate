@@ -4,6 +4,7 @@
 
 - `citations/`: Next app for paid answers, source registration, x402 payment verification/settlement, FeeRouter creator payouts, receipt proofs, and Forum accountability surfaces.
 - `aperture/`: Next app for Immich shared-link download metering, owner-to-wallet registry, license receipts, proof-pack export, and optional FeeRouter payout routing.
+- `peertube-plugin-tollgate/`: permissionless PeerTube plugin that gates video downloads, routes USDC to the creator through FeeRouter, and writes hash-chained receipts. Self-contained (bundles the viem FeeRouter payout); installs from the npm plugin index with no upstream changes.
 - Forum contracts: FeeRouter, TrackRecord, CovenantVault, and SlashBond surfaces already deployed on Arc testnet.
 
 ## Core Lifecycle
@@ -42,6 +43,19 @@ shared-link license download
   -> idempotency check by eventId
   -> optional FeeRouter route or local proof
   -> license receipt / proof pack
+```
+
+## PeerTube Lifecycle
+
+```text
+video download request
+  -> filter:api.download.video.allowed.result gate
+  -> paid? allow : block with payment-required message
+  -> viewer triggers /router/video/:id/pay
+  -> resolve creator wallet (mapping or default)
+  -> operator-funded FeeRouter payout on Arc
+  -> hash-linked receipt (storageManager)
+  -> download unlocks; /router/proof exposes the receipt chain
 ```
 
 ## Settlement Labels

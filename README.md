@@ -56,14 +56,17 @@ node scripts/export-proof-pack.mjs
 
 ## Apps
 
-Tollgate is one settlement core with two integrations. This repo holds both as independent apps:
+Tollgate is one settlement core with three integrations on real open-source creator communities — feeds, photo, and video. This repo holds them as independent packages:
 
-| App | What it does | Live |
-| --- | --- | --- |
-| [`citations/`](./citations) | An autonomous answer agent buys the sources it cites and pays each creator per citation. | `https://tollgate.gudman.xyz` |
-| [`aperture/`](./aperture) | A permissionless sidecar on self-hosted Immich gates shared-photo downloads with x402 and pays photographers per licensed download, with no upstream changes. | `https://tollgate.gudman.xyz/aperture` |
+| Package | Community | What it does | Live / proof |
+| --- | --- | --- | --- |
+| [`citations/`](./citations) | AI answer engines (feeds/RSS) | An autonomous answer agent buys the sources it cites and pays each creator per citation. | `https://tollgate.gudman.xyz` |
+| [`aperture/`](./aperture) | self-hosted Immich (photo) | A permissionless sidecar gates shared-photo downloads with x402 and pays photographers per licensed download, with no upstream changes. | `https://tollgate.gudman.xyz/aperture` |
+| [`peertube-plugin-tollgate/`](./peertube-plugin-tollgate) | PeerTube (video) | A permissionless PeerTube plugin gates video downloads and pays the creator per download in USDC on Arc. Installs from the npm plugin index — no upstream changes. | on-chain payout proven (Arc pay tx `0x1448f4b9…bcbf19`, status success) |
 
 **Unified overview + live proof:** `https://tollgate.gudman.xyz/core`
+
+Each integration attaches to a community that already emits settlement-grade events (citations, shared-link downloads, video downloads) and settles against wallets the community's own data structures already encode — no upstream approval required.
 
 ## Shared core
 
