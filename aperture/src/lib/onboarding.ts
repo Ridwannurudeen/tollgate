@@ -4,11 +4,13 @@ import { sha256Hex } from "./hash";
 import {
   readWalletRegistry,
   upsertWalletRegistryEntry,
+  withRegistryWriteLock,
   writeWalletRegistry,
 } from "./registry";
 import type { OwnershipProof, WalletRegistryEntry } from "./types";
 
 const BLOCKCHAIN = "ARC-TESTNET";
+const OWNERSHIP_FRESHNESS_WINDOW_MS = 10 * 60 * 1000;
 
 export type RegisterCreatorInput = {
   ownerId: string;
@@ -68,6 +70,20 @@ async function ownershipProofFromInput(
   });
   if (!valid) {
     throw new Error("ownershipSignature did not recover the owner wallet.");
+  }
+
+  // Reject stale or future-dated proofs so a leaked signature cannot be
+  // replayed to claim ownership long after it was signed.
+  const signedAt = new Date(timestamp.trim()).getTime();
+  if (Number.isNaN(signedAt)) {
+    throw new Error("ownershipTimestamp is not a valid date.");
+  }
+  const ageMs = Date.now() - signedAt;
+  if (
+    ageMs > OWNERSHIP_FRESHNESS_WINDOW_MS ||
+    ageMs < -OWNERSHIP_FRESHNESS_WINDOW_MS
+  ) {
+    throw new Error("ownershipTimestamp is outside the freshness window.");
   }
 
   return {
@@ -135,10 +151,12 @@ export async function registerCreator(
     };
   }
 
-  const registry = await readWalletRegistry(input.filePath);
-  await writeWalletRegistry(
-    upsertWalletRegistryEntry(registry, entry),
-    input.filePath,
-  );
-  return entry;
+  return withRegistryWriteLock(async () => {
+    const registry = await readWalletRegistry(input.filePath);
+    await writeWalletRegistry(
+      upsertWalletRegistryEntry(registry, entry),
+      input.filePath,
+    );
+    return entry;
+  });
 }

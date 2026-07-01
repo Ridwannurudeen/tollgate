@@ -9,6 +9,11 @@ const buckets = new Map<string, RateLimitBucket>();
 
 export function assertQueryRateLimit(key: string, now = Date.now()): void {
   const bucketKey = key || "anonymous";
+  for (const [existingKey, bucket] of buckets) {
+    if (now - bucket.windowStart >= QUERY_WINDOW_MS) {
+      buckets.delete(existingKey);
+    }
+  }
   const current = buckets.get(bucketKey);
   if (!current || now - current.windowStart >= QUERY_WINDOW_MS) {
     buckets.set(bucketKey, { windowStart: now, count: 1 });

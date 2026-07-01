@@ -29,20 +29,29 @@ async function readNewLines(filePath: string): Promise<string[]> {
 
 async function tick() {
   for (const line of await readNewLines(APERTURE_ACCESS_LOG)) {
-    const result = await processAccessLogLine(line, {
-      immichApiBaseUrl: APERTURE_IMMICH_API_BASE_URL,
-      amountAtomicUsdc: APERTURE_LICENSE_FEE_ATOMIC_USDC,
-      ...(APERTURE_EXIF_ENABLED ? { readExifCredit: readAssetExifCredit } : {}),
-    });
-    if (result.kind === "processed") {
-      console.log(
-        JSON.stringify({
-          kind: result.kind,
-          sharedLinkId: result.sharedLink.id,
-          receipts: result.receipts.map((receipt) => receipt.receiptHash),
-          unresolvedOwnerIds: result.unresolvedOwnerIds,
-        }),
-      );
+    // The offset was already advanced by readNewLines, so a throw here would
+    // permanently drop this line and every remaining one. Skip the bad line
+    // and keep processing; append de-dup keeps retries from double-paying.
+    try {
+      const result = await processAccessLogLine(line, {
+        immichApiBaseUrl: APERTURE_IMMICH_API_BASE_URL,
+        amountAtomicUsdc: APERTURE_LICENSE_FEE_ATOMIC_USDC,
+        ...(APERTURE_EXIF_ENABLED
+          ? { readExifCredit: readAssetExifCredit }
+          : {}),
+      });
+      if (result.kind === "processed") {
+        console.log(
+          JSON.stringify({
+            kind: result.kind,
+            sharedLinkId: result.sharedLink.id,
+            receipts: result.receipts.map((receipt) => receipt.receiptHash),
+            unresolvedOwnerIds: result.unresolvedOwnerIds,
+          }),
+        );
+      }
+    } catch (error) {
+      console.error(error);
     }
   }
 }

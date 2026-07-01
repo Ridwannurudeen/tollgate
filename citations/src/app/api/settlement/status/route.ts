@@ -5,6 +5,7 @@ import {
   PAID_QUERY_PRICE_ATOMIC_USDC,
   tollgateAgentWallet,
 } from "@/lib/payments";
+import type { SettlementStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,7 @@ export async function GET() {
     0,
   );
 
-  return NextResponse.json({
+  return NextResponse.json<SettlementStatus>({
     mode: "multi-accept",
     readerSettlement: {
       schemes: ["exact", "gateway-batched"],

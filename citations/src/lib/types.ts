@@ -237,3 +237,25 @@ export type LedgerVerification = {
   latestHash: string;
   issues: LedgerVerificationIssue[];
 };
+
+export type SettlementStatus = {
+  mode: "multi-accept";
+  readerSettlement: {
+    schemes: string[];
+    gatewayBatchedSettlement: boolean;
+    selfFacilitator: boolean;
+  };
+  facilitatorConfigured: boolean;
+  forumRouterConfigured: boolean;
+  network: string;
+  asset: string;
+  rpcConfigured: boolean;
+  paidQueryPriceAtomicUsdc: number;
+  tollgateAgentWallet: string;
+  latestReaderPayment: QueryPaymentEvidence | null;
+  readerPaymentTotalAtomicUsdc: number;
+  latestVerifiedReceipt: string | null;
+  latestSettledReceipt: string | null;
+  latestForumRoutedReceipt: string | null;
+  verification: LedgerVerification;
+};

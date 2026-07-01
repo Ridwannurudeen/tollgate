@@ -1,10 +1,6 @@
 import { readSources } from "./catalog";
 import { readFeeRouterSplitRegistry } from "./fee-router";
-import {
-  readLedger,
-  summarizeCreators,
-  verifyLedgerIntegrity,
-} from "./ledger";
+import { readLedger, summarizeCreators, verifyLedgerIntegrity } from "./ledger";
 
 export async function buildProofPack() {
   const [ledger, sources, splitRegistry] = await Promise.all([
@@ -13,6 +9,7 @@ export async function buildProofPack() {
     readFeeRouterSplitRegistry(),
   ]);
   const creators = summarizeCreators(ledger);
+  const verification = verifyLedgerIntegrity(ledger);
   const paidQueries = ledger.queries.filter((query) => query.readerPayment);
   const uniquePayers = new Set(
     paidQueries
@@ -27,13 +24,16 @@ export async function buildProofPack() {
     project: "tollgate-citations",
     generatedAt: new Date().toISOString(),
     traction: {
-      externalSources: sources.filter((source) => source.sourceKind === "external")
+      externalSources: sources.filter(
+        (source) => source.sourceKind === "external",
+      ).length,
+      seedSources: sources.filter((source) => source.sourceKind === "seed")
         .length,
-      seedSources: sources.filter((source) => source.sourceKind === "seed").length,
       internalTestSources: sources.filter(
         (source) => source.sourceKind === "internal-test",
       ).length,
-      verifiedCreators: sources.filter((source) => source.verifiedCreator).length,
+      verifiedCreators: sources.filter((source) => source.verifiedCreator)
+        .length,
       paidQueries: paidQueries.length,
       payoutReceipts: ledger.receipts.length,
       uniquePayerWallets: uniquePayers.size,
@@ -44,8 +44,8 @@ export async function buildProofPack() {
       ),
     },
     ledger: {
-      valid: verifyLedgerIntegrity(ledger).ok,
-      verification: verifyLedgerIntegrity(ledger),
+      valid: verification.ok,
+      verification,
       latestHash: ledger.receipts.at(-1)?.receiptHash ?? null,
     },
     creators,

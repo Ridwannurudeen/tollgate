@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { readFeeRouterClaimable } from "@/lib/fee-router";
-import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
+import {
+  arcscanTxUrl,
+  formatUsdc,
+  settlementLabel,
+  shortHash,
+  shortWallet,
+} from "@/lib/format";
 import { getCreatorEvidence, readLedger } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
@@ -8,17 +14,6 @@ export const dynamic = "force-dynamic";
 type Props = {
   params: Promise<{ wallet: string }>;
 };
-
-function settlementLabel(mode: string): string {
-  if (mode === "forum-routed") return "forum routed";
-  if (mode === "x402-settled") return "x402 settled";
-  if (mode === "x402-verified") return "x402 verified";
-  return "local proof";
-}
-
-function arcscanTxUrl(tx: string): string {
-  return `https://testnet.arcscan.app/tx/${tx}`;
-}
 
 export default async function CreatorPage({ params }: Props) {
   const { wallet } = await params;

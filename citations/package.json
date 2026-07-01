@@ -2,6 +2,9 @@
   "name": "leptonweb",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "description": "LeptonWeb is a paid knowledge network for AI agents. The first wedge is Tollgate: an answer engine that pays creators per cited source and writes attribution receipts.",
   "scripts": {
     "dev": "next dev",

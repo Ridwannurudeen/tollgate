@@ -1,7 +1,7 @@
 import type { Address, Hex } from "viem";
 import { buildResolveEventId } from "./dedupe";
 import { APERTURE_LICENSE_FEE_ATOMIC_USDC } from "./config";
-import type { LicenseReceiptInput } from "./ledger";
+import { readLicenseLedger, type LicenseReceiptInput } from "./ledger";
 import type {
   DownloadArchiveEvent,
   ImmichSharedLink,
@@ -42,6 +42,7 @@ export type LicenseDownloadDeps = {
   appendReceipt: (
     input: LicenseReceiptInput,
   ) => Promise<{ receipt: LicenseReceipt; created: boolean }>;
+  findExistingReceipt?: (eventId: Hex) => Promise<LicenseReceipt | null>;
   now?: () => string;
   settlePayment?: (
     signatureHeader: string,
@@ -146,8 +147,18 @@ export async function handleLicenseDownload(
     };
   }
 
-  const totalAtomicUsdc =
-    resolved.length * APERTURE_LICENSE_FEE_ATOMIC_USDC;
+  if (resolved.length > 1 && !deps.collectorAddress) {
+    return {
+      status: 402,
+      headers: {},
+      body: {
+        error:
+          "collector address required for multi-owner link; refusing to route the full total to a single photographer",
+      },
+    };
+  }
+
+  const totalAtomicUsdc = resolved.length * APERTURE_LICENSE_FEE_ATOMIC_USDC;
   const payTo = deps.collectorAddress ?? resolved[0].photographer.wallet;
   const requirements = buildPaymentRequirements(payTo, totalAtomicUsdc);
   const resourceUrl = `${deps.origin}${deps.basePath}/api/license-download`;
@@ -172,7 +183,10 @@ export async function handleLicenseDownload(
 
   const settlement = localProof
     ? null
-    : await (deps.settlePayment ?? settleX402)(signatureHeader ?? "", requirements);
+    : await (deps.settlePayment ?? settleX402)(
+        signatureHeader ?? "",
+        requirements,
+      );
   if (settlement && !settlement.ok) {
     return {
       status: settlement.status,
@@ -184,8 +198,27 @@ export async function handleLicenseDownload(
   const createdAt = deps.now?.() ?? new Date().toISOString();
   const event = downloadEvent(input.sharedLinkKey, createdAt);
   const receipts: LicenseReceipt[] = [];
+  const findExisting =
+    deps.findExistingReceipt ??
+    (async (eventId: Hex) => {
+      const ledger = await readLicenseLedger();
+      return (
+        ledger.receipts.find((receipt) => receipt.eventId === eventId) ?? null
+      );
+    });
 
   for (const asset of resolved) {
+    const eventId = buildResolveEventId(event, sharedLink.id, asset.assetId);
+
+    // Idempotency: if this resolve event was already settled, do NOT pay the
+    // creator on-chain again. Paying before this check double-pays and the
+    // receipt is then silently discarded by append de-dup (see watcher.ts).
+    const existing = await findExisting(eventId);
+    if (existing) {
+      receipts.push(existing);
+      continue;
+    }
+
     const payoutEvidence =
       (await deps.routeLicensePayment(
         asset.photographer.wallet,
@@ -195,7 +228,7 @@ export async function handleLicenseDownload(
         ? x402Evidence(settlement, paymentResource)
         : localProofEvidence(paymentResource));
     const result = await deps.appendReceipt({
-      eventId: buildResolveEventId(event, sharedLink.id, asset.assetId),
+      eventId,
       event,
       sharedLinkId: sharedLink.id,
       assetId: asset.assetId,

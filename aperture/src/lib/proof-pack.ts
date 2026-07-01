@@ -21,6 +21,13 @@ export async function buildProofPack() {
     (sum, creator) => sum + creator.earned,
     0,
   );
+  // Public payload: strip custodial Circle walletIds and ownershipProof so the
+  // unauthenticated /api/proof endpoint never leaks them.
+  const publicRegistry = {
+    photographers: registry.photographers.map(
+      ({ walletId, ownershipProof, ...entry }) => entry,
+    ),
+  };
 
   return {
     generatedAt: new Date().toISOString(),
@@ -37,7 +44,7 @@ export async function buildProofPack() {
     },
     creators,
     feeRouterSplits: splitRegistry,
-    registry,
+    registry: publicRegistry,
     ledger,
   };
 }

@@ -360,11 +360,15 @@ export async function routeLicensePayment(
   }
 
   if (allowance < amount) {
+    // Approve a bounded standing allowance (~100 payouts) so subsequent payouts
+    // skip the approve tx (each payout was otherwise 2 txs: approve + pay),
+    // while capping the FeeRouter's pull exposure on the payer key.
+    const standingAllowance = amount * 100n;
     const approveTx = await walletClient.writeContract({
       address: ARC_USDC,
       abi: usdcRouterAbi,
       functionName: "approve",
-      args: [FEE_ROUTER_ADDRESS, amount],
+      args: [FEE_ROUTER_ADDRESS, standingAllowance],
       account,
       chain: arcTestnet,
     });

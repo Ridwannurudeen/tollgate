@@ -5,7 +5,14 @@ import {
   formatBudgetUtilization,
   ledgerPaidQueryEconomics,
 } from "@/lib/economics";
-import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
+import {
+  arcscanTxUrl,
+  formatAtomicUsdc,
+  formatUsdc,
+  settlementLabel,
+  shortHash,
+  shortWallet,
+} from "@/lib/format";
 import {
   readLedger,
   summarizeCreators,
@@ -52,21 +59,6 @@ function sourceStats(ledger: Ledger): SourceStat[] {
   return Array.from(stats.values()).sort(
     (a, b) => b.earnedAtomicUsdc - a.earnedAtomicUsdc,
   );
-}
-
-function settlementLabel(mode: string): string {
-  if (mode === "forum-routed") return "forum routed";
-  if (mode === "x402-settled") return "x402 settled";
-  if (mode === "x402-verified") return "x402 verified";
-  return "local proof";
-}
-
-function arcscanTxUrl(tx: string): string {
-  return `https://testnet.arcscan.app/tx/${tx}`;
-}
-
-function formatAtomicUsdc(value: bigint): string {
-  return formatUsdc(Number(value));
 }
 
 export default async function ProofPage() {
@@ -205,9 +197,7 @@ export default async function ProofPage() {
         </div>
         <div className="evidence-row">
           <span>paid-query creator payouts</span>
-          <strong>
-            {formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC
-          </strong>
+          <strong>{formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC</strong>
         </div>
         <div className="evidence-row">
           <span>paid-query protocol retained</span>
@@ -287,7 +277,9 @@ export default async function ProofPage() {
           </div>
           <div className="evidence-row">
             <span>verified creators</span>
-            <strong>{sources.filter((source) => source.verifiedCreator).length}</strong>
+            <strong>
+              {sources.filter((source) => source.verifiedCreator).length}
+            </strong>
           </div>
           <div className="evidence-row">
             <span>paid queries</span>
@@ -428,8 +420,7 @@ export default async function ProofPage() {
             <div className="evidence-row">
               <span>budget</span>
               <strong>
-                {formatAtomicUsdc(covenant.latestVault.mandate.budgetUsdc)}{" "}
-                USDC
+                {formatAtomicUsdc(covenant.latestVault.mandate.budgetUsdc)} USDC
               </strong>
             </div>
             <div className="evidence-row">

@@ -4,7 +4,13 @@ import {
   formatBudgetUtilization,
   queryPaymentEconomics,
 } from "@/lib/economics";
-import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
+import {
+  arcscanTxUrl,
+  formatUsdc,
+  settlementLabel,
+  shortHash,
+  shortWallet,
+} from "@/lib/format";
 import { readLedger } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
@@ -12,17 +18,6 @@ export const dynamic = "force-dynamic";
 type Props = {
   params: Promise<{ hash: string }>;
 };
-
-function settlementLabel(mode: string): string {
-  if (mode === "forum-routed") return "forum routed";
-  if (mode === "x402-settled") return "x402 settled";
-  if (mode === "x402-verified") return "x402 verified";
-  return "local proof";
-}
-
-function arcscanTxUrl(tx: string): string {
-  return `https://testnet.arcscan.app/tx/${tx}`;
-}
 
 function EvidenceRow({
   label,

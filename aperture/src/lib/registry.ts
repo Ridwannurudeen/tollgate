@@ -5,6 +5,16 @@ import type { WalletRegistry, WalletRegistryEntry } from "./types";
 
 const REGISTRY_PATH = path.join(process.cwd(), "data", "registry.json");
 const EMPTY_REGISTRY: WalletRegistry = { photographers: [] };
+let registryWriteLock: Promise<void> = Promise.resolve();
+
+export function withRegistryWriteLock<T>(write: () => Promise<T>): Promise<T> {
+  const run = registryWriteLock.then(write, write);
+  registryWriteLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
 
 function isRegistryEntry(value: unknown): value is WalletRegistryEntry {
   if (!value || typeof value !== "object") return false;

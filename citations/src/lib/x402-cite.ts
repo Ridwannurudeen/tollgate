@@ -52,8 +52,21 @@ export function encodeX402CiteHeader(
 
 export function decodeX402CiteHeader<T extends X402CiteToll | X402CiteReceipt>(
   header: string,
-): T {
-  return JSON.parse(decodeBase64Url(header)) as T;
+): T | null {
+  try {
+    const parsed = JSON.parse(decodeBase64Url(header)) as T;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      parsed.version !== X402_CITE_VERSION ||
+      typeof parsed.sourceId !== "string"
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export function buildX402CiteToll(
@@ -88,7 +101,8 @@ export function buildX402CiteReceipt(
     paidAt: receipt.createdAt,
   };
   if (receipt.payer !== undefined) payload.payer = receipt.payer;
-  if (receipt.transaction !== undefined) payload.transaction = receipt.transaction;
+  if (receipt.transaction !== undefined)
+    payload.transaction = receipt.transaction;
   if (receipt.feeRouterPayTx !== undefined) {
     payload.feeRouterPayTx = receipt.feeRouterPayTx;
   }

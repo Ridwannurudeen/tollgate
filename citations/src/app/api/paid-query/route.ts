@@ -73,16 +73,10 @@ export async function POST(request: NextRequest) {
       paymentResource: "/api/paid-query",
     });
 
-    return NextResponse.json(
-      {
-        ...result,
-        readerPayment: result.query.readerPayment,
-      },
-      {
-        status: 201,
-        headers: { [PAYMENT_RESPONSE_HEADER]: settlement.responseHeader },
-      },
-    );
+    return NextResponse.json(result, {
+      status: 201,
+      headers: { [PAYMENT_RESPONSE_HEADER]: settlement.responseHeader },
+    });
   } catch (error) {
     return NextResponse.json(
       {

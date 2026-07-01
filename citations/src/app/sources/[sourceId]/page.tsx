@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { findSource } from "@/lib/catalog";
-import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
+import {
+  formatUsdc,
+  settlementLabel,
+  shortHash,
+  shortWallet,
+} from "@/lib/format";
 import { getSourceEvidence, readLedger } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
@@ -9,13 +14,6 @@ export const dynamic = "force-dynamic";
 type Props = {
   params: Promise<{ sourceId: string }>;
 };
-
-function settlementLabel(mode: string): string {
-  if (mode === "forum-routed") return "forum routed";
-  if (mode === "x402-settled") return "x402 settled";
-  if (mode === "x402-verified") return "x402 verified";
-  return "local proof";
-}
 
 export default async function SourcePage({ params }: Props) {
   const { sourceId } = await params;
@@ -134,7 +132,8 @@ export default async function SourcePage({ params }: Props) {
                   {receipt.createdAt}
                 </span>
                 <span>
-                  content {receipt.sourceContentHash
+                  content{" "}
+                  {receipt.sourceContentHash
                     ? shortHash(receipt.sourceContentHash)
                     : "not recorded"}{" "}
                   / excerpt{" "}

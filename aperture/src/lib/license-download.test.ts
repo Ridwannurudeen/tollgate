@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Hex } from "viem";
-import {
-  LOCAL_PROOF_HEADER,
-  handleLicenseDownload,
-} from "./license-download";
+import { LOCAL_PROOF_HEADER, handleLicenseDownload } from "./license-download";
 import {
   PAYMENT_REQUIRED_HEADER,
   PAYMENT_RESPONSE_HEADER,
@@ -158,5 +155,45 @@ describe("handleLicenseDownload", () => {
     );
 
     expect(result.status).toBe(200);
+  });
+
+  it("rejects a multi-owner link when no collector address is set", async () => {
+    let payoutCalls = 0;
+    const photographerTwo: WalletRegistryEntry = {
+      ownerId: "owner-2",
+      displayName: "Photographer Two",
+      wallet: "0x3333333333333333333333333333333333333333",
+      createdAt: "2026-06-24T00:00:00.000Z",
+      approvalStatus: "operator-approved",
+    };
+    const result = await handleLicenseDownload(
+      { sharedLinkKey: "abc123" },
+      {
+        headers: new Headers({ [PAYMENT_SIGNATURE_HEADER]: "paid" }),
+        origin: "https://tollgate.gudman.xyz",
+        basePath: "/aperture",
+        resolveSharedLink: async () => ({
+          id: "share-1",
+          key: "abc123",
+          assets: [
+            { id: "asset-1", ownerId: "owner-1", originalFileName: "a.png" },
+            { id: "asset-2", ownerId: "owner-2", originalFileName: "b.png" },
+          ],
+        }),
+        findWalletForOwner: async (ownerId) =>
+          ownerId === "owner-2" ? photographerTwo : photographer,
+        routeLicensePayment: async () => {
+          payoutCalls += 1;
+          return null;
+        },
+        appendReceipt: async () => {
+          throw new Error("multi-owner without collector should not append");
+        },
+      },
+    );
+
+    expect(result.status).toBe(402);
+    expect(JSON.stringify(result.body)).toContain("collector");
+    expect(payoutCalls).toBe(0);
   });
 });

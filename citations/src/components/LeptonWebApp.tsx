@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { WalletClient } from "viem";
-import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
+import {
+  formatUsdc,
+  settlementLabel,
+  shortHash,
+  shortWallet,
+} from "@/lib/format";
 import type {
   CreatorEarnings,
   CreatorSource,
@@ -11,6 +16,7 @@ import type {
   LedgerVerification,
   PaymentReceipt,
   SettlementResult,
+  SettlementStatus,
 } from "@/lib/types";
 
 type LedgerResponse = {
@@ -39,28 +45,6 @@ type SourceRegistryResponse = {
   source?: CreatorSource;
   sources: CreatorSource[];
   error?: string;
-};
-
-type SettlementStatusResponse = {
-  mode: "verify-only" | "settle-enabled";
-  facilitatorConfigured: boolean;
-  forumRouterConfigured: boolean;
-  paidQueryPriceAtomicUsdc: number;
-  tollgateAgentWallet: string;
-  readerPaymentTotalAtomicUsdc: number;
-  latestReaderPayment: {
-    amountAtomicUsdc: number;
-    settlementMode: string;
-    payTo: string;
-    payer?: string;
-    transaction?: string;
-    paymentResource: string;
-    paymentHash: string;
-  } | null;
-  latestVerifiedReceipt: string | null;
-  latestSettledReceipt: string | null;
-  latestForumRoutedReceipt: string | null;
-  verification: LedgerVerification;
 };
 
 type SourceFormState = {
@@ -106,13 +90,6 @@ function latestHash(ledger: Ledger): string {
   return ledger.receipts.at(-1)?.receiptHash ?? `0x${"0".repeat(64)}`;
 }
 
-function settlementLabel(mode: string): string {
-  if (mode === "forum-routed") return "forum routed";
-  if (mode === "x402-settled") return "x402 settled";
-  if (mode === "x402-verified") return "x402 verified";
-  return "local proof";
-}
-
 function shortAddress(address?: string): string {
   return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 }
@@ -130,7 +107,7 @@ export function LeptonWebApp({
     null,
   );
   const [settlementStatus, setSettlementStatus] =
-    useState<SettlementStatusResponse | null>(null);
+    useState<SettlementStatus | null>(null);
   const [activeResult, setActiveResult] = useState<SettlementResult | null>(
     null,
   );
@@ -175,36 +152,18 @@ export function LeptonWebApp({
     setVerification(data.verification);
   }
 
-  async function refreshSources() {
-    const response = await fetch("/api/sources", { cache: "no-store" });
-    if (!response.ok)
-      throw new Error(`source registry fetch failed: ${response.status}`);
-    const data = (await response.json()) as SourceRegistryResponse;
-    setRegistrySources(data.sources);
-  }
-
   async function refreshSettlementStatus() {
     const response = await fetch("/api/settlement/status", {
       cache: "no-store",
     });
     if (!response.ok)
       throw new Error(`settlement status failed: ${response.status}`);
-    const data = (await response.json()) as SettlementStatusResponse;
+    const data = (await response.json()) as SettlementStatus;
     setSettlementStatus(data);
     setVerification(data.verification);
   }
 
   useEffect(() => {
-    refreshLedger().catch((error: unknown) => {
-      setStatus(
-        error instanceof Error ? error.message : "Ledger refresh failed.",
-      );
-    });
-    refreshSources().catch((error: unknown) => {
-      setSourceRegistrationStatus(
-        error instanceof Error ? error.message : "Source refresh failed.",
-      );
-    });
     refreshSettlementStatus().catch((error: unknown) => {
       setStatus(
         error instanceof Error
@@ -234,8 +193,7 @@ export function LeptonWebApp({
       const result = body as SettlementResult;
       setActiveResult(result);
       setLedger(result.ledger);
-      await refreshLedger();
-      await refreshSettlementStatus();
+      await Promise.all([refreshLedger(), refreshSettlementStatus()]);
       setStatus("Answer paid, attributed, and receipt-linked.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Query failed.");
@@ -267,8 +225,7 @@ export function LeptonWebApp({
       const result = body as SettlementResult;
       setActiveResult(result);
       setLedger(result.ledger);
-      await refreshLedger();
-      await refreshSettlementStatus();
+      await Promise.all([refreshLedger(), refreshSettlementStatus()]);
       setStatus("Reader paid, answer recorded, and citations receipted.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Paid query failed.");
@@ -298,8 +255,7 @@ export function LeptonWebApp({
         throw new Error(body.error ?? `HTTP ${response.status}`);
       }
       if (body.ledger) setLedger(body.ledger);
-      await refreshLedger();
-      await refreshSettlementStatus();
+      await Promise.all([refreshLedger(), refreshSettlementStatus()]);
       setSourcePaymentStatus(
         `${source.creator} paid via ${settlementLabel(body.settlementMode)}.`,
       );

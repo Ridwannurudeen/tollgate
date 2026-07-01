@@ -5,7 +5,14 @@ import {
   queryPaymentEconomics,
 } from "@/lib/economics";
 import { readCovenantEnvelope } from "@/lib/covenant";
-import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
+import {
+  arcscanTxUrl,
+  formatAtomicUsdc,
+  formatUsdc,
+  settlementLabel,
+  shortHash,
+  shortWallet,
+} from "@/lib/format";
 import { getAnswerEvidence, readLedger } from "@/lib/ledger";
 import { readSlashBondStatus } from "@/lib/slash-bond";
 
@@ -14,21 +21,6 @@ export const dynamic = "force-dynamic";
 type Props = {
   params: Promise<{ queryId: string }>;
 };
-
-function settlementLabel(mode: string): string {
-  if (mode === "forum-routed") return "forum routed";
-  if (mode === "x402-settled") return "x402 settled";
-  if (mode === "x402-verified") return "x402 verified";
-  return "local proof";
-}
-
-function arcscanTxUrl(tx: string): string {
-  return `https://testnet.arcscan.app/tx/${tx}`;
-}
-
-function formatAtomicUsdc(value: bigint): string {
-  return formatUsdc(Number(value));
-}
 
 function EvidenceRow({
   label,
@@ -239,7 +231,9 @@ export default async function AnswerPage({ params }: Props) {
             <EvidenceRow
               label="TrackRecord anchor"
               value={
-                query.trackRecord ? shortHash(query.trackRecord.recordHash) : "none"
+                query.trackRecord
+                  ? shortHash(query.trackRecord.recordHash)
+                  : "none"
               }
             />
             <EvidenceRow
@@ -377,7 +371,9 @@ export default async function AnswerPage({ params }: Props) {
                 <span className="trace-summary">
                   Final answer is restricted to paid citation records.
                 </span>
-                <small>{query.citations.map((citation) => citation.title).join(", ")}</small>
+                <small>
+                  {query.citations.map((citation) => citation.title).join(", ")}
+                </small>
               </div>
             </li>
             <li className="trace-step">

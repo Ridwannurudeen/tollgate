@@ -29,7 +29,6 @@ import {
   ARC_GATEWAY_WALLET,
   ARC_RPC_URL,
   ARC_USDC,
-  USDC_DECIMALS,
   arcTestnet,
 } from "./chain";
 
@@ -192,6 +191,19 @@ async function verifyOnly(
   const auth = (payload.payload as { authorization?: Record<string, unknown> })
     .authorization;
   if (!auth) return { ok: false, reason: "missing EIP-3009 authorization" };
+  if (
+    typeof auth.from !== "string" ||
+    typeof auth.to !== "string" ||
+    typeof auth.nonce !== "string" ||
+    typeof auth.value !== "string" ||
+    typeof auth.validAfter !== "string" ||
+    typeof auth.validBefore !== "string" ||
+    !/^\d+$/.test(auth.value) ||
+    !/^\d+$/.test(auth.validAfter) ||
+    !/^\d+$/.test(auth.validBefore)
+  ) {
+    return { ok: false, reason: "malformed authorization" };
+  }
   const publicClient = createPublicClient({
     chain: arcTestnet,
     transport: http(ARC_RPC_URL),

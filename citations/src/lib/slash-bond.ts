@@ -124,6 +124,38 @@ export type DemoSlashBondEvidence = {
   };
 };
 
+function hasStringBalances(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.bondBalance === "string" &&
+    typeof record.totalSlashed === "string"
+  );
+}
+
+function isDemoSlashBondEvidence(
+  value: unknown,
+): value is DemoSlashBondEvidence {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.createdAt === "string" &&
+    typeof record.role === "string" &&
+    typeof record.caller === "string" &&
+    typeof record.address === "string" &&
+    typeof record.deployTx === "string" &&
+    (record.approveTx === null || typeof record.approveTx === "string") &&
+    typeof record.bondTx === "string" &&
+    typeof record.slashTx === "string" &&
+    typeof record.reasonHash === "string" &&
+    typeof record.botId === "string" &&
+    typeof record.bondAmountAtomicUsdc === "string" &&
+    typeof record.slashAmountAtomicUsdc === "string" &&
+    hasStringBalances(record.statusBeforeSlash) &&
+    hasStringBalances(record.statusAfterSlash)
+  );
+}
+
 export function createSlashBondPublicClient() {
   return createPublicClient({
     chain: arcTestnet,
@@ -131,7 +163,10 @@ export function createSlashBondPublicClient() {
   });
 }
 
-export function canSlashBond(status: SlashBondStatus, caller: Address): boolean {
+export function canSlashBond(
+  status: SlashBondStatus,
+  caller: Address,
+): boolean {
   return status.attestor.toLowerCase() === caller.toLowerCase();
 }
 
@@ -141,7 +176,8 @@ export async function readDemoSlashBondEvidence(): Promise<DemoSlashBondEvidence
       path.join(process.cwd(), "data", "slashbond-demo.json"),
       "utf8",
     );
-    return JSON.parse(raw) as DemoSlashBondEvidence;
+    const parsed = JSON.parse(raw) as unknown;
+    return isDemoSlashBondEvidence(parsed) ? parsed : null;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") return null;

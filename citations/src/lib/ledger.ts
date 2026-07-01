@@ -52,7 +52,9 @@ function isLedger(value: unknown): value is Ledger {
   return Array.isArray(record.queries) && Array.isArray(record.receipts);
 }
 
-export async function readLedger(filePath: string = LEDGER_PATH): Promise<Ledger> {
+export async function readLedger(
+  filePath: string = LEDGER_PATH,
+): Promise<Ledger> {
   try {
     const raw = await readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as unknown;
@@ -256,7 +258,8 @@ export function createReceipts(
             evidence.sourceContentHash ?? citation.sourceContentHash,
           sourceExcerptHash:
             evidence.sourceExcerptHash ?? citation.sourceExcerptHash,
-          contentFetchedAt: evidence.contentFetchedAt ?? citation.contentFetchedAt,
+          contentFetchedAt:
+            evidence.contentFetchedAt ?? citation.contentFetchedAt,
           ownershipProof: evidence.ownershipProof ?? citation.ownershipProof,
         },
         previousHash,
@@ -389,6 +392,18 @@ export function getCreatorEvidence(
   const latestReceipt = receipts[0];
   const sourceStats = new Map<string, SourceEarnings>();
 
+  const queryById = new Map<string, QueryRecord>();
+  let handle: string | undefined;
+  for (const query of ledger.queries) {
+    queryById.set(query.id, query);
+    if (handle === undefined) {
+      const match = query.citations.find(
+        (citation) => citation.wallet.toLowerCase() === normalizedWallet,
+      );
+      if (match) handle = match.handle;
+    }
+  }
+
   for (const receipt of receipts) {
     const current = sourceStats.get(receipt.sourceId) ?? {
       sourceId: receipt.sourceId,
@@ -398,9 +413,7 @@ export function getCreatorEvidence(
       citationCount: 0,
       earnedAtomicUsdc: 0,
     };
-    const query = ledger.queries.find(
-      (candidate) => candidate.id === receipt.queryId,
-    );
+    const query = queryById.get(receipt.queryId);
     const citation = query?.citations.find(
       (candidate) => candidate.sourceId === receipt.sourceId,
     );
@@ -412,11 +425,7 @@ export function getCreatorEvidence(
 
   return {
     creator: latestReceipt.creator,
-    handle:
-      ledger.queries
-        .flatMap((query) => query.citations)
-        .find((citation) => citation.wallet.toLowerCase() === normalizedWallet)
-        ?.handle ?? "@unknown",
+    handle: handle ?? "@unknown",
     wallet: latestReceipt.wallet,
     sourceCount: sourceStats.size,
     citationCount: receipts.length,

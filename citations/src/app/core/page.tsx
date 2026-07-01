@@ -32,7 +32,10 @@ type ApertureProof = {
 
 async function loadAperture(): Promise<ApertureProof | null> {
   try {
-    const res = await fetch(APERTURE_PROOF_URL, { cache: "no-store" });
+    const res = await fetch(APERTURE_PROOF_URL, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
     if (!res.ok) return null;
     return (await res.json()) as ApertureProof;
   } catch {
@@ -41,14 +44,17 @@ async function loadAperture(): Promise<ApertureProof | null> {
 }
 
 export default async function CorePage() {
-  const [ledger, sources] = await Promise.all([readLedger(), readSources()]);
+  const [ledger, sources, aperture] = await Promise.all([
+    readLedger(),
+    readSources(),
+    loadAperture(),
+  ]);
   const creators = summarizeCreators(ledger);
   const verification = verifyLedgerIntegrity(ledger);
   const citationRouted = ledger.receipts.reduce(
     (sum, receipt) => sum + receipt.amountAtomicUsdc,
     0,
   );
-  const aperture = await loadAperture();
   const paidQueries = ledger.queries.filter((query) => query.readerPayment);
   const uniquePayers = new Set(
     paidQueries
@@ -110,7 +116,10 @@ export default async function CorePage() {
           <div className="evidence-row">
             <span>external sources</span>
             <strong>
-              {sources.filter((source) => source.sourceKind === "external").length}
+              {
+                sources.filter((source) => source.sourceKind === "external")
+                  .length
+              }
             </strong>
           </div>
           <div className="evidence-row">
@@ -123,8 +132,9 @@ export default async function CorePage() {
             <span>internal-test sources</span>
             <strong>
               {
-                sources.filter((source) => source.sourceKind === "internal-test")
-                  .length
+                sources.filter(
+                  (source) => source.sourceKind === "internal-test",
+                ).length
               }
             </strong>
           </div>

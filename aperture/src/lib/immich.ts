@@ -27,9 +27,11 @@ function parseNginxTimestamp(value: string): string {
     Nov: "11",
     Dec: "12",
   };
+  const month = months[match.groups.month];
+  if (!month) return new Date().toISOString();
   const offset = `${match.groups.offset.slice(0, 3)}:${match.groups.offset.slice(3)}`;
   return new Date(
-    `${match.groups.year}-${months[match.groups.month]}-${match.groups.day}T${match.groups.time}${offset}`,
+    `${match.groups.year}-${month}-${match.groups.day}T${match.groups.time}${offset}`,
   ).toISOString();
 }
 

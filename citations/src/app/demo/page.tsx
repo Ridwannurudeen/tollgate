@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { readCovenantEnvelope } from "@/lib/covenant";
-import { formatUsdc, shortHash, shortWallet } from "@/lib/format";
+import {
+  arcscanTxUrl,
+  formatAtomicUsdc,
+  formatUsdc,
+  settlementLabel,
+  shortHash,
+  shortWallet,
+} from "@/lib/format";
 import {
   getJudgeDemoEvidence,
   readLedger,
@@ -36,21 +43,6 @@ function totalReaderPaid(ledger: Ledger): number {
     (sum, query) => sum + (query.readerPayment?.amountAtomicUsdc ?? 0),
     0,
   );
-}
-
-function settlementLabel(mode: string): string {
-  if (mode === "forum-routed") return "forum routed";
-  if (mode === "x402-settled") return "x402 settled";
-  if (mode === "x402-verified") return "x402 verified";
-  return "local proof";
-}
-
-function arcscanTxUrl(tx: string): string {
-  return `https://testnet.arcscan.app/tx/${tx}`;
-}
-
-function formatAtomicUsdc(value: bigint | string): string {
-  return formatUsdc(Number(value));
 }
 
 function sourcePurchaseReceipt(

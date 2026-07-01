@@ -322,6 +322,15 @@ export async function settleX402(
     };
   }
 
+  if (process.env.APERTURE_ALLOW_VERIFY_ONLY !== "1") {
+    return {
+      ok: false,
+      status: 402,
+      reason:
+        "settlement not configured; set APERTURE_ALLOW_VERIFY_ONLY=1 to allow verify-only demo unlocks",
+    };
+  }
+
   const verified = await verifyOnly(payload, requirements);
   if (!verified.ok) {
     return {

@@ -2,6 +2,9 @@
   "name": "aperture",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "description": "Aperture is an Immich sidecar that pays photographers when shared photos are downloaded.",
   "scripts": {
     "dev": "next dev",

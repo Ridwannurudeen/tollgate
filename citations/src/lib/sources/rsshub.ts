@@ -222,24 +222,27 @@ export function parseCreatorFeed(
 
 export async function readRsshubSources(): Promise<CreatorSource[]> {
   const registrations = await readCreatorFeedRegistry();
-  const sources: CreatorSource[] = [];
-
-  for (const registration of registrations) {
-    try {
-      const response = await fetch(registration.feedUrl, {
-        headers: {
-          accept: "application/rss+xml, application/atom+xml, text/xml",
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`feed returned HTTP ${response.status}`);
+  const results = await Promise.all(
+    registrations.map(async (registration) => {
+      try {
+        const response = await fetch(registration.feedUrl, {
+          headers: {
+            accept: "application/rss+xml, application/atom+xml, text/xml",
+          },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!response.ok) {
+          throw new Error(`feed returned HTTP ${response.status}`);
+        }
+        return parseCreatorFeed(await response.text(), registration);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "unknown error";
+        console.warn(`Skipping creator feed ${registration.id}: ${message}`);
+        return [];
       }
-      sources.push(...parseCreatorFeed(await response.text(), registration));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown error";
-      console.warn(`Skipping creator feed ${registration.id}: ${message}`);
-    }
-  }
+    }),
+  );
 
-  return sources;
+  return results.flat();
 }

@@ -59,7 +59,8 @@ describe("registerCreator", () => {
   it("self-custody: a valid ownership signature marks the entry wallet-signed", async () => {
     await withTempRegistry(async (filePath) => {
       const account = privateKeyToAccount(generatePrivateKey());
-      const timestamp = "2026-06-28T00:00:00.000Z";
+      // Fresh timestamp: ownershipProofFromInput now rejects stale proofs.
+      const timestamp = new Date().toISOString();
       const signature = await account.signMessage({
         message: buildOwnerOwnershipMessage({
           ownerId: "owner-1",

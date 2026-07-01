@@ -377,12 +377,22 @@ export async function appendSource(
     verifiedCreator: ownershipProof !== undefined,
     ...(ownershipProof ? { ownershipProof } : {}),
   };
+  const liveSources = await readRsshubSources();
   return withRegistryLock(async () => {
-    const existingSources = await readSources();
+    const customSources = await readCustomSources(filePath);
+    const seen = new Set<string>();
+    const existingSources = [
+      ...liveSources,
+      ...DEFAULT_CREATOR_SOURCES,
+      ...customSources,
+    ].filter((existing) => {
+      if (seen.has(existing.id)) return false;
+      seen.add(existing.id);
+      return true;
+    });
     if (existingSources.some((existing) => existing.id === source.id)) {
       throw new SourceRegistryError("source id already exists.", 409);
     }
-    const customSources = await readCustomSources(filePath);
     const nextCustomSources = [...customSources, source];
     await writeCustomSources(nextCustomSources, filePath);
     return { source, sources: [...existingSources, source] };
