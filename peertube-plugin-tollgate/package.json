@@ -1,0 +1,38 @@
+{
+  "name": "peertube-plugin-tollgate",
+  "version": "0.1.0",
+  "description": "Pay the creator in USDC on Arc when their video is downloaded. A permissionless PeerTube payments plugin.",
+  "engine": {
+    "peertube": ">=6.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "peertube",
+    "plugin",
+    "payments",
+    "usdc",
+    "creator"
+  ],
+  "license": "AGPL-3.0",
+  "author": "Tollgate",
+  "scripts": {
+    "test": "node --test"
+  },
+  "library": "./main.js",
+  "clientScripts": [
+    {
+      "script": "client/tollgate-watch.js",
+      "scopes": [
+        "video-watch"
+      ]
+    }
+  ],
+  "css": [],
+  "staticDirs": {},
+  "translations": {},
+  "dependencies": {
+    "viem": "^2.53.1"
+  }
+}
