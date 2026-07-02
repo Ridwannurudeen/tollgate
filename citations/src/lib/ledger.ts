@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { sha256Hex } from "./hash";
@@ -151,6 +152,28 @@ function withQueryPaymentHash(
   };
 }
 
+function legacyStableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => legacyStableStringify(item)).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map(
+        (key) => `${JSON.stringify(key)}:${legacyStableStringify(record[key])}`,
+      )
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value) ?? "undefined";
+}
+
+function legacySha256Hex(value: unknown): string {
+  return `0x${createHash("sha256").update(legacyStableStringify(value)).digest("hex")}`;
+}
+
 function payloadFromReceipt(
   receipt: PaymentReceipt,
   includeUndefinedOptionals: boolean,
@@ -204,6 +227,32 @@ function payloadFromReceipt(
   return payload;
 }
 
+function legacyX402SourceAccessReceiptPayload(
+  receipt: PaymentReceipt,
+): unknown {
+  return {
+    queryId: receipt.queryId,
+    sourceId: receipt.sourceId,
+    creator: receipt.creator,
+    wallet: receipt.wallet,
+    amountAtomicUsdc: receipt.amountAtomicUsdc,
+    settlementMode: receipt.settlementMode,
+    payer: receipt.payer,
+    transaction: receipt.transaction,
+    paymentResource: receipt.paymentResource,
+    previousHash: receipt.previousHash,
+    createdAt: receipt.createdAt,
+  };
+}
+
+function receiptHashCandidates(receipt: PaymentReceipt): string[] {
+  return [
+    sha256Hex(payloadFromReceipt(receipt, false)),
+    sha256Hex(payloadFromReceipt(receipt, true)),
+    legacySha256Hex(legacyX402SourceAccessReceiptPayload(receipt)),
+  ];
+}
+
 function queryPaymentPayload(
   query: QueryRecord,
   includeUndefinedOptionals: boolean,
@@ -228,6 +277,27 @@ function queryPaymentPayload(
     payload.transaction = query.readerPayment.transaction;
   }
   return payload;
+}
+
+function legacyQueryPaymentPayload(query: QueryRecord): unknown {
+  if (!query.readerPayment) return null;
+  return {
+    amountAtomicUsdc: query.readerPayment.amountAtomicUsdc,
+    settlementMode: query.readerPayment.settlementMode,
+    payTo: query.readerPayment.payTo,
+    paymentResource: query.readerPayment.paymentResource,
+    payer: query.readerPayment.payer,
+    transaction: query.readerPayment.transaction,
+  };
+}
+
+function queryPaymentHashCandidates(query: QueryRecord): string[] {
+  if (!query.readerPayment) return [];
+  return [
+    sha256Hex(queryPaymentPayload(query, false)),
+    sha256Hex(queryPaymentPayload(query, true)),
+    legacySha256Hex(legacyQueryPaymentPayload(query)),
+  ];
 }
 
 export function createReceipts(
@@ -540,12 +610,7 @@ export function verifyLedgerIntegrity(ledger: Ledger): LedgerVerification {
       });
     }
 
-    const storedShapeHash = sha256Hex(payloadFromReceipt(receipt, false));
-    const legacyUndefinedHash = sha256Hex(payloadFromReceipt(receipt, true));
-    if (
-      receipt.receiptHash !== storedShapeHash &&
-      receipt.receiptHash !== legacyUndefinedHash
-    ) {
+    if (!receiptHashCandidates(receipt).includes(receipt.receiptHash)) {
       issues.push({
         index,
         receiptHash: receipt.receiptHash,
@@ -567,10 +632,9 @@ export function verifyLedgerIntegrity(ledger: Ledger): LedgerVerification {
   ledger.queries.forEach((query) => {
     if (
       query.readerPayment &&
-      sha256Hex(queryPaymentPayload(query, false)) !==
-        query.readerPayment.paymentHash &&
-      sha256Hex(queryPaymentPayload(query, true)) !==
-        query.readerPayment.paymentHash
+      !queryPaymentHashCandidates(query).includes(
+        query.readerPayment.paymentHash,
+      )
     ) {
       issues.push({
         index: -1,

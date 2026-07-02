@@ -5,6 +5,8 @@ const ZERO_HASH = `0x${"0".repeat(64)}`;
 const ledgerPath = new URL("../data/ledger.json", import.meta.url);
 
 function stableStringify(value) {
+  if (value === undefined) return "null";
+
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableStringify(item)).join(",")}]`;
   }
@@ -12,6 +14,7 @@ function stableStringify(value) {
   if (value && typeof value === "object") {
     return `{${Object.keys(value)
       .sort()
+      .filter((key) => value[key] !== undefined)
       .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
       .join(",")}}`;
   }
@@ -21,6 +24,27 @@ function stableStringify(value) {
 
 function sha256Hex(value) {
   return `0x${createHash("sha256").update(stableStringify(value)).digest("hex")}`;
+}
+
+function legacyStableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => legacyStableStringify(item)).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map(
+        (key) => `${JSON.stringify(key)}:${legacyStableStringify(value[key])}`,
+      )
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value) ?? "undefined";
+}
+
+function legacySha256Hex(value) {
+  return `0x${createHash("sha256").update(legacyStableStringify(value)).digest("hex")}`;
 }
 
 function receiptPayload(receipt, includeUndefinedOptionals) {
@@ -73,6 +97,30 @@ function receiptPayload(receipt, includeUndefinedOptionals) {
   return payload;
 }
 
+function legacyX402SourceAccessReceiptPayload(receipt) {
+  return {
+    queryId: receipt.queryId,
+    sourceId: receipt.sourceId,
+    creator: receipt.creator,
+    wallet: receipt.wallet,
+    amountAtomicUsdc: receipt.amountAtomicUsdc,
+    settlementMode: receipt.settlementMode,
+    payer: receipt.payer,
+    transaction: receipt.transaction,
+    paymentResource: receipt.paymentResource,
+    previousHash: receipt.previousHash,
+    createdAt: receipt.createdAt,
+  };
+}
+
+function receiptHashCandidates(receipt) {
+  return [
+    sha256Hex(receiptPayload(receipt, false)),
+    sha256Hex(receiptPayload(receipt, true)),
+    legacySha256Hex(legacyX402SourceAccessReceiptPayload(receipt)),
+  ];
+}
+
 function queryPaymentPayload(query, includeUndefinedOptionals) {
   if (!query.readerPayment) return null;
   const payload = {
@@ -93,6 +141,27 @@ function queryPaymentPayload(query, includeUndefinedOptionals) {
   return payload;
 }
 
+function legacyQueryPaymentPayload(query) {
+  if (!query.readerPayment) return null;
+  return {
+    amountAtomicUsdc: query.readerPayment.amountAtomicUsdc,
+    settlementMode: query.readerPayment.settlementMode,
+    payTo: query.readerPayment.payTo,
+    paymentResource: query.readerPayment.paymentResource,
+    payer: query.readerPayment.payer,
+    transaction: query.readerPayment.transaction,
+  };
+}
+
+function queryPaymentHashCandidates(query) {
+  if (!query.readerPayment) return [];
+  return [
+    sha256Hex(queryPaymentPayload(query, false)),
+    sha256Hex(queryPaymentPayload(query, true)),
+    legacySha256Hex(legacyQueryPaymentPayload(query)),
+  ];
+}
+
 function verifyLedger(ledger) {
   const issues = [];
   const receiptHashes = new Set(
@@ -110,12 +179,7 @@ function verifyLedger(ledger) {
       });
     }
 
-    const storedShapeHash = sha256Hex(receiptPayload(receipt, false));
-    const legacyUndefinedHash = sha256Hex(receiptPayload(receipt, true));
-    if (
-      receipt.receiptHash !== storedShapeHash &&
-      receipt.receiptHash !== legacyUndefinedHash
-    ) {
+    if (!receiptHashCandidates(receipt).includes(receipt.receiptHash)) {
       issues.push({
         index,
         receiptHash: receipt.receiptHash,
@@ -137,10 +201,9 @@ function verifyLedger(ledger) {
   ledger.queries.forEach((query) => {
     if (
       query.readerPayment &&
-      sha256Hex(queryPaymentPayload(query, false)) !==
-        query.readerPayment.paymentHash &&
-      sha256Hex(queryPaymentPayload(query, true)) !==
-        query.readerPayment.paymentHash
+      !queryPaymentHashCandidates(query).includes(
+        query.readerPayment.paymentHash,
+      )
     ) {
       issues.push({
         index: -1,

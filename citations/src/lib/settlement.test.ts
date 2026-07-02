@@ -27,9 +27,10 @@ import {
   readLedger,
   summarizeCreators,
   verifyLedgerIntegrity,
+  ZERO_HASH,
 } from "./ledger";
 import { PAID_QUERY_PRICE_ATOMIC_USDC } from "./payments";
-import type { Ledger } from "./types";
+import type { Ledger, PaymentReceipt, QueryRecord } from "./types";
 import { createQueryPaymentEvidence, validateQuestion } from "./settlement";
 
 describe("LeptonWeb settlement engine", () => {
@@ -462,6 +463,82 @@ describe("LeptonWeb settlement engine", () => {
     expect(verification.latestHash).toBe(receipts.at(-1)?.receiptHash);
   });
 
+  it("accepts legacy x402 source access receipt hashes with undefined transaction", () => {
+    const receiptHash = [
+      "0xa6259069d4674cc9",
+      "efd4dd5854151da7",
+      "88ed9b922b918c34",
+      "59ce2d26dfb75b00",
+    ].join("");
+    const query: QueryRecord = {
+      id: "legacy-source-query",
+      question: "Paid source access: Circle Gateway nano x402 source",
+      answer: "Legacy source-access proof.",
+      queryHash: "legacy-query-hash",
+      answerHash: "legacy-answer-hash",
+      totalAtomicUsdc: 2_400,
+      citations: [],
+      receiptHashes: [receiptHash],
+      createdAt: "2026-06-16T14:00:03.396Z",
+    };
+    const receipt: PaymentReceipt = {
+      id: receiptHash.slice(0, 18),
+      queryId: query.id,
+      sourceId: "circle-gateway-nano",
+      creator: "Gateway Lab",
+      wallet: "0x3333333333333333333333333333333333333333",
+      amountAtomicUsdc: 2_400,
+      settlementMode: "x402-verified",
+      payer: "0xb48169146BF764161B6DFee09b58E8dBE846cb28",
+      paymentResource: "/api/sources/circle-gateway-nano",
+      previousHash: ZERO_HASH,
+      receiptHash,
+      createdAt: query.createdAt,
+    };
+
+    const verification = verifyLedgerIntegrity({
+      queries: [query],
+      receipts: [receipt],
+    });
+
+    expect(verification.ok).toBe(true);
+  });
+
+  it("accepts legacy reader payment hashes with undefined transaction", () => {
+    const paymentHash = [
+      "0xb64d83a7a199defd",
+      "1da999f1a5539005",
+      "24e81e6413f7158f",
+      "0ffa521c019660ed",
+    ].join("");
+    const query: QueryRecord = {
+      id: "legacy-paid-query",
+      question: "How does Tollgate prove reader-paid answers on Arc?",
+      answer: "Legacy paid-query proof.",
+      queryHash: "legacy-paid-query-hash",
+      answerHash: "legacy-paid-answer-hash",
+      totalAtomicUsdc: 0,
+      citations: [],
+      receiptHashes: [],
+      readerPayment: {
+        amountAtomicUsdc: 1_000,
+        settlementMode: "x402-verified",
+        payTo: "0x22949cA9A470181c66a034E81a743E2518579E95",
+        payer: "0x9E210daeA5b622D1BBCa3389Ac8C6e83fa960A06",
+        paymentResource: "/api/paid-query",
+        paymentHash,
+      },
+      createdAt: "2026-06-16T14:00:03.396Z",
+    };
+
+    const verification = verifyLedgerIntegrity({
+      queries: [query],
+      receipts: [],
+    });
+
+    expect(verification.ok).toBe(true);
+  });
+
   it("serializes concurrent ledger appends without dropping receipts", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-ledger-"));
     const filePath = path.join(dir, "ledger.json");
@@ -495,9 +572,7 @@ describe("LeptonWeb settlement engine", () => {
       expect(ledger.queries).toHaveLength(queries.length);
       expect(ledger.receipts).toHaveLength(expectedReceiptCount);
       expect(verification.ok).toBe(true);
-      expect(verification.latestHash).toBe(
-        ledger.receipts.at(-1)?.receiptHash,
-      );
+      expect(verification.latestHash).toBe(ledger.receipts.at(-1)?.receiptHash);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
