@@ -388,6 +388,67 @@ h3 {
   color: rgba(239, 233, 214, 0.62);
 }
 
+.stat-link {
+  color: var(--gold-bright);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(194, 151, 63, 0.4);
+  white-space: nowrap;
+}
+
+.stat-link:hover {
+  color: #fdfaf0;
+  border-bottom-color: #fdfaf0;
+}
+
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.cta-primary,
+.cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 50px;
+  padding: 0 28px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    transform 140ms ease-out,
+    background 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.cta-primary {
+  border: 1px solid var(--green-deep);
+  background: var(--green);
+  color: #f6f2e7;
+  box-shadow: 0 10px 26px var(--shadow);
+}
+
+.cta-primary:hover {
+  transform: translateY(-1px);
+  background: var(--green-deep);
+}
+
+.cta-secondary {
+  border: 1px solid var(--line-strong);
+  background: var(--paper-raised);
+  color: var(--ink-1);
+}
+
+.cta-secondary:hover {
+  transform: translateY(-1px);
+  border-color: var(--green);
+  color: var(--green-deep);
+}
+
 .ticker {
   display: flex;
   align-items: center;

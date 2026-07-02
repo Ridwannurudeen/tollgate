@@ -6,6 +6,14 @@ export function formatAtomicUsdc(value: bigint | string): string {
   return formatUsdc(Number(value));
 }
 
+// Creator-facing money: plain dollars, trailing zeros trimmed. 81000 -> "$0.081".
+export function formatDollars(value: number | bigint | string): string {
+  const dollars = Number(value) / 1_000_000;
+  if (!Number.isFinite(dollars) || dollars === 0) return "$0";
+  const trimmed = dollars.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+  return `$${trimmed}`;
+}
+
 export function shortHash(hash: string): string {
   if (hash.length <= 18) return hash;
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;

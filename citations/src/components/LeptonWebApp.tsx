@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { WalletClient } from "viem";
 import {
-  formatUsdc,
+  formatDollars,
   settlementLabel,
   shortHash,
   shortWallet,
@@ -14,7 +14,6 @@ import type {
   CreatorSource,
   Ledger,
   LedgerVerification,
-  PaymentReceipt,
   SettlementResult,
   SettlementStatus,
 } from "@/lib/types";
@@ -29,16 +28,6 @@ type Props = {
   sources: CreatorSource[];
   initialLedger: Ledger;
   initialCreators: CreatorEarnings[];
-};
-
-type SourcePurchaseResponse = {
-  source: CreatorSource;
-  settlementMode: string;
-  payer?: string;
-  transaction?: string | null;
-  receipt?: PaymentReceipt;
-  ledger?: Ledger;
-  error?: string;
 };
 
 type SourceRegistryResponse = {
@@ -90,10 +79,6 @@ function latestHash(ledger: Ledger): string {
   return ledger.receipts.at(-1)?.receiptHash ?? `0x${"0".repeat(64)}`;
 }
 
-function shortAddress(address?: string): string {
-  return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
-}
-
 export function LeptonWebApp({
   sources,
   initialLedger,
@@ -114,9 +99,6 @@ export function LeptonWebApp({
   const [sourceForm, setSourceForm] =
     useState<SourceFormState>(EMPTY_SOURCE_FORM);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
-  const [walletAddress, setWalletAddress] = useState("");
-  const [payingSourceId, setPayingSourceId] = useState("");
-  const [sourcePaymentStatus, setSourcePaymentStatus] = useState("");
   const [sourceRegistrationStatus, setSourceRegistrationStatus] = useState("");
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -140,7 +122,6 @@ export function LeptonWebApp({
   const displayedDecisions = displayedQuery?.sourceDecisions ?? [];
   const displayedSteps = displayedQuery?.agentSteps ?? [];
   const proofOk = verification?.ok ?? settlementStatus?.verification.ok ?? true;
-  const settlementMode = settlementStatus?.mode ?? "verify-only";
 
   async function refreshLedger() {
     const response = await fetch("/api/ledger", { cache: "no-store" });
@@ -238,34 +219,7 @@ export function LeptonWebApp({
     const { connectArcWallet } = await import("@/lib/x402-client");
     const client = await connectArcWallet();
     setWalletClient(client);
-    setWalletAddress(client.account?.address ?? "");
     return client;
-  }
-
-  async function paySource(source: CreatorSource) {
-    setPayingSourceId(source.id);
-    setSourcePaymentStatus(`Preparing x402 payment for ${source.title}...`);
-    try {
-      const client = walletClient ?? (await connectWallet());
-      const { makePaidFetch } = await import("@/lib/x402-client");
-      const paidFetch = makePaidFetch(client);
-      const response = await paidFetch(`/api/sources/${source.id}`);
-      const body = (await response.json()) as SourcePurchaseResponse;
-      if (!response.ok) {
-        throw new Error(body.error ?? `HTTP ${response.status}`);
-      }
-      if (body.ledger) setLedger(body.ledger);
-      await Promise.all([refreshLedger(), refreshSettlementStatus()]);
-      setSourcePaymentStatus(
-        `${source.creator} paid via ${settlementLabel(body.settlementMode)}.`,
-      );
-    } catch (error) {
-      setSourcePaymentStatus(
-        error instanceof Error ? error.message : "Source payment failed.",
-      );
-    } finally {
-      setPayingSourceId("");
-    }
   }
 
   function updateSourceForm(field: keyof SourceFormState, value: string) {
@@ -303,55 +257,33 @@ export function LeptonWebApp({
   return (
     <main className="shell">
       <header className="topbar" aria-label="Product header">
-        <a className="skip-link" href="#ask">
-          Skip to query
+        <a className="skip-link" href="#register">
+          Skip to register
         </a>
         <div className="brand">
           <h1>Tollgate</h1>
-          <p className="eyebrow">Paid knowledge network · live on Arc</p>
+          <p className="eyebrow">Get paid when AI uses your work</p>
         </div>
-        <div className="top-actions">
-          <div className="network-pill" aria-label="Settlement mode">
-            <span className="live-dot" />
-            x402 {settlementMode}
-          </div>
-          <div className="network-pill" aria-label="Forum routing">
-            <span className="live-dot" />
-            Forum{" "}
-            {settlementStatus?.forumRouterConfigured ? "routing" : "ready"}
-          </div>
-          <div className="network-pill" aria-label="Ledger verification">
+        <nav className="top-actions" aria-label="Primary">
+          <span
+            className="network-pill"
+            aria-label={
+              proofOk ? "Payments live and verified" : "Payments need review"
+            }
+          >
             <span className={proofOk ? "live-dot" : "live-dot alert-dot"} />
-            ledger {proofOk ? "verified" : "needs review"}
-          </div>
-          <Link className="wallet-button" href="/core">
-            Overview
-          </Link>
-          <a className="wallet-button" href="/aperture">
-            Photos
+            {proofOk ? "Live" : "Review"}
+          </span>
+          <a className="wallet-button" href="#how">
+            How it works
           </a>
           <Link className="wallet-button" href="/proof">
             Proof
           </Link>
-          <Link className="wallet-button" href="/demo">
-            Demo
-          </Link>
-          <button
-            className="wallet-button primary"
-            type="button"
-            onClick={() => {
-              connectWallet().catch((error: unknown) => {
-                setSourcePaymentStatus(
-                  error instanceof Error
-                    ? error.message
-                    : "Wallet connection failed.",
-                );
-              });
-            }}
-          >
-            {walletAddress ? shortAddress(walletAddress) : "Connect wallet"}
-          </button>
-        </div>
+          <a className="wallet-button primary" href="#register">
+            Register your work
+          </a>
+        </nav>
       </header>
 
       <section className="hero" aria-labelledby="hero-title">
@@ -364,13 +296,24 @@ export function LeptonWebApp({
             instantly, with a receipt that proves it. No subscriptions, no
             middlemen.
           </p>
+          <div className="hero-cta">
+            <a className="cta-primary" href="#register">
+              Register your work
+            </a>
+            <a className="cta-secondary" href="#how">
+              See how it works
+            </a>
+          </div>
         </div>
         <div className="signature-stat" aria-live="polite">
           <span className="stat-label">citation payments made</span>
           <strong>{stats.receiptCount}</strong>
           <span className="stat-sub">
-            to {stats.creatorCount} creators ·{" "}
-            {Number(formatUsdc(stats.totalPaid))} USDC recorded in receipts
+            to {stats.creatorCount} creators · {formatDollars(stats.totalPaid)}{" "}
+            paid ·{" "}
+            <Link className="stat-link" href="/proof">
+              verifiable on-chain →
+            </Link>
           </span>
         </div>
       </section>
@@ -381,16 +324,14 @@ export function LeptonWebApp({
             {[...ledger.receipts.slice(-8), ...ledger.receipts.slice(-8)].map(
               (receipt, index) => (
                 <span key={`${receipt.receiptHash}-${index}`}>
-                  {receipt.creator} +{formatUsdc(receipt.amountAtomicUsdc)} USDC
-                  / {shortHash(receipt.receiptHash)}
+                  {receipt.creator} +{formatDollars(receipt.amountAtomicUsdc)}
                 </span>
               ),
             )}
             {ledger.receipts.length === 0 && (
               <>
-                <span>Awaiting first paid citation receipt</span>
-                <span>Registered sources ready for attribution</span>
-                <span>Gateway/x402 adapter boundary prepared</span>
+                <span>Awaiting the first paid citation</span>
+                <span>Registered works are ready to earn</span>
               </>
             )}
           </div>
@@ -410,7 +351,7 @@ export function LeptonWebApp({
         </button>
       </section>
 
-      <section className="how-it-works" aria-label="How it works">
+      <section className="how-it-works" id="how" aria-label="How it works">
         <ol className="step-grid">
           <li className="step-card">
             <span className="step-num">1</span>
@@ -482,13 +423,9 @@ export function LeptonWebApp({
           </button>
           <p className="status-line" aria-live="polite">
             {status ||
-              `Paid answers cost ${formatUsdc(
+              `A paid answer costs ${formatDollars(
                 settlementStatus?.paidQueryPriceAtomicUsdc ?? 10_000,
-              )} USDC and append receipt-linked citations.`}
-          </p>
-          <p className="status-line source-status" aria-live="polite">
-            {sourcePaymentStatus ||
-              "Use a priced source row below to sign one x402 source payment."}
+              )} and pays every creator it cites.`}
           </p>
         </div>
 
@@ -521,7 +458,9 @@ export function LeptonWebApp({
                 </div>
                 <div>
                   <span>total paid</span>
-                  <strong>{formatUsdc(displayedQuery.totalAtomicUsdc)}</strong>
+                  <strong>
+                    {formatDollars(displayedQuery.totalAtomicUsdc)}
+                  </strong>
                 </div>
               </div>
               {displayedQuery.readerPayment && (
@@ -545,10 +484,9 @@ export function LeptonWebApp({
                   <div>
                     <span>amount</span>
                     <strong>
-                      {formatUsdc(
+                      {formatDollars(
                         displayedQuery.readerPayment.amountAtomicUsdc,
-                      )}{" "}
-                      USDC
+                      )}
                     </strong>
                   </div>
                   <div>
@@ -599,19 +537,19 @@ export function LeptonWebApp({
                     <div>
                       <span>source budget</span>
                       <strong>
-                        {formatUsdc(displayedBudget.sourceBudgetAtomicUsdc)}
+                        {formatDollars(displayedBudget.sourceBudgetAtomicUsdc)}
                       </strong>
                     </div>
                     <div>
                       <span>agent spent</span>
                       <strong>
-                        {formatUsdc(displayedBudget.spentAtomicUsdc)}
+                        {formatDollars(displayedBudget.spentAtomicUsdc)}
                       </strong>
                     </div>
                     <div>
                       <span>remaining</span>
                       <strong>
-                        {formatUsdc(displayedBudget.remainingAtomicUsdc)}
+                        {formatDollars(displayedBudget.remainingAtomicUsdc)}
                       </strong>
                     </div>
                     <div>
@@ -636,7 +574,7 @@ export function LeptonWebApp({
                           <strong>{decision.title}</strong>
                           <span>
                             {decision.creator} / score {decision.score} /{" "}
-                            {formatUsdc(decision.priceAtomicUsdc)} USDC
+                            {formatDollars(decision.priceAtomicUsdc)}
                           </span>
                         </div>
                         <small>{decision.reason}</small>
@@ -652,7 +590,7 @@ export function LeptonWebApp({
                       <p>{citation.title}</p>
                       <span>
                         {citation.creator} /{" "}
-                        {formatUsdc(citation.amountAtomicUsdc)} USDC
+                        {formatDollars(citation.amountAtomicUsdc)}
                       </span>
                     </div>
                     <small>{citation.reason}</small>
@@ -675,7 +613,7 @@ export function LeptonWebApp({
       <section className="metrics-band" aria-label="Ledger metrics">
         <Metric label="queries" value={stats.queryCount.toString()} />
         <Metric label="receipts" value={stats.receiptCount.toString()} />
-        <Metric label="reader paid" value={formatUsdc(stats.readerPaid)} />
+        <Metric label="reader paid" value={formatDollars(stats.readerPaid)} />
         <Metric
           label="earning creators"
           value={stats.creatorCount.toString()}
@@ -704,7 +642,7 @@ export function LeptonWebApp({
                   </span>
                 </div>
                 <div className="numeric-cell">
-                  <strong>{formatUsdc(creator.earnedAtomicUsdc)}</strong>
+                  <strong>{formatDollars(creator.earnedAtomicUsdc)}</strong>
                   <Link
                     className="receipt-link"
                     href={`/creators/${creator.wallet}`}
@@ -722,7 +660,7 @@ export function LeptonWebApp({
           )}
         </div>
 
-        <div className="source-registry">
+        <div className="source-registry" id="register">
           <div className="panel-heading">
             <p className="eyebrow">get listed</p>
             <h3>Register your work</h3>
@@ -774,8 +712,11 @@ export function LeptonWebApp({
                   }
                 />
                 <small className="field-hint">
-                  In millionths of a dollar — e.g. 1500 = $0.0015 each time
-                  you&apos;re cited.
+                  {Number(sourceForm.priceAtomicUsdc) > 0
+                    ? `You'll earn ${formatDollars(
+                        Number(sourceForm.priceAtomicUsdc),
+                      )} each time the AI cites your work.`
+                    : "How much you earn each time the AI cites your work."}
                 </small>
               </div>
             </div>
@@ -789,7 +730,8 @@ export function LeptonWebApp({
               }
             />
             <small className="field-hint">
-              Your Arc address — where your USDC earnings are paid out.
+              Where your earnings are paid. Paste any Ethereum-style wallet
+              address (it starts with 0x).
             </small>
             <label htmlFor="source-url">Link to your work</label>
             <input
@@ -827,37 +769,6 @@ export function LeptonWebApp({
                 "Add one link to your work — you'll be paid whenever the AI cites it."}
             </p>
           </form>
-          <p className="source-list-label">
-            Priced sources · {registrySources.length} live · scroll to browse
-          </p>
-          <div className="source-list">
-            {registrySources.map((source) => (
-              <article key={source.id} className="source-card">
-                <div>
-                  <p>{source.title}</p>
-                  <span>
-                    {source.creator} / {`/api/sources/${source.id}`}
-                  </span>
-                </div>
-                <div className="source-action">
-                  <strong>{formatUsdc(source.priceAtomicUsdc)} USDC</strong>
-                  <Link className="receipt-link" href={`/sources/${source.id}`}>
-                    Evidence page
-                  </Link>
-                  <button
-                    type="button"
-                    className="source-pay-button"
-                    onClick={() => {
-                      paySource(source);
-                    }}
-                    disabled={payingSourceId === source.id}
-                  >
-                    {payingSourceId === source.id ? "paying..." : "Pay source"}
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -881,7 +792,7 @@ export function LeptonWebApp({
                 </span>
               </div>
               <div className="numeric-cell">
-                <strong>{formatUsdc(receipt.amountAtomicUsdc)}</strong>
+                <strong>{formatDollars(receipt.amountAtomicUsdc)}</strong>
                 <a
                   className="receipt-link"
                   href={`/receipts/${receipt.receiptHash}`}

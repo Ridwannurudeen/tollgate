@@ -2,7 +2,7 @@ import Link from "next/link";
 import { readFeeRouterClaimable } from "@/lib/fee-router";
 import {
   arcscanTxUrl,
-  formatUsdc,
+  formatDollars,
   settlementLabel,
   shortHash,
   shortWallet,
@@ -24,7 +24,7 @@ export default async function CreatorPage({ params }: Props) {
       <main className="shell receipt-page">
         <header className="receipt-header">
           <div>
-            <p className="eyebrow">creator evidence</p>
+            <p className="eyebrow">your earnings</p>
             <h1>{shortWallet(wallet)}</h1>
           </div>
           <Link className="wallet-button receipt-back" href="/">
@@ -34,9 +34,8 @@ export default async function CreatorPage({ params }: Props) {
 
         <section className="receipt-proof">
           <div className="signature-stat proof-stat">
-            <span className="stat-label">earned from citations</span>
-            <strong>{formatUsdc(0)}</strong>
-            <span className="stat-unit">USDC</span>
+            <span className="stat-label">earned so far</span>
+            <strong>{formatDollars(0)}</strong>
           </div>
           <div className="proof-copy">
             <h2>No earnings yet</h2>
@@ -63,7 +62,7 @@ export default async function CreatorPage({ params }: Props) {
     <main className="shell receipt-page">
       <header className="receipt-header">
         <div>
-          <p className="eyebrow">creator evidence</p>
+          <p className="eyebrow">your earnings</p>
           <h1>{creator.creator}</h1>
         </div>
         <Link className="wallet-button receipt-back" href="/">
@@ -73,17 +72,15 @@ export default async function CreatorPage({ params }: Props) {
 
       <section className="receipt-proof">
         <div className="signature-stat proof-stat">
-          <span className="stat-label">earned from citations</span>
-          <strong>{formatUsdc(creator.earnedAtomicUsdc)}</strong>
-          <span className="stat-unit">USDC</span>
+          <span className="stat-label">earned so far</span>
+          <strong>{formatDollars(creator.earnedAtomicUsdc)}</strong>
         </div>
         <div className="proof-copy">
           <p className="eyebrow">{creator.handle}</p>
           <h2>{shortWallet(creator.wallet)}</h2>
           <p className="hero-text">
-            This public profile is generated from the append-only Tollgate
-            ledger. Every amount below links back to the receipt and answer that
-            caused the creator to earn.
+            This is your public earnings page. Every amount links to the payment
+            that created it, and you can withdraw any time.
           </p>
         </div>
       </section>
@@ -102,11 +99,9 @@ export default async function CreatorPage({ params }: Props) {
           <strong>{creator.queries.length}</strong>
         </div>
         <div className="metric">
-          <span>claimable</span>
+          <span>available to withdraw</span>
           <strong>
-            {claimable === null
-              ? "RPC unavailable"
-              : `${formatUsdc(Number(claimable))} USDC`}
+            {claimable === null ? "—" : formatDollars(Number(claimable))}
           </strong>
         </div>
         <div className="metric wide">
@@ -120,32 +115,20 @@ export default async function CreatorPage({ params }: Props) {
       <section className="evidence-grid">
         <div className="evidence-row">
           <span>total earned</span>
-          <strong>{formatUsdc(creator.earnedAtomicUsdc)} USDC</strong>
+          <strong>{formatDollars(creator.earnedAtomicUsdc)}</strong>
         </div>
         <div className="evidence-row">
-          <span>creator wallet</span>
+          <span>available to withdraw</span>
+          <strong>
+            {claimable === null ? "—" : formatDollars(Number(claimable))}
+          </strong>
+        </div>
+        <div className="evidence-row">
+          <span>payout wallet</span>
           <strong>{creator.wallet}</strong>
         </div>
         <div className="evidence-row">
-          <span>FeeRouter claimable</span>
-          <strong>
-            {claimable === null
-              ? "RPC unavailable"
-              : `${formatUsdc(Number(claimable))} USDC`}
-          </strong>
-        </div>
-        <div className="evidence-row">
-          <span>creator claim</span>
-          <strong>
-            {claimable === null
-              ? "RPC unavailable"
-              : claimable > 0n
-                ? "claimable on FeeRouter"
-                : "nothing claimable"}
-          </strong>
-        </div>
-        <div className="evidence-row">
-          <span>latest route tx</span>
+          <span>latest payment</span>
           <strong>
             {latestRouteTx ? (
               <a
@@ -174,8 +157,8 @@ export default async function CreatorPage({ params }: Props) {
               <div>
                 <p>{source.title}</p>
                 <span>
-                  {source.citationCount} citations /{" "}
-                  {formatUsdc(source.earnedAtomicUsdc)} USDC
+                  {source.citationCount} citations ·{" "}
+                  {formatDollars(source.earnedAtomicUsdc)}
                 </span>
               </div>
               <Link
@@ -201,13 +184,9 @@ export default async function CreatorPage({ params }: Props) {
               <span>
                 {settlementLabel(receipt.settlementMode)} / {receipt.createdAt}
               </span>
-              <span>
-                split {receipt.feeRouterSplitId ?? "none"} / prev{" "}
-                {shortHash(receipt.previousHash)}
-              </span>
             </div>
             <div className="numeric-cell">
-              <strong>{formatUsdc(receipt.amountAtomicUsdc)}</strong>
+              <strong>{formatDollars(receipt.amountAtomicUsdc)}</strong>
               <Link
                 className="receipt-link"
                 href={`/receipts/${receipt.receiptHash}`}
