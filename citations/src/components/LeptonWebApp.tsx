@@ -380,6 +380,152 @@ export function LeptonWebApp({
         </ol>
       </section>
 
+      <section className="lower-grid">
+        <div className="creator-table">
+          <div className="panel-heading">
+            <p className="eyebrow">creator earnings</p>
+            <h3>Who got paid</h3>
+          </div>
+          {creators.length > 0 ? (
+            creators.map((creator) => (
+              <div className="creator-row" key={creator.wallet}>
+                <div>
+                  <strong>{creator.creator}</strong>
+                  <span>
+                    {creator.handle} / {shortWallet(creator.wallet)}
+                  </span>
+                </div>
+                <div className="numeric-cell">
+                  <strong>{formatDollars(creator.earnedAtomicUsdc)}</strong>
+                  <Link
+                    className="receipt-link"
+                    href={`/creators/${creator.wallet}`}
+                  >
+                    {creator.citationCount} citations
+                  </Link>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state compact">
+              <strong>No creators paid yet.</strong>
+              <span>Run the first query to populate the earnings board.</span>
+            </div>
+          )}
+        </div>
+
+        <div className="source-registry" id="register">
+          <div className="panel-heading">
+            <p className="eyebrow">get listed</p>
+            <h3>Register your work</h3>
+          </div>
+          <form className="register-source-form" onSubmit={registerSource}>
+            <div className="form-grid">
+              <div>
+                <label htmlFor="source-title">Title of your work</label>
+                <input
+                  id="source-title"
+                  placeholder="Agent Payments, Explained"
+                  value={sourceForm.title}
+                  onChange={(event) =>
+                    updateSourceForm("title", event.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="source-creator">Your name</label>
+                <input
+                  id="source-creator"
+                  placeholder="Ada Rivera"
+                  value={sourceForm.creator}
+                  onChange={(event) =>
+                    updateSourceForm("creator", event.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="source-handle">Handle</label>
+                <input
+                  id="source-handle"
+                  placeholder="@adawrites"
+                  value={sourceForm.handle}
+                  onChange={(event) =>
+                    updateSourceForm("handle", event.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="source-price">Price per citation</label>
+                <input
+                  id="source-price"
+                  inputMode="numeric"
+                  placeholder="1500"
+                  value={sourceForm.priceAtomicUsdc}
+                  onChange={(event) =>
+                    updateSourceForm("priceAtomicUsdc", event.target.value)
+                  }
+                />
+                <small className="field-hint">
+                  {Number(sourceForm.priceAtomicUsdc) > 0
+                    ? `You'll earn ${formatDollars(
+                        Number(sourceForm.priceAtomicUsdc),
+                      )} each time the AI cites your work.`
+                    : "How much you earn each time the AI cites your work."}
+                </small>
+              </div>
+            </div>
+            <label htmlFor="source-wallet">Payout wallet</label>
+            <input
+              id="source-wallet"
+              placeholder="0x…"
+              value={sourceForm.wallet}
+              onChange={(event) =>
+                updateSourceForm("wallet", event.target.value)
+              }
+            />
+            <small className="field-hint">
+              Where your earnings are paid. Paste any Ethereum-style wallet
+              address (it starts with 0x).
+            </small>
+            <label htmlFor="source-url">Link to your work</label>
+            <input
+              id="source-url"
+              placeholder="https://yourblog.com/post"
+              value={sourceForm.url}
+              onChange={(event) => updateSourceForm("url", event.target.value)}
+            />
+            <label htmlFor="source-summary">What it covers</label>
+            <textarea
+              id="source-summary"
+              placeholder="One line on what it's about — helps the AI know when to cite you."
+              value={sourceForm.summary}
+              rows={3}
+              onChange={(event) =>
+                updateSourceForm("summary", event.target.value)
+              }
+            />
+            <label htmlFor="source-tags">Topics</label>
+            <input
+              id="source-tags"
+              placeholder="agents, payments, x402"
+              value={sourceForm.tags}
+              onChange={(event) => updateSourceForm("tags", event.target.value)}
+            />
+            <button
+              type="submit"
+              className="source-register-button"
+              disabled={isRegisteringSource}
+            >
+              {isRegisteringSource ? "registering…" : "Register my work"}
+            </button>
+            <p className="status-line source-status" aria-live="polite">
+              {sourceRegistrationStatus ||
+                "Add one link to your work — you'll be paid whenever the AI cites it."}
+            </p>
+          </form>
+        </div>
+      </section>
+
       <section className="workbench" id="ask">
         <div className="ask-panel">
           <div className="panel-heading">
@@ -624,152 +770,6 @@ export function LeptonWebApp({
           value={shortHash(stats.latestHash)}
           wide
         />
-      </section>
-
-      <section className="lower-grid">
-        <div className="creator-table">
-          <div className="panel-heading">
-            <p className="eyebrow">creator earnings</p>
-            <h3>Who got paid</h3>
-          </div>
-          {creators.length > 0 ? (
-            creators.map((creator) => (
-              <div className="creator-row" key={creator.wallet}>
-                <div>
-                  <strong>{creator.creator}</strong>
-                  <span>
-                    {creator.handle} / {shortWallet(creator.wallet)}
-                  </span>
-                </div>
-                <div className="numeric-cell">
-                  <strong>{formatDollars(creator.earnedAtomicUsdc)}</strong>
-                  <Link
-                    className="receipt-link"
-                    href={`/creators/${creator.wallet}`}
-                  >
-                    {creator.citationCount} citations
-                  </Link>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="empty-state compact">
-              <strong>No creators paid yet.</strong>
-              <span>Run the first query to populate the earnings board.</span>
-            </div>
-          )}
-        </div>
-
-        <div className="source-registry" id="register">
-          <div className="panel-heading">
-            <p className="eyebrow">get listed</p>
-            <h3>Register your work</h3>
-          </div>
-          <form className="register-source-form" onSubmit={registerSource}>
-            <div className="form-grid">
-              <div>
-                <label htmlFor="source-title">Title of your work</label>
-                <input
-                  id="source-title"
-                  placeholder="Agent Payments, Explained"
-                  value={sourceForm.title}
-                  onChange={(event) =>
-                    updateSourceForm("title", event.target.value)
-                  }
-                />
-              </div>
-              <div>
-                <label htmlFor="source-creator">Your name</label>
-                <input
-                  id="source-creator"
-                  placeholder="Ada Rivera"
-                  value={sourceForm.creator}
-                  onChange={(event) =>
-                    updateSourceForm("creator", event.target.value)
-                  }
-                />
-              </div>
-              <div>
-                <label htmlFor="source-handle">Handle</label>
-                <input
-                  id="source-handle"
-                  placeholder="@adawrites"
-                  value={sourceForm.handle}
-                  onChange={(event) =>
-                    updateSourceForm("handle", event.target.value)
-                  }
-                />
-              </div>
-              <div>
-                <label htmlFor="source-price">Price per citation</label>
-                <input
-                  id="source-price"
-                  inputMode="numeric"
-                  placeholder="1500"
-                  value={sourceForm.priceAtomicUsdc}
-                  onChange={(event) =>
-                    updateSourceForm("priceAtomicUsdc", event.target.value)
-                  }
-                />
-                <small className="field-hint">
-                  {Number(sourceForm.priceAtomicUsdc) > 0
-                    ? `You'll earn ${formatDollars(
-                        Number(sourceForm.priceAtomicUsdc),
-                      )} each time the AI cites your work.`
-                    : "How much you earn each time the AI cites your work."}
-                </small>
-              </div>
-            </div>
-            <label htmlFor="source-wallet">Payout wallet</label>
-            <input
-              id="source-wallet"
-              placeholder="0x…"
-              value={sourceForm.wallet}
-              onChange={(event) =>
-                updateSourceForm("wallet", event.target.value)
-              }
-            />
-            <small className="field-hint">
-              Where your earnings are paid. Paste any Ethereum-style wallet
-              address (it starts with 0x).
-            </small>
-            <label htmlFor="source-url">Link to your work</label>
-            <input
-              id="source-url"
-              placeholder="https://yourblog.com/post"
-              value={sourceForm.url}
-              onChange={(event) => updateSourceForm("url", event.target.value)}
-            />
-            <label htmlFor="source-summary">What it covers</label>
-            <textarea
-              id="source-summary"
-              placeholder="One line on what it's about — helps the AI know when to cite you."
-              value={sourceForm.summary}
-              rows={3}
-              onChange={(event) =>
-                updateSourceForm("summary", event.target.value)
-              }
-            />
-            <label htmlFor="source-tags">Topics</label>
-            <input
-              id="source-tags"
-              placeholder="agents, payments, x402"
-              value={sourceForm.tags}
-              onChange={(event) => updateSourceForm("tags", event.target.value)}
-            />
-            <button
-              type="submit"
-              className="source-register-button"
-              disabled={isRegisteringSource}
-            >
-              {isRegisteringSource ? "registering…" : "Register my work"}
-            </button>
-            <p className="status-line source-status" aria-live="polite">
-              {sourceRegistrationStatus ||
-                "Add one link to your work — you'll be paid whenever the AI cites it."}
-            </p>
-          </form>
-        </div>
       </section>
 
       <section className="receipt-ledger">

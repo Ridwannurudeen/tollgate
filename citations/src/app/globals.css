@@ -971,6 +971,7 @@ textarea:focus {
   display: grid;
   grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1.15fr);
   gap: 18px;
+  margin-bottom: 28px;
 }
 
 .integration-grid {
