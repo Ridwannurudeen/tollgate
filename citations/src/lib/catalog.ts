@@ -290,16 +290,33 @@ async function ownershipProofFromInput(
     throw new SourceRegistryError("ownershipTimestamp is required.");
   }
 
-  const message = buildSourceOwnershipMessage({
-    sourceUrl: source.url,
-    wallet: source.wallet,
-    timestamp: timestamp.trim(),
-  });
-  const valid = await verifyMessage({
-    address: source.wallet,
-    message,
-    signature: signature as `0x${string}`,
-  });
+  // URL normalization (new URL().toString()) appends a trailing slash to
+  // bare-domain URLs, so a creator who signs the URL they submitted would
+  // otherwise fail verification. Accept a signature over either the normalized
+  // stored URL or the raw submitted URL.
+  const rawUrl =
+    typeof input.url === "string"
+      ? input.url.replace(/\s+/g, " ").trim()
+      : source.url;
+  const candidateUrls = Array.from(new Set([source.url, rawUrl]));
+  let valid = false;
+  for (const sourceUrl of candidateUrls) {
+    const message = buildSourceOwnershipMessage({
+      sourceUrl,
+      wallet: source.wallet,
+      timestamp: timestamp.trim(),
+    });
+    if (
+      await verifyMessage({
+        address: source.wallet,
+        message,
+        signature: signature as `0x${string}`,
+      })
+    ) {
+      valid = true;
+      break;
+    }
+  }
   if (!valid) {
     throw new SourceRegistryError(
       "ownershipSignature did not recover the source wallet.",
