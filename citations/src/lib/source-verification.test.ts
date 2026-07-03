@@ -28,11 +28,13 @@ describe("wallet-free source verification", () => {
     const token = verificationToken(source.id);
 
     try {
-      const proof = await verifyMetaTagSource(source, async () => {
-        return new Response(
-          `<html><head><meta name="tollgate-verification" content="${token}"></head></html>`,
-          { status: 200 },
-        );
+      const proof = await verifyMetaTagSource(source, {
+        fetchImpl: async () =>
+          new Response(
+            `<html><head><meta name="tollgate-verification" content="${token}"></head></html>`,
+            { status: 200 },
+          ),
+        resolveHost: async () => ["93.184.216.34"],
       });
 
       expect(proof.method).toBe("meta-tag");

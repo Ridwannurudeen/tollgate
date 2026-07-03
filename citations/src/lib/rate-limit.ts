@@ -9,9 +9,12 @@ const REGISTRATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 const REGISTRATION_LIMIT = 20;
 const CLAIM_WINDOW_MS = 60 * 60 * 1000;
 const CLAIM_LIMIT = 3;
+const RSS_IMPORT_WINDOW_MS = 60 * 60 * 1000;
+const RSS_IMPORT_LIMIT = 10;
 const buckets = new Map<string, RateLimitBucket>();
 const registrationBuckets = new Map<string, RateLimitBucket>();
 const claimBuckets = new Map<string, RateLimitBucket>();
+const rssImportBuckets = new Map<string, RateLimitBucket>();
 
 export function assertQueryRateLimit(key: string, now = Date.now()): void {
   const bucketKey = key || "anonymous";
@@ -69,6 +72,24 @@ export function assertClaimRateLimit(key: string, now = Date.now()): void {
   }
   if (current.count >= CLAIM_LIMIT) {
     throw new Error("Too many claim attempts. Wait an hour and retry.");
+  }
+  current.count += 1;
+}
+
+export function assertRssImportRateLimit(key: string, now = Date.now()): void {
+  const bucketKey = key || "anonymous";
+  for (const [existingKey, bucket] of rssImportBuckets) {
+    if (now - bucket.windowStart >= RSS_IMPORT_WINDOW_MS) {
+      rssImportBuckets.delete(existingKey);
+    }
+  }
+  const current = rssImportBuckets.get(bucketKey);
+  if (!current || now - current.windowStart >= RSS_IMPORT_WINDOW_MS) {
+    rssImportBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= RSS_IMPORT_LIMIT) {
+    throw new Error("Too many feed imports. Wait an hour and retry.");
   }
   current.count += 1;
 }

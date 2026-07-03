@@ -15,16 +15,26 @@ function flagValue(name) {
 }
 
 function isUnsafeHost(hostname) {
-  const host = hostname.toLowerCase();
-  return (
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host === "0.0.0.0" ||
+  const host = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "0.0.0.0") return true;
+  if (
     host.startsWith("127.") ||
     host.startsWith("10.") ||
     host.startsWith("192.168.") ||
+    host.startsWith("169.254.") ||
     /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
-  );
+  ) {
+    return true;
+  }
+  if (host.includes(":")) {
+    if (host === "::" || host === "::1") return true;
+    if (/^fe[89ab]/.test(host)) return true;
+    if (host.startsWith("fc") || host.startsWith("fd")) return true;
+    const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isUnsafeHost(mapped[1]);
+  }
+  return false;
 }
 
 function assertFetchUrl(url, allowLocal) {

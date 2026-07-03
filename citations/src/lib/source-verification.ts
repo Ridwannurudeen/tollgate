@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { updateSourceVerification } from "./catalog";
 import { sha256Hex } from "./hash";
+import { safeFetch, type SafeFetchOptions } from "./safe-fetch";
 import type { CreatorSource, SourceOwnershipProof } from "./types";
 
 const VERIFY_TIMEOUT_MS = 5_000;
@@ -16,20 +17,10 @@ export function verificationToken(sourceId: string): string {
   return createHmac("sha256", verifySecret()).update(sourceId).digest("hex");
 }
 
-function isUnsafeFetchHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return (
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host === "0.0.0.0" ||
-    host.startsWith("127.") ||
-    host.startsWith("10.") ||
-    host.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
-  );
-}
-
-function proof(method: "meta-tag" | "dns-txt", token: string): SourceOwnershipProof {
+function proof(
+  method: "meta-tag" | "dns-txt",
+  token: string,
+): SourceOwnershipProof {
   return {
     method,
     signatureHash: sha256Hex(token),
@@ -57,17 +48,18 @@ function hasVerificationMetaTag(html: string, token: string): boolean {
 
 export async function verifyMetaTagSource(
   source: CreatorSource,
-  fetchImpl: typeof fetch = fetch,
+  fetchOptions: SafeFetchOptions = {},
 ): Promise<SourceOwnershipProof> {
   const token = verificationToken(source.id);
   const url = new URL(source.url);
-  if (isUnsafeFetchHost(url.hostname)) {
-    throw new Error("source host is not allowed for verification fetch.");
-  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS);
   try {
-    const response = await fetchImpl(url, { signal: controller.signal });
+    const response = await safeFetch(
+      url,
+      { signal: controller.signal },
+      fetchOptions,
+    );
     if (!response.ok) {
       throw new Error(`verification fetch failed: HTTP ${response.status}`);
     }

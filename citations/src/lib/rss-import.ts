@@ -1,3 +1,4 @@
+import { safeFetch, type SafeFetchOptions } from "./safe-fetch";
 import { parseCreatorFeed } from "./sources/rsshub";
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
@@ -34,31 +35,22 @@ function alternateFeedUrl(html: string, baseUrl: URL): URL | null {
   return null;
 }
 
-function assertSafeFetchUrl(url: URL): void {
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("feed URL must use http or https.");
-  }
-  const host = url.hostname.toLowerCase();
-  const unsafe =
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host === "0.0.0.0" ||
-    host.startsWith("127.") ||
-    host.startsWith("10.") ||
-    host.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
-  if (unsafe) throw new Error("feed host is not allowed.");
-}
-
-async function fetchText(url: URL, accept: string): Promise<{
+async function fetchText(
+  url: URL,
+  accept: string,
+  fetchOptions: SafeFetchOptions,
+): Promise<{
   text: string;
   contentType: string;
 }> {
-  assertSafeFetchUrl(url);
-  const response = await fetch(url, {
-    headers: { accept },
-    signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-  });
+  const response = await safeFetch(
+    url,
+    {
+      headers: { accept },
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+    },
+    fetchOptions,
+  );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return {
     text: await response.text(),
@@ -85,7 +77,10 @@ function parsePosts(xml: string, feedUrl: URL): RssImportPost[] {
     .slice(0, MAX_IMPORT_POSTS);
 }
 
-export async function discoverRssPosts(inputUrl: string): Promise<{
+export async function discoverRssPosts(
+  inputUrl: string,
+  fetchOptions: SafeFetchOptions = {},
+): Promise<{
   feedUrl: string;
   posts: RssImportPost[];
 }> {
@@ -93,6 +88,7 @@ export async function discoverRssPosts(inputUrl: string): Promise<{
   const first = await fetchText(
     url,
     "application/rss+xml, application/atom+xml, text/xml, text/html",
+    fetchOptions,
   );
   if (/(rss|atom|xml)/i.test(first.contentType)) {
     return { feedUrl: url.toString(), posts: parsePosts(first.text, url) };
@@ -107,6 +103,7 @@ export async function discoverRssPosts(inputUrl: string): Promise<{
       const feed = await fetchText(
         candidate,
         "application/rss+xml, application/atom+xml, text/xml",
+        fetchOptions,
       );
       const posts = parsePosts(feed.text, candidate);
       if (posts.length > 0) {

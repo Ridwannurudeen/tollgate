@@ -265,7 +265,9 @@ export function LeptonWebApp({
     return {
       ...baseForm,
       ...overrides,
-      ...(sourceForm.notifyEmail ? { notifyEmail: sourceForm.notifyEmail } : {}),
+      ...(sourceForm.notifyEmail
+        ? { notifyEmail: sourceForm.notifyEmail }
+        : {}),
       ...(contributors.length > 0 ? { contributors } : {}),
     };
   }
@@ -328,37 +330,47 @@ export function LeptonWebApp({
     const selected = rssPosts.filter((post) => selectedRssUrls.has(post.url));
     setIsRegisteringSource(true);
     setSourceRegistrationStatus("Registering selected feed posts...");
+    let registeredCount = 0;
+    let firstError: string | null = null;
     try {
-      const results = await Promise.all(
-        selected.map((post) =>
-          fetch("/api/sources", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(
-              sourceRegistrationPayload({
-                title: post.title,
-                url: post.url,
-                summary: post.summary,
-                tags: [...post.tags, sourceForm.tags].join(","),
-                origin: "rss-import",
-              }),
-            ),
-          }),
-        ),
-      );
-      const failed = results.find((response) => !response.ok);
-      if (failed) {
-        const body = (await failed.json()) as { error?: string };
-        throw new Error(body.error ?? `HTTP ${failed.status}`);
+      // Sequential on purpose: each success is preserved, and a failure
+      // (duplicate, daily cap) is reported honestly as a partial result.
+      for (const post of selected) {
+        const response = await fetch("/api/sources", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            sourceRegistrationPayload({
+              title: post.title,
+              url: post.url,
+              summary: post.summary,
+              tags: [...post.tags, sourceForm.tags].join(","),
+              origin: "rss-import",
+            }),
+          ),
+        });
+        const body = (await response.json()) as SourceRegistryResponse;
+        if (!response.ok) {
+          firstError = body.error ?? `HTTP ${response.status}`;
+          break;
+        }
+        registeredCount += 1;
+        if (body.sources) setRegistrySources(body.sources);
       }
-      const latest = (await results.at(-1)?.json()) as
-        | SourceRegistryResponse
-        | undefined;
-      if (latest?.sources) setRegistrySources(latest.sources);
-      setSourceRegistrationStatus(`Registered ${selected.length} feed post(s).`);
+      setSourceRegistrationStatus(
+        firstError
+          ? `Registered ${registeredCount} of ${selected.length} feed post(s), then stopped: ${firstError}`
+          : `Registered ${registeredCount} feed post(s).`,
+      );
     } catch (error) {
       setSourceRegistrationStatus(
-        error instanceof Error ? error.message : "Feed import failed.",
+        registeredCount > 0
+          ? `Registered ${registeredCount} of ${selected.length} feed post(s), then failed: ${
+              error instanceof Error ? error.message : "Feed import failed."
+            }`
+          : error instanceof Error
+            ? error.message
+            : "Feed import failed.",
       );
     } finally {
       setIsRegisteringSource(false);

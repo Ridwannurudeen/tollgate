@@ -3,6 +3,7 @@ import path from "node:path";
 import { verifyMessage } from "viem";
 import { w3sMintWallet, type MintedWallet } from "./circle-w3s";
 import { sha256Hex } from "./hash";
+import { safeFetch } from "./safe-fetch";
 import { readRsshubSources } from "./sources/rsshub";
 import type {
   CreatorSource,
@@ -118,7 +119,9 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
 const SOURCE_REGISTRY_PATH = path.join(process.cwd(), "data", "sources.json");
 const WALLET_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const REGISTRATION_FETCH_TIMEOUT_MS = 5_000;
-const DEFAULT_REGISTRATION_CAP_PER_WALLET_PER_DAY = 5;
+// High enough for one full RSS import (20 posts) plus a few singles;
+// override with TOLLGATE_REGISTRATION_CAP_PER_WALLET_PER_DAY.
+const DEFAULT_REGISTRATION_CAP_PER_WALLET_PER_DAY = 25;
 const W3S_BLOCKCHAIN = "ARC-TESTNET";
 
 function cleanText(value: unknown, field: string, maxLength: number): string {
@@ -543,36 +546,18 @@ function assertNoDuplicateSource(
   }
 }
 
-function isUnsafeFetchHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return (
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host === "0.0.0.0" ||
-    host.startsWith("127.") ||
-    host.startsWith("10.") ||
-    host.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
-  );
-}
-
 async function registrationContentEvidence(
   source: CreatorSource,
 ): Promise<Pick<CreatorSource, "contentHash" | "contentFetchedAt">> {
   if (process.env.TOLLGATE_REGISTRATION_FETCH !== "1") return {};
   const url = new URL(source.url);
-  if (isUnsafeFetchHost(url.hostname)) {
-    throw new SourceRegistryError(
-      "url host is not allowed for content checks.",
-    );
-  }
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
     REGISTRATION_FETCH_TIMEOUT_MS,
   );
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await safeFetch(url, { signal: controller.signal });
     if (!response.ok) {
       throw new SourceRegistryError(
         `url content check failed: HTTP ${response.status}.`,
