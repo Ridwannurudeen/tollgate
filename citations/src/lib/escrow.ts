@@ -1,4 +1,7 @@
-import { routeEscrowReleasePayment, type FeeRouterRouteOptions } from "./fee-router";
+import {
+  routeEscrowReleasePayment,
+  type FeeRouterRouteOptions,
+} from "./fee-router";
 import { sha256Hex } from "./hash";
 import { appendSettlement, readLedger } from "./ledger";
 import { buildSourceContent } from "./source-content";
@@ -110,7 +113,31 @@ function releaseQueryRecord(
   };
 }
 
-export async function releaseEscrowForSource(
+let escrowReleaseChain: Promise<unknown> = Promise.resolve();
+
+function withEscrowReleaseLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = escrowReleaseChain.then(task, task);
+  escrowReleaseChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+export function releaseEscrowForSource(
+  source: CreatorSource,
+  options: EscrowReleaseOptions = {},
+): Promise<EscrowReleaseResult> {
+  // Serialized: pending is recomputed inside the lock, so a concurrent
+  // release for the same source sees the first release's receipts and
+  // cannot pay twice. (Uses its own lock — appendSettlement takes the
+  // ledger write lock internally, which is not reentrant.)
+  return withEscrowReleaseLock(() =>
+    releaseEscrowForSourceUnlocked(source, options),
+  );
+}
+
+async function releaseEscrowForSourceUnlocked(
   source: CreatorSource,
   options: EscrowReleaseOptions = {},
 ): Promise<EscrowReleaseResult> {

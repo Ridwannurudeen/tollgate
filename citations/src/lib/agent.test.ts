@@ -386,8 +386,82 @@ describe("createAgentQueryRecord", () => {
       refundedAtomicUsdc: 2_200,
     });
     expect(
-      query.citations.find((citation) => citation.sourceId === "arc-finality-usdc")
-        ?.payoutPolicy,
+      query.citations.find(
+        (citation) => citation.sourceId === "arc-finality-usdc",
+      )?.payoutPolicy,
     ).toBe("refund-unused");
+  });
+
+  it("treats sources omitted from sourceUsage as used and never refunds them", async () => {
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            {
+              sourceId: "forum-mandates",
+              verdict: "buy",
+              relevance: 90,
+              reason: "Primary support.",
+            },
+            {
+              sourceId: "arc-finality-usdc",
+              verdict: "buy",
+              relevance: 80,
+              reason: "Also cited in the final answer.",
+            },
+          ],
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "Forum mandates bind budgets and Arc finality settles the citation payments.",
+          claims: [
+            {
+              text: "Forum mandates bind budgets.",
+              sourceId: "forum-mandates",
+            },
+            {
+              text: "Arc finality settles citation payments.",
+              sourceId: "arc-finality-usdc",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        // Forgetful model: lists only one source and omits the other.
+        // Omission must mean "used" — the omitted creator still gets paid.
+        return JSON.stringify({
+          groundedAnswer:
+            "Forum mandates bind budgets and Arc finality settles the citation payments on-chain.",
+          verdict: "Both purchased sources ground the final answer.",
+          sourceUsage: [{ sourceId: "forum-mandates", used: true }],
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await createAgentQueryRecord(
+      "How do Forum mandates and Arc finality settle paid citations?",
+      "2026-06-25T00:00:00.000Z",
+      DEFAULT_CREATOR_SOURCES,
+      undefined,
+      { llmConfig: LLM_CONFIG, completeChat },
+    );
+
+    expect(query.refundSummary).toEqual({
+      boughtCount: 2,
+      citedCount: 2,
+      refundedCount: 0,
+      refundedAtomicUsdc: 0,
+    });
+    expect(
+      query.citations.every(
+        (citation) => citation.payoutPolicy !== "refund-unused",
+      ),
+    ).toBe(true);
   });
 });

@@ -220,18 +220,24 @@ function normalizeNotifyEmail(value: unknown): string | undefined {
   return email;
 }
 
-function normalizeContributors(value: unknown): SourceContributor[] | undefined {
+function normalizeContributors(
+  value: unknown,
+): SourceContributor[] | undefined {
   if (value === undefined || value === null) return undefined;
   if (!Array.isArray(value)) {
     throw new SourceRegistryError("contributors must be an array.");
   }
   if (value.length === 0) return undefined;
   if (value.length > 4) {
-    throw new SourceRegistryError("contributors can include at most 4 wallets.");
+    throw new SourceRegistryError(
+      "contributors can include at most 4 wallets.",
+    );
   }
   const contributors = value.map((item, index) => {
     if (!isRecord(item)) {
-      throw new SourceRegistryError(`contributors[${index}] must be an object.`);
+      throw new SourceRegistryError(
+        `contributors[${index}] must be an object.`,
+      );
     }
     const wallet = normalizeWallet(item.wallet);
     const shareBps = Number(item.shareBps);
@@ -299,11 +305,7 @@ export function normalizeSourceInput(input: unknown): CreatorSource {
     throw new SourceRegistryError("wallet must be a 20-byte EVM address.");
   }
   const custody = registration.custody;
-  if (
-    custody !== undefined &&
-    custody !== "self" &&
-    custody !== "circle-w3s"
-  ) {
+  if (custody !== undefined && custody !== "self" && custody !== "circle-w3s") {
     throw new SourceRegistryError("custody must be self or circle-w3s.");
   }
   const origin = registration.origin;
@@ -369,8 +371,7 @@ async function inputWithCustodialWallet(
   ) {
     throw new SourceRegistryError("custodial onboarding not enabled.");
   }
-  const title =
-    typeof input.title === "string" ? input.title.trim() : "source";
+  const title = typeof input.title === "string" ? input.title.trim() : "source";
   const minted = await mintWallet({
     walletSetId,
     blockchain: W3S_BLOCKCHAIN,
@@ -561,7 +562,9 @@ async function registrationContentEvidence(
   if (process.env.TOLLGATE_REGISTRATION_FETCH !== "1") return {};
   const url = new URL(source.url);
   if (isUnsafeFetchHost(url.hostname)) {
-    throw new SourceRegistryError("url host is not allowed for content checks.");
+    throw new SourceRegistryError(
+      "url host is not allowed for content checks.",
+    );
   }
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -571,10 +574,16 @@ async function registrationContentEvidence(
   try {
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) {
-      throw new SourceRegistryError(`url content check failed: HTTP ${response.status}.`);
+      throw new SourceRegistryError(
+        `url content check failed: HTTP ${response.status}.`,
+      );
     }
     const contentType = response.headers.get("content-type") ?? "";
-    if (!/(text\/html|application\/xhtml\+xml|application\/rss\+xml|application\/atom\+xml|text\/xml|application\/xml)/i.test(contentType)) {
+    if (
+      !/(text\/html|application\/xhtml\+xml|application\/rss\+xml|application\/atom\+xml|text\/xml|application\/xml)/i.test(
+        contentType,
+      )
+    ) {
       throw new SourceRegistryError(
         "url content check requires HTML or XML content.",
       );
@@ -590,6 +599,13 @@ async function registrationContentEvidence(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export function publicSource(source: CreatorSource): CreatorSource {
+  // Strip creator PII / custodial internals before a source leaves the
+  // server: notifyEmail and the Circle W3S walletId are operator-only.
+  const { notifyEmail: _notifyEmail, walletId: _walletId, ...rest } = source;
+  return rest;
 }
 
 export async function readSources(): Promise<CreatorSource[]> {
@@ -684,7 +700,11 @@ export async function updateSourceVerification(
     const liveSources = await readRsshubSources();
     return {
       source,
-      sources: [...liveSources, ...DEFAULT_CREATOR_SOURCES, ...nextCustomSources],
+      sources: [
+        ...liveSources,
+        ...DEFAULT_CREATOR_SOURCES,
+        ...nextCustomSources,
+      ],
     };
   });
 }

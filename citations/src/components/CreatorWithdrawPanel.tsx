@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { createWalletClient, custom, getAddress, type Hex } from "viem";
 import { ARC_CHAIN_ID, arcTestnet } from "@/lib/chain";
-import {
-  FEE_ROUTER_ADDRESS,
-  feeRouterV1Abi,
-} from "@/lib/fee-router-contract";
+import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "@/lib/fee-router-contract";
 import { arcscanTxUrl, formatDollars, shortHash } from "@/lib/format";
 
 type EthereumProvider = {
@@ -61,9 +58,20 @@ export function CreatorWithdrawPanel({
     const response = await fetch(`/api/creators/${wallet}/claim`, {
       method: "POST",
     });
-    const body = (await response.json()) as { transaction?: Hex; error?: string };
-    if (!response.ok || !body.transaction) {
+    const body = (await response.json()) as {
+      claimed?: boolean;
+      message?: string;
+      transaction?: Hex;
+      error?: string;
+    };
+    if (!response.ok) {
       throw new Error(body.error ?? `HTTP ${response.status}`);
+    }
+    if (body.claimed === false) {
+      throw new Error(body.message ?? "Nothing to claim yet.");
+    }
+    if (!body.transaction) {
+      throw new Error(body.error ?? "Claim did not return a transaction.");
     }
     return body.transaction;
   }
@@ -73,7 +81,9 @@ export function CreatorWithdrawPanel({
     setTx(null);
     try {
       const transaction =
-        custody === "circle-w3s" ? await claimCustodial() : await claimSelfCustody();
+        custody === "circle-w3s"
+          ? await claimCustodial()
+          : await claimSelfCustody();
       setTx(transaction);
       setStatus("Claim submitted.");
     } catch (error) {

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SourceRegistryError, appendSource, readSources } from "@/lib/catalog";
+import {
+  SourceRegistryError,
+  appendSource,
+  publicSource,
+  readSources,
+} from "@/lib/catalog";
 import { assertSourceRegistrationRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const sources = await readSources();
-  return NextResponse.json({ sources });
+  return NextResponse.json({ sources: sources.map(publicSource) });
 }
 
 export async function POST(request: NextRequest) {
@@ -18,7 +23,13 @@ export async function POST(request: NextRequest) {
     assertSourceRegistrationRateLimit(rateLimitKey);
     const body = (await request.json()) as unknown;
     const result = await appendSource(body);
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(
+      {
+        source: publicSource(result.source),
+        sources: result.sources.map(publicSource),
+      },
+      { status: 201 },
+    );
   } catch (error) {
     if (error instanceof SourceRegistryError) {
       return NextResponse.json(

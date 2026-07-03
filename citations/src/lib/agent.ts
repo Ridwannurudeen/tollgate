@@ -61,7 +61,7 @@ type Draft = {
 type Critique = {
   groundedAnswer: string;
   verdict: string;
-  usedSourceIds?: Set<string>;
+  explicitlyUnusedSourceIds: Set<string>;
 };
 
 type AgentLoopResult = {
@@ -191,7 +191,7 @@ function critiqueMessages(
     {
       role: "system",
       content:
-        "You are Tollgate. STEP 3 is SELF-CRITIQUE: check that every claim is supported by one of the purchased sourceIds. Rewrite the answer so it only keeps claims backed by a purchased source. Return strict JSON.",
+        "You are Tollgate. STEP 3 is SELF-CRITIQUE: check that every claim is supported by one of the purchased sourceIds. Rewrite the answer so it only keeps claims backed by a purchased source. In sourceUsage, list EVERY purchased sourceId with used true or false; a source omitted from sourceUsage is treated as used. Return strict JSON.",
     },
     {
       role: "user",
@@ -317,27 +317,22 @@ function parseCritique(text: string, fallbackAnswer: string): Critique {
   }
   const grounded = cleanModelText(parsed.groundedAnswer, MAX_ANSWER_LENGTH);
   const verdict = cleanModelText(parsed.verdict, MAX_REASON_LENGTH);
-  const sourceUsage = Array.isArray(parsed.sourceUsage)
-    ? parsed.sourceUsage
-        .map((item) => {
-          if (!isRecord(item)) return null;
-          const sourceId = cleanModelText(item.sourceId, 80);
-          if (!sourceId) return null;
-          return { sourceId, used: item.used === true };
-        })
-        .filter((item): item is { sourceId: string; used: boolean } => item !== null)
-    : [];
+  // Only an explicit used:false marks a source unused. Omission from
+  // sourceUsage means "used" — a forgetful model must never refund a cited
+  // creator.
+  const explicitlyUnusedSourceIds = new Set<string>();
+  if (Array.isArray(parsed.sourceUsage)) {
+    for (const item of parsed.sourceUsage) {
+      if (!isRecord(item)) continue;
+      const sourceId = cleanModelText(item.sourceId, 80);
+      if (!sourceId) continue;
+      if (item.used === false) explicitlyUnusedSourceIds.add(sourceId);
+    }
+  }
   return {
     groundedAnswer: grounded.length >= 40 ? grounded : fallbackAnswer,
     verdict,
-    usedSourceIds:
-      sourceUsage.length > 0
-        ? new Set(
-            sourceUsage
-              .filter((usage) => usage.used)
-              .map((usage) => usage.sourceId),
-          )
-        : undefined,
+    explicitlyUnusedSourceIds,
   };
 }
 
@@ -481,11 +476,9 @@ async function runAgentLoop(
 
   let answer = critique.groundedAnswer;
   let unusedSourceIds = new Set(
-    critique.usedSourceIds
-      ? selected
-          .filter((source) => !critique.usedSourceIds?.has(source.id))
-          .map((source) => source.id)
-      : [],
+    selected
+      .filter((source) => critique.explicitlyUnusedSourceIds.has(source.id))
+      .map((source) => source.id),
   );
   let rationale =
     critique.verdict ||
@@ -526,7 +519,14 @@ async function runAgentLoop(
     }
   }
 
-  return { answer, selected, unusedSourceIds, steps, rationale, appraisalReason };
+  return {
+    answer,
+    selected,
+    unusedSourceIds,
+    steps,
+    rationale,
+    appraisalReason,
+  };
 }
 
 function buildLlmQueryRecord(

@@ -31,7 +31,12 @@ import {
   ZERO_HASH,
 } from "./ledger";
 import { PAID_QUERY_PRICE_ATOMIC_USDC } from "./payments";
-import type { CreatorSource, Ledger, PaymentReceipt, QueryRecord } from "./types";
+import type {
+  CreatorSource,
+  Ledger,
+  PaymentReceipt,
+  QueryRecord,
+} from "./types";
 import {
   createQueryPaymentEvidence,
   filterSourcesForSettlement,
@@ -198,7 +203,12 @@ describe("LeptonWeb settlement engine", () => {
 
     try {
       const filtered = sourcesForAgent([source], {
-        queries: [{ ...query, receiptHashes: receipts.map((receipt) => receipt.receiptHash) }],
+        queries: [
+          {
+            ...query,
+            receiptHashes: receipts.map((receipt) => receipt.receiptHash),
+          },
+        ],
         receipts,
       });
 
@@ -535,8 +545,7 @@ describe("LeptonWeb settlement engine", () => {
       expect(escrowSettlement.receipts[0]?.settlementMode).toBe("escrowed");
       expect(summarizeCreators(escrowSettlement.ledger)).toHaveLength(0);
       expect(
-        getSourceEvidence(escrowSettlement.ledger, source.id)
-          ?.earnedAtomicUsdc,
+        getSourceEvidence(escrowSettlement.ledger, source.id)?.earnedAtomicUsdc,
       ).toBe(0);
 
       const verifiedSource: CreatorSource = {
@@ -562,10 +571,77 @@ describe("LeptonWeb settlement engine", () => {
       expect(releaseReceipt?.releasedReceiptHashes).toEqual([
         escrowSettlement.receipts[0]?.receiptHash,
       ]);
-      expect(getSourceEvidence(releasedLedger, source.id)?.earnedAtomicUsdc).toBe(
-        source.priceAtomicUsdc,
-      );
+      expect(
+        getSourceEvidence(releasedLedger, source.id)?.earnedAtomicUsdc,
+      ).toBe(source.priceAtomicUsdc);
       expect(verifyLedgerIntegrity(releasedLedger).ok).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("releases escrow exactly once under concurrent verify calls", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-escrow-race-"));
+    const filePath = path.join(dir, "ledger.json");
+    const source: CreatorSource = {
+      id: "raced-research",
+      title: "Raced Research",
+      creator: "Race Lab",
+      handle: "@race",
+      wallet: "0x8888888888888888888888888888888888888888",
+      url: "https://example.com/raced-research",
+      summary: "Research used to prove escrow releases are serialized.",
+      tags: ["escrow", "race"],
+      priceAtomicUsdc: 1_100,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: false,
+    };
+
+    try {
+      const query = createQueryRecord(
+        "How does Tollgate serialize concurrent escrow releases?",
+        "2026-07-03T13:00:00.000Z",
+        [source],
+      );
+      await appendSettlement(
+        query,
+        {
+          [source.id]: {
+            settlementMode: "escrowed",
+            paymentResource: "tollgate-escrow:unverified-source",
+            payoutPolicy: "escrow-unverified",
+          },
+        },
+        filePath,
+      );
+
+      const verifiedSource: CreatorSource = {
+        ...source,
+        verifiedCreator: true,
+      };
+      const [first, second] = await Promise.all([
+        releaseEscrowForSource(verifiedSource, {
+          ledgerPath: filePath,
+          enabled: false,
+        }),
+        releaseEscrowForSource(verifiedSource, {
+          ledgerPath: filePath,
+          enabled: false,
+        }),
+      ]);
+
+      const releasedCount = [first, second].filter(
+        (result) => result.released,
+      ).length;
+      expect(releasedCount).toBe(1);
+
+      const ledger = await readLedger(filePath);
+      const releaseReceipts = ledger.receipts.filter(
+        (receipt) => receipt.payoutPolicy === "escrow-release",
+      );
+      expect(releaseReceipts).toHaveLength(1);
+      expect(verifyLedgerIntegrity(ledger).ok).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

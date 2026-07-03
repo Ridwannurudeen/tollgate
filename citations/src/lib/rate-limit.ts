@@ -7,8 +7,11 @@ const QUERY_WINDOW_MS = 60_000;
 const QUERY_LIMIT = 12;
 const REGISTRATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 const REGISTRATION_LIMIT = 20;
+const CLAIM_WINDOW_MS = 60 * 60 * 1000;
+const CLAIM_LIMIT = 3;
 const buckets = new Map<string, RateLimitBucket>();
 const registrationBuckets = new Map<string, RateLimitBucket>();
+const claimBuckets = new Map<string, RateLimitBucket>();
 
 export function assertQueryRateLimit(key: string, now = Date.now()): void {
   const bucketKey = key || "anonymous";
@@ -48,6 +51,24 @@ export function assertSourceRegistrationRateLimit(
   }
   if (current.count >= limit) {
     throw new Error("Too many source registrations. Wait a day and retry.");
+  }
+  current.count += 1;
+}
+
+export function assertClaimRateLimit(key: string, now = Date.now()): void {
+  const bucketKey = key || "anonymous";
+  for (const [existingKey, bucket] of claimBuckets) {
+    if (now - bucket.windowStart >= CLAIM_WINDOW_MS) {
+      claimBuckets.delete(existingKey);
+    }
+  }
+  const current = claimBuckets.get(bucketKey);
+  if (!current || now - current.windowStart >= CLAIM_WINDOW_MS) {
+    claimBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= CLAIM_LIMIT) {
+    throw new Error("Too many claim attempts. Wait an hour and retry.");
   }
   current.count += 1;
 }

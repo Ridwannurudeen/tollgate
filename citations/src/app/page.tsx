@@ -1,5 +1,5 @@
 import { LeptonWebApp } from "@/components/LeptonWebApp";
-import { readSources } from "@/lib/catalog";
+import { publicSource, readSources } from "@/lib/catalog";
 import { readLedger, summarizeCreators } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export default async function Home() {
     <LeptonWebApp
       initialCreators={creators}
       initialLedger={ledger}
-      sources={sources}
+      sources={sources.map(publicSource)}
     />
   );
 }
