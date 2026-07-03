@@ -9,6 +9,10 @@ import {
   shortHash,
   shortWallet,
 } from "@/lib/format";
+import {
+  recentReceiptTickerReceipts,
+  verifiedExternalCreatorSources,
+} from "@/lib/first-load";
 import type {
   CreatorEarnings,
   CreatorSource,
@@ -138,6 +142,14 @@ export function LeptonWebApp({
   const displayedDecisions = displayedQuery?.sourceDecisions ?? [];
   const displayedSteps = displayedQuery?.agentSteps ?? [];
   const proofOk = verification?.ok ?? settlementStatus?.verification.ok ?? true;
+  const tickerReceipts = useMemo(
+    () => recentReceiptTickerReceipts(ledger.receipts),
+    [ledger.receipts],
+  );
+  const externalCreators = useMemo(
+    () => verifiedExternalCreatorSources(registrySources),
+    [registrySources],
+  );
 
   async function refreshLedger() {
     const response = await fetch("/api/ledger", { cache: "no-store" });
@@ -444,13 +456,11 @@ export function LeptonWebApp({
       <section className="ticker" aria-label="Live receipt ticker">
         <div className="ticker-viewport">
           <div className={`ticker-track${tickerPaused ? " is-paused" : ""}`}>
-            {[...ledger.receipts.slice(-8), ...ledger.receipts.slice(-8)].map(
-              (receipt, index) => (
-                <span key={`${receipt.receiptHash}-${index}`}>
-                  {receipt.creator} +{formatDollars(receipt.amountAtomicUsdc)}
-                </span>
-              ),
-            )}
+            {[...tickerReceipts, ...tickerReceipts].map((receipt, index) => (
+              <span key={`${receipt.receiptHash}-${index}`}>
+                {receipt.creator} +{formatDollars(receipt.amountAtomicUsdc)}
+              </span>
+            ))}
             {ledger.receipts.length === 0 && (
               <>
                 <span>Awaiting the first paid citation</span>
@@ -473,6 +483,30 @@ export function LeptonWebApp({
           {tickerPaused ? "Play" : "Pause"}
         </button>
       </section>
+
+      {externalCreators.length > 0 && (
+        <section
+          className="external-strip"
+          aria-label="Verified external creators"
+        >
+          <div className="external-strip-heading">
+            <p className="eyebrow">verified external creators</p>
+            <strong>{externalCreators.length}/3 live sources</strong>
+          </div>
+          <div className="external-strip-list">
+            {externalCreators.map((source) => (
+              <Link
+                className="external-creator-link"
+                href={`/sources/${source.id}`}
+                key={source.id}
+              >
+                <span>{source.creator}</span>
+                <strong>{source.title}</strong>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="how-it-works" id="how" aria-label="How it works">
         <ol className="step-grid">
