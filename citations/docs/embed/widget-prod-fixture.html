@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tollgate Widget Cross-Origin Fixture</title>
+    <style>
+      :root {
+        color: #1c2a23;
+        background: #f4f0e4;
+        font-family: Georgia, "Times New Roman", serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 40px;
+      }
+
+      main {
+        max-width: 760px;
+      }
+
+      h1 {
+        margin: 0 0 14px;
+        font-size: 34px;
+        line-height: 1.05;
+      }
+
+      p {
+        max-width: 540px;
+        color: #53665b;
+        font-size: 16px;
+        line-height: 1.55;
+      }
+
+      .widget-host {
+        margin-top: 24px;
+        max-width: 420px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Publisher page fixture</h1>
+      <p>
+        This static page loads the production Tollgate widget script from a
+        plain document, matching the copy-paste integration path creators use.
+      </p>
+      <div class="widget-host">
+        <script
+          async
+          src="https://tollgate.gudman.xyz/widget.js?creator=0x5389688243328c26a92b301faEEAb5fbf9AFf105"
+        ></script>
+      </div>
+    </main>
+  </body>
+</html>

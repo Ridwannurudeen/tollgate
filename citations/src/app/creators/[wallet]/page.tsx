@@ -65,12 +65,16 @@ export default async function CreatorPage({ params }: Props) {
   const latestRouteTx = creator.receipts.find(
     (receipt) => receipt.feeRouterPayTx,
   )?.feeRouterPayTx;
-  const publicBaseUrl = process.env.LEPTONWEB_PUBLIC_URL ?? "";
+  const publicBaseUrl =
+    process.env.LEPTONWEB_PUBLIC_URL ?? "https://tollgate.gudman.xyz";
   const firstSourceId = creator.sources[0]?.sourceId;
   const badgeSnippet = firstSourceId
     ? `<img alt="Tollgate paid citation badge" src="${publicBaseUrl}/api/badge/${firstSourceId}.svg" />`
     : null;
-  const widgetSnippet = `<script async src="${publicBaseUrl}/widget.js?creator=${creator.wallet}"></script>`;
+  const embedUrl = `${publicBaseUrl}/embed?creator=${creator.wallet}`;
+  const widgetSnippet = `<div style="max-width:420px">
+  <script async src="${publicBaseUrl}/widget.js?creator=${creator.wallet}"></script>
+</div>`;
   const earnedReceipts = creator.receipts.filter(
     (receipt) =>
       receipt.settlementMode !== "escrowed" &&
@@ -186,20 +190,26 @@ export default async function CreatorPage({ params }: Props) {
 
       <section className="receipt-context profile-section">
         <div className="panel-heading">
-          <p className="eyebrow">publisher snippets</p>
-          <h3>Badge and answer box</h3>
+          <p className="eyebrow">widget adoption</p>
+          <h3>Embed the answer box on your site</h3>
         </div>
         <div className="snippet-grid">
+          <div>
+            <span>copy-paste snippet</span>
+            <code>{widgetSnippet}</code>
+          </div>
+          <div>
+            <span>direct embed URL</span>
+            <Link className="receipt-link inline-link" href={embedUrl}>
+              {embedUrl}
+            </Link>
+          </div>
           {badgeSnippet && (
             <div>
-              <span>badge</span>
+              <span>citation badge</span>
               <code>{badgeSnippet}</code>
             </div>
           )}
-          <div>
-            <span>answer widget</span>
-            <code>{widgetSnippet}</code>
-          </div>
         </div>
       </section>
 

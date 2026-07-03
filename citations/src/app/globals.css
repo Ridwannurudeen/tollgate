@@ -1257,6 +1257,8 @@ textarea:focus {
 }
 
 .snippet-grid code {
+  display: block;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -1266,6 +1268,10 @@ textarea:focus {
   font-family: var(--font-num);
   font-size: 11px;
   line-height: 1.5;
+}
+
+.snippet-grid a {
+  overflow-wrap: anywhere;
 }
 
 .embed-shell {
