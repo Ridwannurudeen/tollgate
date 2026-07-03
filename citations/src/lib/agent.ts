@@ -4,13 +4,11 @@ import {
   planCitationMarket,
 } from "./engine";
 import {
+  EscalationPaidError,
   EXTERNAL_PROVIDERS,
   type ExternalProvider,
 } from "./external-providers";
-import {
-  groundingYieldValue,
-  type GroundingYieldMap,
-} from "./grounding-yield";
+import { groundingYieldValue, type GroundingYieldMap } from "./grounding-yield";
 import { sha256Hex } from "./hash";
 import { buildSourceContent } from "./source-content";
 import type {
@@ -604,30 +602,64 @@ async function runAgentLoop(
     externalAssists.length === 0 &&
     externalProvider.priceAtomicUsdc <= escalationCapAtomicUsdc()
   ) {
-    const external = await externalProvider.ask(question);
-    externalAssists.push(external.assist);
-    const fallbackAnswer = `${answer} Paid external assist from ${externalProvider.label}: ${external.answer}`;
-    const merge = parseEscalationMerge(
-      await completeChat(
-        escalationMessages(
-          question,
-          answer,
-          externalProvider.label,
-          external.answer,
-        ),
-        llmConfig,
-      ),
-      cleanModelText(fallbackAnswer, MAX_ANSWER_LENGTH),
-    );
-    answer = merge.groundedAnswer;
-    steps.push({
-      index: steps.length,
-      name: "escalate",
-      summary: `Bought external grounding from ${externalProvider.label} after unsupported claims remained.`,
-      detail: `Provider ${externalProvider.id} answered query ${external.assist.queryId ?? "without a query id"}.`,
-      spentAtomicUsdc: external.assist.amountAtomicUsdc,
-    });
-    rationale = `${rationale} Unsupported claims remained after registry reflect, so the agent escalated to ${externalProvider.label} and attributed the paid assist.`;
+    // Money can move inside ask(): once it has, every failure below must
+    // still record the paid assist + an escalate step — a post-transfer
+    // error must never unwind to the deterministic fallback and lose the
+    // spend from the record.
+    let external: Awaited<ReturnType<ExternalProvider["ask"]>> | null = null;
+    try {
+      external = await externalProvider.ask(question);
+      externalAssists.push(external.assist);
+    } catch (error) {
+      if (error instanceof EscalationPaidError) {
+        externalAssists.push(error.assist);
+        steps.push({
+          index: steps.length,
+          name: "escalate",
+          summary: `Paid ${externalProvider.label} for external grounding, but the provider did not answer.`,
+          detail: error.message,
+          spentAtomicUsdc: error.assist.amountAtomicUsdc,
+        });
+        rationale = `${rationale} The agent paid ${externalProvider.label} to escalate, but the provider failed to answer; the payment is recorded and the answer keeps only registry-grounded claims.`;
+      }
+      // Pre-transfer failures (no money moved) fall through: no assist, no
+      // step — the loop result stands on its registry grounding.
+    }
+    if (external) {
+      // The external answer is untrusted third-party text: it reaches the
+      // final answer only through the merge model, or — if the merge fails —
+      // as a short, clearly delimited quote.
+      const quotedExternal = cleanModelText(external.answer, 400);
+      const fallbackAnswer = cleanModelText(
+        `${answer} ${externalProvider.label} (paid external assist) says: "${quotedExternal}"`,
+        MAX_ANSWER_LENGTH,
+      );
+      try {
+        const merge = parseEscalationMerge(
+          await completeChat(
+            escalationMessages(
+              question,
+              answer,
+              externalProvider.label,
+              external.answer,
+            ),
+            llmConfig,
+          ),
+          fallbackAnswer,
+        );
+        answer = merge.groundedAnswer;
+      } catch {
+        answer = fallbackAnswer;
+      }
+      steps.push({
+        index: steps.length,
+        name: "escalate",
+        summary: `Bought external grounding from ${externalProvider.label} after unsupported claims remained.`,
+        detail: `Provider ${externalProvider.id} answered query ${external.assist.queryId ?? "without a query id"}.`,
+        spentAtomicUsdc: external.assist.amountAtomicUsdc,
+      });
+      rationale = `${rationale} Unsupported claims remained after registry reflect, so the agent escalated to ${externalProvider.label} and attributed the paid assist.`;
+    }
   }
 
   return {
@@ -725,6 +757,12 @@ function buildLlmQueryRecord(
     agentBudget: budget,
     traceHash,
     readerPaymentHash: readerPayment?.paymentHash,
+    // Binds the escalation payment proof (tx hash, provider answerHash) into
+    // the record's integrity hash. Absent (undefined key is dropped by
+    // stableStringify) when there was no escalation, so pre-existing records
+    // hash identically.
+    externalAssists:
+      loop.externalAssists.length > 0 ? loop.externalAssists : undefined,
   });
   const id = sha256Hex({ createdAt, question, queryHash }).slice(0, 18);
 

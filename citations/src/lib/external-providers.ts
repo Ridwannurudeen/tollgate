@@ -23,6 +23,19 @@ export type ExternalProviderAnswer = {
   assist: ExternalAssist;
 };
 
+// Thrown when the on-chain payment succeeded but the provider failed to
+// answer. Carries the paid assist so callers can record the spend honestly
+// instead of losing it.
+export class EscalationPaidError extends Error {
+  readonly assist: ExternalAssist;
+
+  constructor(message: string, assist: ExternalAssist) {
+    super(message);
+    this.name = "EscalationPaidError";
+    this.assist = assist;
+  }
+}
+
 export type ExternalProvider = {
   id: string;
   label: string;
@@ -71,24 +84,51 @@ async function askCitePay(
     throw new Error(`CitePay transfer failed with status ${receipt.status}.`);
   }
 
-  const response = await (options.fetch ?? fetch)(provider.endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "X-Arc-Tx-Hash": transaction,
-    },
-    body: JSON.stringify({ query: question }),
-  });
+  // Money has moved from here on: any failure below must surface the paid
+  // assist so the caller records the spend instead of losing it.
+  const paidAssist: ExternalAssist = {
+    provider: provider.id,
+    endpoint: provider.endpoint,
+    amountAtomicUsdc: provider.priceAtomicUsdc,
+    transaction,
+    answerHash: sha256Hex(""),
+  };
+  let response: Response;
+  try {
+    response = await (options.fetch ?? fetch)(provider.endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "X-Arc-Tx-Hash": transaction,
+      },
+      body: JSON.stringify({ query: question }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "network error";
+    throw new EscalationPaidError(
+      `CitePay escalation paid but the request failed: ${message}`,
+      paidAssist,
+    );
+  }
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) {
-    throw new Error(`CitePay escalation failed with HTTP ${response.status}.`);
+    throw new EscalationPaidError(
+      `CitePay escalation paid but got HTTP ${response.status}.`,
+      paidAssist,
+    );
   }
   if (!isRecord(payload)) {
-    throw new Error("CitePay escalation returned an invalid response.");
+    throw new EscalationPaidError(
+      "CitePay escalation paid but returned an invalid response.",
+      paidAssist,
+    );
   }
   const answer = textField(payload.answer, 1_600);
   if (!answer) {
-    throw new Error("CitePay escalation returned no answer.");
+    throw new EscalationPaidError(
+      "CitePay escalation paid but returned no answer.",
+      paidAssist,
+    );
   }
 
   const queryId = textField(payload.queryId, 120);
@@ -96,10 +136,7 @@ async function askCitePay(
   return {
     answer,
     assist: {
-      provider: provider.id,
-      endpoint: provider.endpoint,
-      amountAtomicUsdc: provider.priceAtomicUsdc,
-      transaction,
+      ...paidAssist,
       answerHash: sha256Hex(answer),
       ...(queryId ? { queryId } : {}),
       ...(queryHash ? { queryHash } : {}),

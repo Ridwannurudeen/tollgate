@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createAgentQueryRecord } from "./agent";
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
-import type { ExternalProvider } from "./external-providers";
+import {
+  EscalationPaidError,
+  type ExternalProvider,
+} from "./external-providers";
 import type { CreatorSource } from "./types";
 
 const LLM_CONFIG = {
@@ -289,6 +292,93 @@ describe("createAgentQueryRecord", () => {
     });
     expect(query.answer).toContain("Paid external assist from CitePay");
     expect(query.refundSummary?.refundedCount).toBe(0);
+  });
+
+  it("records the paid assist when the provider fails after the transfer", async () => {
+    const paidButBroken: ExternalProvider = {
+      ...FAKE_EXTERNAL_PROVIDER,
+      ask: async () => {
+        throw new EscalationPaidError(
+          "CitePay escalation paid but got HTTP 500.",
+          {
+            provider: "citepay",
+            endpoint: "https://citepay.test/api/ask",
+            amountAtomicUsdc: 1_000,
+            transaction: `0x${"d".repeat(64)}`,
+            answerHash: `0x${"0".repeat(64)}`,
+          },
+        );
+      },
+    };
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            {
+              sourceId: "forum-mandates",
+              verdict: "buy",
+              relevance: 88,
+              reason: "Covers the budget question.",
+            },
+          ],
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "Forum mandates bound the budget, and a missing source supports the second claim.",
+          claims: [
+            {
+              text: "Forum mandates bound the agent budget.",
+              sourceId: "forum-mandates",
+            },
+            {
+              text: "A missing source supports the second claim.",
+              sourceId: "off-registry-source",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        return JSON.stringify({
+          groundedAnswer:
+            "Forum mandates bound the agent budget and publish receipts for every cited purchase.",
+          verdict: "Dropped the claim without a purchased source.",
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await withEscalationEnv("1", undefined, () =>
+      createAgentQueryRecord(
+        "How do Forum mandates bound paid agent budgets?",
+        "2026-07-03T00:00:00.000Z",
+        DEFAULT_CREATOR_SOURCES,
+        undefined,
+        {
+          llmConfig: LLM_CONFIG,
+          completeChat,
+          externalProvider: paidButBroken,
+        },
+      ),
+    );
+
+    // The spend must be recorded even though the provider never answered —
+    // and the record must NOT collapse to the deterministic fallback.
+    expect(query.agentMode).toBe("llm");
+    expect(query.externalAssists?.[0]).toMatchObject({
+      provider: "citepay",
+      amountAtomicUsdc: 1_000,
+    });
+    const escalateStep = query.agentSteps?.find(
+      (step) => step.name === "escalate",
+    );
+    expect(escalateStep?.summary).toContain("did not answer");
+    expect(escalateStep?.spentAtomicUsdc).toBe(1_000);
+    expect(query.answer).toContain("Forum mandates bound the agent budget");
   });
 
   it("does not escalate by default when the env gate is off", async () => {
