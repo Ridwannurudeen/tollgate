@@ -11,14 +11,12 @@ function escapeXml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function sourceIdFromRequest(request: Request): string {
-  const pathname = new URL(request.url).pathname;
-  const segment = pathname.split("/").at(-1) ?? "";
-  return decodeURIComponent(segment.replace(/\.svg$/, ""));
-}
+type Props = {
+  params: Promise<{ sourceId: string }>;
+};
 
-export async function GET(request: Request) {
-  const sourceId = sourceIdFromRequest(request);
+export async function GET(_request: Request, { params }: Props) {
+  const { sourceId } = await params;
   const evidence = getSourceEvidence(await readLedger(), sourceId);
   const earned = evidence
     ? `$${(evidence.earnedAtomicUsdc / 1_000_000)

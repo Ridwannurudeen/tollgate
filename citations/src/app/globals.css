@@ -1040,6 +1040,10 @@ textarea:focus {
   font-size: 12.5px;
 }
 
+.receipt-row span {
+  display: block;
+}
+
 .receipt-ledger {
   margin-top: 18px;
 }
@@ -1266,6 +1270,7 @@ textarea:focus {
 
 .embed-shell {
   display: grid;
+  align-content: start;
   gap: 12px;
   max-width: 420px;
   min-height: 100vh;
