@@ -1,5 +1,6 @@
 node_modules/
 dist/
+demo/jellyfin/
 data/ledger.json
 data/sessions.json
 data/registry.json

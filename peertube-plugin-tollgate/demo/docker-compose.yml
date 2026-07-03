@@ -14,15 +14,15 @@ services:
     environment:
       POSTGRES_USER: peertube
       POSTGRES_PASSWORD: peertube
-      POSTGRES_DB: peertube_prod
+      POSTGRES_DB: peertube
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
   redis:
     image: redis:8-alpine
     volumes:
-      - ./data/redis:/data
+      - redis_data:/data
     restart: unless-stopped
 
   peertube:
@@ -34,6 +34,7 @@ services:
       PEERTUBE_DB_HOSTNAME: postgres
       PEERTUBE_DB_USERNAME: peertube
       PEERTUBE_DB_PASSWORD: peertube
+      PEERTUBE_DB_NAME: peertube
       PEERTUBE_DB_SSL: "false"
       PEERTUBE_REDIS_HOSTNAME: redis
       PEERTUBE_WEBSERVER_HOSTNAME: localhost
@@ -48,7 +49,12 @@ services:
       - "9000:9000"
       - "1935:1935"
     volumes:
-      - ./data/peertube:/data
+      - peertube_data:/data
       # Mount this plugin so it can be installed from a local path.
       - ../:/plugins-local/peertube-plugin-tollgate:ro
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  peertube_data:

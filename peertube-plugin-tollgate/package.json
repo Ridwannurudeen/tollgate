@@ -17,9 +17,17 @@
   ],
   "license": "AGPL-3.0",
   "author": "Tollgate",
+  "homepage": "https://tollgate.gudman.xyz",
+  "bugs": "https://github.com/Ridwannurudeen/tollgate/issues",
   "scripts": {
     "test": "node --test"
   },
+  "files": [
+    "main.js",
+    "client",
+    "lib",
+    "README.md"
+  ],
   "library": "./main.js",
   "clientScripts": [
     {

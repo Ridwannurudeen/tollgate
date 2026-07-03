@@ -1,8 +1,8 @@
 # Tollgate Jellyfin Sidecar
 
-Status: BUILT-NOT-LIVE-RUN
+Status: DOCKER-DRY-RUN-VALIDATED
 
-Readiness: READY-needs-Jellyfin-instance
+Readiness: READY-needs-real-Jellyfin-webhook-plugin-config
 
 This package is a Jellyfin Webhook sidecar for Tollgate per-minute VOD accounting.
 It consumes PlaybackStart and PlaybackStop webhook events, maps Jellyfin item IDs
@@ -121,6 +121,42 @@ docker compose up --build
 The compose file starts a Jellyfin container and the sidecar. You still need to
 finish Jellyfin first-run setup, install/configure the Webhook plugin, import a
 media item, and set that media item's Jellyfin `ItemId` in `data/registry.json`.
+
+## Docker Validation
+
+Validated on 2026-07-03 in WSL Ubuntu 24.04 using Docker Engine 29.1.3 and
+Docker Compose 2.40.3.
+
+Commands:
+
+```bash
+cp data/registry.example.json data/registry.json
+docker compose up -d --build
+curl -I http://127.0.0.1:8096/
+curl http://127.0.0.1:4317/health
+curl -X POST -H "Content-Type: application/json" \
+  --data-binary @fixtures/jellyfin-playback-start.json \
+  http://127.0.0.1:4317/webhooks/jellyfin
+curl -X POST -H "Content-Type: application/json" \
+  --data-binary @fixtures/jellyfin-playback-stop.json \
+  http://127.0.0.1:4317/webhooks/jellyfin
+curl http://127.0.0.1:4317/proof
+```
+
+Observed:
+
+```text
+Jellyfin: HTTP/1.1 302 Found -> web/
+Sidecar health: ok=true, registry.videos=1
+PlaybackStop: created=true, watchedMinutes=2, amountAtomicUsdc=5000
+Proof: verification.ok=true, receiptCount=1, totalAtomicUsdc=5000
+Duplicate PlaybackStop: created=false
+```
+
+This validates the Docker wiring, sidecar HTTP surface, fixture webhook handling,
+hash-chained ledger, and dry-run FeeRouter adapter. It does not prove Jellyfin's
+Webhook plugin UI because the local container still needs first-run setup and
+plugin configuration. Live settlement remains disabled by design.
 
 ## Receipt Semantics
 

@@ -17,9 +17,11 @@ Payments settle in USDC on Arc, so the minimum viable payment is a fraction of a
 
 ## Install (self-hosted PeerTube)
 
-The plugin is published to npm under the `peertube-plugin-` convention, so it appears in every instance's **Administration → Plugins/Themes → Search** within ~a day of publish, and installs with one click. No approval process.
+The plugin follows PeerTube's `peertube-plugin-` package convention and has
+been validated from a local path in a Docker-backed PeerTube instance. It has
+not been published to npm from this repo.
 
-For local development against your own instance:
+For local install against your own instance:
 
 ```bash
 peertube-cli auth add -u 'https://your.peertube' -U 'root' --password '...'

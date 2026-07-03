@@ -50,6 +50,7 @@
     "buffer": "^6.0.3",
     "fast-xml-parser": "^5.9.3",
     "next": "^15.5.4",
+    "nodemailer": "^9.0.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "solc": "^0.8.35",
@@ -57,6 +58,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.7.0",

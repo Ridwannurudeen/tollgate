@@ -1,6 +1,9 @@
 import { readPlaybackLedger, verifyPlaybackLedger } from "./ledger.js";
 import { readCreatorRegistry } from "./registry.js";
 
+const STATUS = "DOCKER-DRY-RUN-VALIDATED";
+const READINESS = "READY-needs-real-Jellyfin-webhook-plugin-config";
+
 export type ProofPackOptions = {
   ledgerPath: string;
   registryPath: string;
@@ -25,8 +28,8 @@ export async function buildProofPack(options: ProofPackOptions) {
 
   return {
     generatedAt: new Date().toISOString(),
-    status: "BUILT-NOT-LIVE-RUN",
-    readiness: "READY-needs-Jellyfin-instance",
+    status: STATUS,
+    readiness: READINESS,
     verification,
     totals: {
       receipts: ledger.receipts.length,
@@ -54,8 +57,8 @@ export async function buildHealth(options: ProofPackOptions) {
   return {
     ok: verification.ok,
     generatedAt: new Date().toISOString(),
-    status: "BUILT-NOT-LIVE-RUN",
-    readiness: "READY-needs-Jellyfin-instance",
+    status: STATUS,
+    readiness: READINESS,
     ledger: verification,
     registry: {
       videos: registry.videos.length,
