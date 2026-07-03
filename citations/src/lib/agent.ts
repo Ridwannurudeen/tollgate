@@ -3,6 +3,10 @@ import {
   DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
   planCitationMarket,
 } from "./engine";
+import {
+  EXTERNAL_PROVIDERS,
+  type ExternalProvider,
+} from "./external-providers";
 import { sha256Hex } from "./hash";
 import { buildSourceContent } from "./source-content";
 import type {
@@ -10,6 +14,7 @@ import type {
   AgentStep,
   Citation,
   CreatorSource,
+  ExternalAssist,
   QueryPaymentEvidence,
   QueryRecord,
   SourceDecision,
@@ -39,6 +44,7 @@ export type CompleteChat = (
 export type AgentOptions = {
   llmConfig?: LlmConfig | null;
   completeChat?: CompleteChat;
+  externalProvider?: ExternalProvider;
 };
 
 type Appraisal = {
@@ -64,6 +70,10 @@ type Critique = {
   explicitlyUnusedSourceIds: Set<string>;
 };
 
+type EscalationMerge = {
+  groundedAnswer: string;
+};
+
 type AgentLoopResult = {
   answer: string;
   selected: CreatorSource[];
@@ -71,6 +81,7 @@ type AgentLoopResult = {
   steps: AgentStep[];
   rationale: string;
   appraisalReason: Map<string, string>;
+  externalAssists: ExternalAssist[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -210,6 +221,36 @@ function critiqueMessages(
   ];
 }
 
+function escalationMessages(
+  question: string,
+  currentAnswer: string,
+  providerLabel: string,
+  externalAnswer: string,
+): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content:
+        "You are Tollgate. STEP 5 is ESCALATION MERGE: an external paid agent has supplied grounding after local critique found unsupported claims. Merge only the useful grounded parts, clearly attribute the external paid agent, and return strict JSON.",
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        stage: "escalate",
+        question,
+        currentAnswer,
+        externalAssist: {
+          provider: providerLabel,
+          answer: externalAnswer,
+        },
+        responseShape: {
+          groundedAnswer: "string",
+        },
+      }),
+    },
+  ];
+}
+
 async function completeOpenAiCompatibleChat(
   messages: ChatMessage[],
   config: LlmConfig,
@@ -336,6 +377,26 @@ function parseCritique(text: string, fallbackAnswer: string): Critique {
   };
 }
 
+function parseEscalationMerge(
+  text: string,
+  fallbackAnswer: string,
+): EscalationMerge {
+  const parsed = parseJsonObject(text);
+  if (!isRecord(parsed)) {
+    throw new Error("LLM escalation JSON must be an object.");
+  }
+  const grounded = cleanModelText(parsed.groundedAnswer, MAX_ANSWER_LENGTH);
+  return {
+    groundedAnswer: grounded.length >= 40 ? grounded : fallbackAnswer,
+  };
+}
+
+function escalationCapAtomicUsdc(): number {
+  const raw = process.env.LEPTONWEB_ESCALATION_CAP_ATOMIC ?? "1500";
+  const cap = Number(raw);
+  return Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : 0;
+}
+
 function allocateFromAppraisals(
   appraisals: Appraisal[],
   sources: CreatorSource[],
@@ -395,8 +456,10 @@ async function runAgentLoop(
   sourceBudgetAtomicUsdc: number,
   completeChat: CompleteChat,
   llmConfig: LlmConfig,
+  externalProvider: ExternalProvider,
 ): Promise<AgentLoopResult> {
   const steps: AgentStep[] = [];
+  const externalAssists: ExternalAssist[] = [];
 
   const appraisals = parseAppraisals(
     await completeChat(
@@ -480,6 +543,7 @@ async function runAgentLoop(
       .filter((source) => critique.explicitlyUnusedSourceIds.has(source.id))
       .map((source) => source.id),
   );
+  let unsupportedAfterRegistry = unsupported.length > 0;
   let rationale =
     critique.verdict ||
     `Bought ${selected.length} source${
@@ -508,6 +572,9 @@ async function runAgentLoop(
       draft = reDraft;
       answer = reDraft.answer;
       unusedSourceIds = new Set();
+      unsupportedAfterRegistry = reDraft.claims.some(
+        (claim) => !boughtIds.has(claim.sourceId),
+      );
       steps.push({
         index: 4,
         name: "reflect",
@@ -519,6 +586,38 @@ async function runAgentLoop(
     }
   }
 
+  if (
+    unsupportedAfterRegistry &&
+    process.env.LEPTONWEB_ESCALATION === "1" &&
+    externalAssists.length === 0 &&
+    externalProvider.priceAtomicUsdc <= escalationCapAtomicUsdc()
+  ) {
+    const external = await externalProvider.ask(question);
+    externalAssists.push(external.assist);
+    const fallbackAnswer = `${answer} Paid external assist from ${externalProvider.label}: ${external.answer}`;
+    const merge = parseEscalationMerge(
+      await completeChat(
+        escalationMessages(
+          question,
+          answer,
+          externalProvider.label,
+          external.answer,
+        ),
+        llmConfig,
+      ),
+      cleanModelText(fallbackAnswer, MAX_ANSWER_LENGTH),
+    );
+    answer = merge.groundedAnswer;
+    steps.push({
+      index: steps.length,
+      name: "escalate",
+      summary: `Bought external grounding from ${externalProvider.label} after unsupported claims remained.`,
+      detail: `Provider ${externalProvider.id} answered query ${external.assist.queryId ?? "without a query id"}.`,
+      spentAtomicUsdc: external.assist.amountAtomicUsdc,
+    });
+    rationale = `${rationale} Unsupported claims remained after registry reflect, so the agent escalated to ${externalProvider.label} and attributed the paid assist.`;
+  }
+
   return {
     answer,
     selected,
@@ -526,6 +625,7 @@ async function runAgentLoop(
     steps,
     rationale,
     appraisalReason,
+    externalAssists,
   };
 }
 
@@ -627,6 +727,9 @@ function buildLlmQueryRecord(
     sourceDecisions: decisions,
     agentBudget: budget,
     agentSteps: loop.steps,
+    ...(loop.externalAssists.length > 0
+      ? { externalAssists: loop.externalAssists }
+      : {}),
     traceHash,
     receiptHashes: [],
     readerPayment,
@@ -681,6 +784,7 @@ export async function createAgentQueryRecord(
       DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
       completeChat,
       llmConfig,
+      options.externalProvider ?? EXTERNAL_PROVIDERS.citepay,
     );
     return buildLlmQueryRecord(
       question,

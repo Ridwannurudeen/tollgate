@@ -14,7 +14,12 @@ import { privateKeyToAccount } from "viem/accounts";
 import { ARC_RPC_URL, ARC_USDC, arcTestnet } from "./chain";
 import { w3sExecuteContract } from "./circle-w3s";
 import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "./fee-router-contract";
-import type { Citation, CreatorSource, QueryRecord, ReceiptEvidence } from "./types";
+import type {
+  Citation,
+  CreatorSource,
+  QueryRecord,
+  ReceiptEvidence,
+} from "./types";
 
 const SPLIT_REGISTRY_PATH = path.join(
   process.cwd(),
@@ -47,6 +52,16 @@ export const usdcRouterAbi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "transfer",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
       { name: "amount", type: "uint256" },
     ],
     outputs: [{ type: "bool" }],
@@ -89,7 +104,7 @@ export type FeeRouterWalletClient = {
   writeContract(request: FeeRouterWriteContractRequest): Promise<Hex>;
 };
 
-type FeeRouterSigner = {
+export type FeeRouterSigner = {
   account: { address: Address };
   walletClient: FeeRouterWalletClient;
 };
@@ -261,7 +276,9 @@ function createW3SFeeRouterWalletClient(): FeeRouterSigner {
   };
 }
 
-function createFeeRouterSigner(options: FeeRouterRouteOptions): FeeRouterSigner {
+export function createFeeRouterSigner(
+  options: FeeRouterRouteOptions,
+): FeeRouterSigner {
   if (feeRouterSignerMode() === "w3s" && !options.privateKey) {
     if (options.walletClient) {
       return {
@@ -352,10 +369,15 @@ function withSplitRegistryLock<T>(write: () => Promise<T>): Promise<T> {
   return run;
 }
 
-function sameAddressList(a: readonly Address[], b: readonly Address[]): boolean {
+function sameAddressList(
+  a: readonly Address[],
+  b: readonly Address[],
+): boolean {
   return (
     a.length === b.length &&
-    a.every((address, index) => address.toLowerCase() === b[index]?.toLowerCase())
+    a.every(
+      (address, index) => address.toLowerCase() === b[index]?.toLowerCase(),
+    )
   );
 }
 
@@ -370,7 +392,10 @@ async function verifyCreatorSplit(
   publicClient: PublicClient,
 ): Promise<void> {
   const split = await readFeeRouterSplit(BigInt(record.splitId), publicClient);
-  if (!sameAddressList(split.recipients, recipients) || !sameBpsList(split.bps, bps)) {
+  if (
+    !sameAddressList(split.recipients, recipients) ||
+    !sameBpsList(split.bps, bps)
+  ) {
     throw new Error(
       `FeeRouter split ${record.splitId} does not match creator recipients.`,
     );
@@ -451,7 +476,9 @@ function splitForCitation(citation: Citation): {
   if (citation.contributors && citation.contributors.length > 0) {
     return {
       wallet: citation.wallet,
-      recipients: citation.contributors.map((contributor) => contributor.wallet),
+      recipients: citation.contributors.map(
+        (contributor) => contributor.wallet,
+      ),
       bps: citation.contributors.map((contributor) => contributor.shareBps),
     };
   }
@@ -614,12 +641,12 @@ export async function routeEscrowReleasePayment(
     await publicClient.waitForTransactionReceipt({ hash: approveTx });
   }
 
-  const recipients = source.contributors?.map((contributor) => contributor.wallet) ?? [
-    source.wallet,
-  ];
-  const bps = source.contributors?.map((contributor) => contributor.shareBps) ?? [
-    10_000,
-  ];
+  const recipients = source.contributors?.map(
+    (contributor) => contributor.wallet,
+  ) ?? [source.wallet];
+  const bps = source.contributors?.map(
+    (contributor) => contributor.shareBps,
+  ) ?? [10_000];
   const split = await ensureCreatorSplit(
     source.wallet,
     recipients,

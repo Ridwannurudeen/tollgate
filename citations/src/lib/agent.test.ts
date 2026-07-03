@@ -1,12 +1,65 @@
 import { describe, expect, it } from "vitest";
 import { createAgentQueryRecord } from "./agent";
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
+import type { ExternalProvider } from "./external-providers";
 
 const LLM_CONFIG = {
   baseUrl: "https://example.com/v1",
   apiKey: "test",
   model: "test-model",
 };
+
+const FAKE_EXTERNAL_PROVIDER: ExternalProvider = {
+  id: "citepay",
+  label: "CitePay",
+  endpoint: "https://citepay.test/api/ask",
+  recipient: "0x5389688243328c26a92b301faEEAb5fbf9AFf105",
+  priceAtomicUsdc: 1_000,
+  ask: async () => ({
+    answer:
+      "CitePay says external paid agents should disclose the paid transaction, source decision, and limits of the answer.",
+    assist: {
+      provider: "citepay",
+      endpoint: "https://citepay.test/api/ask",
+      amountAtomicUsdc: 1_000,
+      transaction: `0x${"d".repeat(64)}`,
+      answerHash: `0x${"e".repeat(64)}`,
+      queryId: "external-query-1",
+      queryHash: `0x${"f".repeat(64)}`,
+    },
+  }),
+};
+
+function withEscalationEnv<T>(
+  value: string | undefined,
+  cap: string | undefined,
+  run: () => Promise<T>,
+): Promise<T> {
+  const previousEnabled = process.env.LEPTONWEB_ESCALATION;
+  const previousCap = process.env.LEPTONWEB_ESCALATION_CAP_ATOMIC;
+  if (value === undefined) {
+    delete process.env.LEPTONWEB_ESCALATION;
+  } else {
+    process.env.LEPTONWEB_ESCALATION = value;
+  }
+  if (cap === undefined) {
+    delete process.env.LEPTONWEB_ESCALATION_CAP_ATOMIC;
+  } else {
+    process.env.LEPTONWEB_ESCALATION_CAP_ATOMIC = cap;
+  }
+  return run().finally(() => {
+    if (previousEnabled === undefined) {
+      delete process.env.LEPTONWEB_ESCALATION;
+    } else {
+      process.env.LEPTONWEB_ESCALATION = previousEnabled;
+    }
+    if (previousCap === undefined) {
+      delete process.env.LEPTONWEB_ESCALATION_CAP_ATOMIC;
+    } else {
+      process.env.LEPTONWEB_ESCALATION_CAP_ATOMIC = previousCap;
+    }
+  });
+}
 
 function stageOf(messages: { role: string; content: string }[]): string {
   const user = messages[1]?.content ?? "{}";
@@ -159,6 +212,274 @@ describe("createAgentQueryRecord", () => {
     const critique = query.agentSteps?.find((step) => step.name === "critique");
     expect(critique?.summary).toContain("unsupported");
     expect(query.answer).toContain("USDC");
+  });
+
+  it("escalates to a paid external provider when gated on and unsupported claims remain", async () => {
+    const stages: string[] = [];
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      stages.push(stage);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            {
+              sourceId: "forum-mandates",
+              verdict: "buy",
+              relevance: 88,
+              reason: "Covers registry spending controls.",
+            },
+          ],
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "Forum mandates bound the budget, and an external market has separate spending controls.",
+          claims: [
+            {
+              text: "Forum mandates bound the agent budget.",
+              sourceId: "forum-mandates",
+            },
+            {
+              text: "An external market has separate spending controls.",
+              sourceId: "off-registry-source",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        return JSON.stringify({
+          groundedAnswer: "Forum mandates bound the local agent budget.",
+          verdict: "One off-registry claim remains unsupported.",
+        });
+      }
+      if (stage === "escalate") {
+        return JSON.stringify({
+          groundedAnswer:
+            "Forum mandates bound the local agent budget. Paid external assist from CitePay adds that external paid agents should disclose the transaction, source decision, and limits.",
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await withEscalationEnv("1", "1500", () =>
+      createAgentQueryRecord(
+        "How should paid agents disclose citation spending?",
+        "2026-07-03T00:00:00.000Z",
+        DEFAULT_CREATOR_SOURCES,
+        undefined,
+        {
+          llmConfig: LLM_CONFIG,
+          completeChat,
+          externalProvider: FAKE_EXTERNAL_PROVIDER,
+        },
+      ),
+    );
+
+    expect(stages).toContain("escalate");
+    expect(query.agentSteps?.map((step) => step.name)).toContain("escalate");
+    expect(query.externalAssists?.[0]).toMatchObject({
+      provider: "citepay",
+      endpoint: "https://citepay.test/api/ask",
+      amountAtomicUsdc: 1_000,
+      queryId: "external-query-1",
+    });
+    expect(query.answer).toContain("Paid external assist from CitePay");
+    expect(query.refundSummary?.refundedCount).toBe(0);
+  });
+
+  it("does not escalate by default when the env gate is off", async () => {
+    const stages: string[] = [];
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      stages.push(stage);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            {
+              sourceId: "forum-mandates",
+              verdict: "buy",
+              relevance: 88,
+              reason: "Covers registry spending controls.",
+            },
+          ],
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "Forum mandates bound the budget, and a missing source supports the second claim.",
+          claims: [
+            {
+              text: "Forum mandates bound the agent budget.",
+              sourceId: "forum-mandates",
+            },
+            {
+              text: "A missing source supports the second claim.",
+              sourceId: "off-registry-source",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        return JSON.stringify({
+          groundedAnswer: "Forum mandates bound the local agent budget.",
+          verdict: "One off-registry claim remains unsupported.",
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await withEscalationEnv(undefined, undefined, () =>
+      createAgentQueryRecord(
+        "How should paid agents disclose citation spending?",
+        "2026-07-03T00:00:00.000Z",
+        DEFAULT_CREATOR_SOURCES,
+        undefined,
+        {
+          llmConfig: LLM_CONFIG,
+          completeChat,
+          externalProvider: FAKE_EXTERNAL_PROVIDER,
+        },
+      ),
+    );
+
+    expect(stages).not.toContain("escalate");
+    expect(query.agentSteps?.map((step) => step.name)).not.toContain(
+      "escalate",
+    );
+    expect(query.externalAssists).toBeUndefined();
+  });
+
+  it("does not escalate when there are no unsupported claims", async () => {
+    const stages: string[] = [];
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      stages.push(stage);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            {
+              sourceId: "forum-mandates",
+              verdict: "buy",
+              relevance: 88,
+              reason: "Covers registry spending controls.",
+            },
+          ],
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "Forum mandates bound the local agent budget and receipts disclose paid citation spending.",
+          claims: [
+            {
+              text: "Forum mandates bound the local agent budget.",
+              sourceId: "forum-mandates",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        return JSON.stringify({
+          groundedAnswer:
+            "Forum mandates bound the local agent budget and receipts disclose paid citation spending.",
+          verdict: "All claims are grounded.",
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await withEscalationEnv("1", "1500", () =>
+      createAgentQueryRecord(
+        "How should paid agents disclose citation spending?",
+        "2026-07-03T00:00:00.000Z",
+        DEFAULT_CREATOR_SOURCES,
+        undefined,
+        {
+          llmConfig: LLM_CONFIG,
+          completeChat,
+          externalProvider: FAKE_EXTERNAL_PROVIDER,
+        },
+      ),
+    );
+
+    expect(stages).not.toContain("escalate");
+    expect(query.agentSteps?.map((step) => step.name)).not.toContain(
+      "escalate",
+    );
+    expect(query.externalAssists).toBeUndefined();
+  });
+
+  it("does not escalate when the cap is below the provider price", async () => {
+    const stages: string[] = [];
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      stages.push(stage);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            {
+              sourceId: "forum-mandates",
+              verdict: "buy",
+              relevance: 88,
+              reason: "Covers registry spending controls.",
+            },
+          ],
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "Forum mandates bound the budget, and a missing source supports the second claim.",
+          claims: [
+            {
+              text: "Forum mandates bound the agent budget.",
+              sourceId: "forum-mandates",
+            },
+            {
+              text: "A missing source supports the second claim.",
+              sourceId: "off-registry-source",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        return JSON.stringify({
+          groundedAnswer: "Forum mandates bound the local agent budget.",
+          verdict: "One off-registry claim remains unsupported.",
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await withEscalationEnv("1", "999", () =>
+      createAgentQueryRecord(
+        "How should paid agents disclose citation spending?",
+        "2026-07-03T00:00:00.000Z",
+        DEFAULT_CREATOR_SOURCES,
+        undefined,
+        {
+          llmConfig: LLM_CONFIG,
+          completeChat,
+          externalProvider: FAKE_EXTERNAL_PROVIDER,
+        },
+      ),
+    );
+
+    expect(stages).not.toContain("escalate");
+    expect(query.agentSteps?.map((step) => step.name)).not.toContain(
+      "escalate",
+    );
+    expect(query.externalAssists).toBeUndefined();
   });
 
   it("reflects by buying one more source to ground an unsupported claim", async () => {

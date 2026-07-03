@@ -55,6 +55,7 @@ export default async function AnswerPage({ params }: Props) {
   const agentBudget = query.agentBudget;
   const sourceDecisions = query.sourceDecisions ?? [];
   const agentSteps = query.agentSteps ?? [];
+  const externalAssists = query.externalAssists ?? [];
   const economics = queryPaymentEconomics(query);
   const latestChainHash = receipts.at(-1)?.receiptHash ?? "none";
   const refundSummary = query.refundSummary ?? {
@@ -62,8 +63,9 @@ export default async function AnswerPage({ params }: Props) {
     citedCount: query.citations.filter(
       (citation) => citation.payoutPolicy !== "refund-unused",
     ).length,
-    refundedCount: receipts.filter((receipt) => receipt.settlementMode === "refunded")
-      .length,
+    refundedCount: receipts.filter(
+      (receipt) => receipt.settlementMode === "refunded",
+    ).length,
     refundedAtomicUsdc: receipts
       .filter((receipt) => receipt.settlementMode === "refunded")
       .reduce((sum, receipt) => sum + receipt.amountAtomicUsdc, 0),
@@ -363,6 +365,19 @@ export default async function AnswerPage({ params }: Props) {
           </div>
           {query.agentRationale && (
             <p className="hero-text">{query.agentRationale}</p>
+          )}
+          {externalAssists.length > 0 && (
+            <p className="status-line">
+              external assist:{" "}
+              {externalAssists
+                .map(
+                  (assist) =>
+                    `${assist.provider} / ${formatUsdc(
+                      assist.amountAtomicUsdc,
+                    )} USDC / ${shortHash(assist.transaction)}`,
+                )
+                .join(", ")}
+            </p>
           )}
           <ol className="trace-list">
             {agentSteps.map((step) => (

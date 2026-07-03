@@ -121,10 +121,20 @@ export type AgentBudget = {
 
 export type AgentStep = {
   index: number;
-  name: "appraise" | "allocate" | "draft" | "critique" | "reflect";
+  name: "appraise" | "allocate" | "draft" | "critique" | "reflect" | "escalate";
   summary: string;
   detail: string;
   spentAtomicUsdc?: number;
+};
+
+export type ExternalAssist = {
+  provider: string;
+  endpoint: string;
+  amountAtomicUsdc: number;
+  transaction: `0x${string}`;
+  answerHash: string;
+  queryId?: string;
+  queryHash?: string;
 };
 
 export type PaymentReceipt = {
@@ -208,6 +218,7 @@ export type QueryRecord = {
   sourceDecisions?: SourceDecision[];
   agentBudget?: AgentBudget;
   agentSteps?: AgentStep[];
+  externalAssists?: ExternalAssist[];
   traceHash?: string;
   receiptHashes: string[];
   readerPayment?: QueryPaymentEvidence;
