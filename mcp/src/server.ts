@@ -15,7 +15,7 @@ export function createTollgateMcpServer() {
     {
       title: "Ask Tollgate",
       description:
-        "Ask Tollgate a source-backed question. Uses paidFetch only when the host process wires one in; otherwise this server calls the local-proof endpoint.",
+        "Buy a source-backed Tollgate answer through the paid x402 endpoint. Requires TOLLGATE_READER_PRIVATE_KEY.",
       inputSchema: z.object({
         question: z.string().min(8).max(280),
       }),
@@ -30,6 +30,7 @@ export function createTollgateMcpServer() {
               {
                 answer: result.answer,
                 queryId: result.query.id,
+                readerPayment: result.query.readerPayment ?? null,
                 receipts: result.receipts.map((receipt) => ({
                   receiptHash: receipt.receiptHash,
                   sourceId: receipt.sourceId,

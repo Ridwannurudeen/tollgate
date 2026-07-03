@@ -1,9 +1,8 @@
 {
-  "name": "@tollgate/mcp",
-  "version": "0.0.0",
-  "private": true,
+  "name": "tollgate-reader-mcp",
+  "version": "0.1.0",
   "type": "module",
-  "description": "Unpublished Tollgate MCP server for paying reader agents.",
+  "description": "MCP server that lets agents buy source-backed Tollgate answers.",
   "bin": {
     "tollgate-mcp": "./dist/server.js"
   },
@@ -21,7 +20,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@tollgate/reader": "file:../sdk",
+    "@x402/evm": "^2.17.0",
+    "@x402/fetch": "^2.17.0",
+    "viem": "^2.52.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {
