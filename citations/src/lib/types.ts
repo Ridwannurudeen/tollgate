@@ -2,17 +2,35 @@ export type SettlementMode =
   | "local-proof"
   | "x402-verified"
   | "x402-settled"
-  | "forum-routed";
+  | "forum-routed"
+  | "escrowed"
+  | "refunded";
+
+export type PayoutPolicy =
+  | "standard"
+  | "escrow-unverified"
+  | "escrow-release"
+  | "refund-unused";
 
 export type SourceKind = "external" | "seed" | "internal-test";
 
 export type CreatorKind = "external" | "seed" | "internal-test";
 
 export type SourceOwnershipProof = {
-  method: "wallet-signature" | "seed-demo" | "operator-approved";
+  method:
+    | "wallet-signature"
+    | "seed-demo"
+    | "operator-approved"
+    | "meta-tag"
+    | "dns-txt";
   signer?: `0x${string}`;
   signatureHash?: string;
   verifiedAt: string;
+};
+
+export type SourceContributor = {
+  wallet: `0x${string}`;
+  shareBps: number;
 };
 
 export type CreatorSource = {
@@ -29,6 +47,15 @@ export type CreatorSource = {
   creatorKind: CreatorKind;
   verifiedCreator: boolean;
   ownershipProof?: SourceOwnershipProof;
+  custody?: "self" | "circle-w3s";
+  walletId?: string;
+  probation?: boolean;
+  registeredAt?: string;
+  contentHash?: string;
+  contentFetchedAt?: string;
+  notifyEmail?: string;
+  contributors?: SourceContributor[];
+  origin?: "registered" | "discovered" | "rss-import";
 };
 
 export type SourceRegistrationInput = {
@@ -43,6 +70,11 @@ export type SourceRegistrationInput = {
   priceAtomicUsdc?: number | string;
   ownershipSignature?: string;
   ownershipTimestamp?: string;
+  custody?: "self" | "circle-w3s";
+  walletId?: string;
+  notifyEmail?: string;
+  contributors?: SourceContributor[];
+  origin?: "registered" | "discovered" | "rss-import";
 };
 
 export type Citation = {
@@ -64,6 +96,8 @@ export type Citation = {
   creatorKind?: CreatorKind;
   verifiedCreator?: boolean;
   ownershipProof?: SourceOwnershipProof;
+  payoutPolicy?: PayoutPolicy;
+  contributors?: SourceContributor[];
 };
 
 export type SourceDecision = {
@@ -113,6 +147,10 @@ export type PaymentReceipt = {
   sourceExcerptHash?: string;
   contentFetchedAt?: string;
   ownershipProof?: SourceOwnershipProof;
+  payoutPolicy?: PayoutPolicy;
+  contributors?: SourceContributor[];
+  releasedReceiptHashes?: string[];
+  refundReason?: string;
   previousHash: string;
   receiptHash: string;
   createdAt: string;
@@ -131,6 +169,10 @@ export type ReceiptEvidence = {
   sourceExcerptHash?: string;
   contentFetchedAt?: string;
   ownershipProof?: SourceOwnershipProof;
+  payoutPolicy?: PayoutPolicy;
+  contributors?: SourceContributor[];
+  releasedReceiptHashes?: string[];
+  refundReason?: string;
 };
 
 export type QueryPaymentEvidence = {
@@ -170,6 +212,12 @@ export type QueryRecord = {
   receiptHashes: string[];
   readerPayment?: QueryPaymentEvidence;
   trackRecord?: TrackRecordEvidence;
+  refundSummary?: {
+    boughtCount: number;
+    citedCount: number;
+    refundedCount: number;
+    refundedAtomicUsdc: number;
+  };
   createdAt: string;
 };
 

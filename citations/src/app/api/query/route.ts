@@ -15,6 +15,14 @@ function readQuestion(body: unknown): string {
   return question;
 }
 
+function readCreator(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const creator = (body as Record<string, unknown>).creator;
+  return typeof creator === "string" && creator.trim()
+    ? creator.trim()
+    : undefined;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rateLimitKey =
@@ -24,7 +32,9 @@ export async function POST(request: NextRequest) {
     assertQueryRateLimit(rateLimitKey);
     const body = (await request.json()) as unknown;
     const question = readQuestion(body);
-    const result = await settleQuestion(question);
+    const result = await settleQuestion(question, {
+      creatorWallet: readCreator(body),
+    });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return NextResponse.json(

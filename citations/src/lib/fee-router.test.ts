@@ -2,10 +2,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { Address, Hex, PublicClient, WalletClient } from "viem";
+import type { Address, Hex, PublicClient } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createQueryRecord } from "./engine";
-import { assertValidFeeRouterSplit, routeCitationPayments } from "./fee-router";
+import {
+  assertValidFeeRouterSplit,
+  routeCitationPayments,
+  type FeeRouterWalletClient,
+} from "./fee-router";
 
 const TEST_KEY = generatePrivateKey();
 
@@ -44,6 +48,7 @@ function mockClients(
   writes: string[],
   paidSplitIds: bigint[] = [],
   createSplitAccounts: unknown[] = [],
+  createSplitArgs: unknown[][] = [],
 ) {
   const publicClient = {
     readContract: async ({ functionName }: { functionName: string }) => {
@@ -74,6 +79,7 @@ function mockClients(
       writes.push(functionName);
       if (functionName === "createSplit") {
         createSplitAccounts.push(account);
+        createSplitArgs.push([...(args ?? [])]);
       }
       if (functionName === "pay" && typeof args?.[0] === "bigint") {
         paidSplitIds.push(args[0]);
@@ -86,7 +92,7 @@ function mockClients(
             : "c";
       return `0x${txByte.repeat(64)}` as Hex;
     },
-  } as unknown as WalletClient;
+  } as FeeRouterWalletClient;
   return { publicClient, walletClient };
 }
 
@@ -138,6 +144,50 @@ describe("assertValidFeeRouterSplit", () => {
     await expect(
       routeCitationPayments(query, { enabled: true }),
     ).rejects.toThrow("LEPTONWEB_FEE_ROUTER_PRIVATE_KEY");
+  });
+
+  it("escrows unverified external citations before loading a FeeRouter key", async () => {
+    const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
+    process.env.TOLLGATE_ESCROW_UNVERIFIED = "1";
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      sourceKind: "external",
+      verifiedCreator: false,
+    }));
+
+    try {
+      const evidence = await routeCitationPayments(query, { enabled: true });
+
+      expect(evidence[query.citations[0].sourceId]).toEqual({
+        settlementMode: "escrowed",
+        paymentResource: "tollgate-escrow:unverified-source",
+        payoutPolicy: "escrow-unverified",
+      });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
+      } else {
+        process.env.TOLLGATE_ESCROW_UNVERIFIED = previous;
+      }
+    }
+  });
+
+  it("records refunds without loading a FeeRouter key", async () => {
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      payoutPolicy: "refund-unused" as const,
+    }));
+
+    const evidence = await routeCitationPayments(query, { enabled: true });
+
+    expect(evidence[query.citations[0].sourceId]).toEqual({
+      settlementMode: "refunded",
+      paymentResource: "tollgate-refund:unused-source",
+      payoutPolicy: "refund-unused",
+      refundReason: "Bought source was not cited in the final answer.",
+    });
   });
 
   it("pays the split id returned by createSplit simulation", async () => {
@@ -210,6 +260,54 @@ describe("assertValidFeeRouterSplit", () => {
 
       expect(writes).toEqual(["createSplit", "pay", "pay"]);
       expect(paidSplitIds).toEqual([124n, 124n]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("creates FeeRouter splits from citation contributors", async () => {
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      contributors: [
+        {
+          wallet: "0x8888888888888888888888888888888888888888",
+          shareBps: 7_000,
+        },
+        {
+          wallet: "0x9999999999999999999999999999999999999999",
+          shareBps: 3_000,
+        },
+      ],
+    }));
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const createSplitArgs: unknown[][] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      1_000_000n,
+      125n,
+      writes,
+      [],
+      [],
+      createSplitArgs,
+    );
+
+    try {
+      await routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+        splitRegistryPath: registryPath,
+      });
+
+      expect(createSplitArgs[0]?.[0]).toEqual([
+        "0x8888888888888888888888888888888888888888",
+        "0x9999999999999999999999999999999999999999",
+      ]);
+      expect(createSplitArgs[0]?.[1]).toEqual([7_000, 3_000]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "wallet": "0x22949cA9A470181c66a034E81a743E2518579E95",
+  "defaultPriceAtomicUsdc": 1500,
+  "sources": [
+    {
+      "url": "https://tollgate.gudman.xyz/docs/x402-cite",
+      "priceAtomicUsdc": 1500,
+      "title": "Tollgate x402 citation notes",
+      "summary": "Tollgate dogfood declaration for source-backed AI answers.",
+      "tags": ["tollgate", "x402", "citations"]
+    }
+  ]
+}

@@ -870,6 +870,13 @@ textarea:focus {
   font-variant-numeric: tabular-nums;
 }
 
+.source-card input[type="checkbox"] {
+  flex: none;
+  width: 18px;
+  min-height: 18px;
+  margin-top: 3px;
+}
+
 .source-action {
   display: grid;
   gap: 8px;
@@ -1195,6 +1202,137 @@ textarea:focus {
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.daily-bars {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  min-height: 150px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.daily-bar {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  min-width: 54px;
+}
+
+.daily-bar span,
+.daily-bar small {
+  color: var(--ink-4);
+  font-family: var(--font-num);
+  font-size: 10px;
+}
+
+.daily-bar strong {
+  display: block;
+  width: 24px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: linear-gradient(180deg, var(--green), var(--gold-bright));
+}
+
+.snippet-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.snippet-grid div {
+  display: grid;
+  gap: 6px;
+}
+
+.snippet-grid span {
+  color: var(--ink-4);
+  font-family: var(--font-num);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.snippet-grid code {
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  padding: 12px;
+  color: var(--ink-1);
+  font-family: var(--font-num);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.embed-shell {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+  min-height: 100vh;
+  padding: 16px;
+  background: var(--paper);
+}
+
+.embed-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.embed-head strong {
+  color: var(--green);
+}
+
+.embed-shell textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.embed-shell button {
+  min-height: 42px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--green);
+  color: #fff;
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.embed-shell button:disabled {
+  opacity: 0.45;
+}
+
+.embed-shell p {
+  min-height: 18px;
+  color: var(--ink-4);
+  font-size: 12px;
+}
+
+.embed-answer {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.embed-answer strong {
+  color: var(--ink-1);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.embed-answer span,
+.embed-answer a {
+  color: var(--ink-4);
+  font-family: var(--font-num);
+  font-size: 11px;
 }
 
 /* plain-language "how it works" for a non-crypto audience */

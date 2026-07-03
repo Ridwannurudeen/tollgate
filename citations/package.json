@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify:ledger": "node scripts/verify-ledger.mjs",
+    "migrate:ledger": "node scripts/migrate-ledger.mjs",
+    "discover:sources": "node ../scripts/discover-sources.mjs --write",
     "export:proof-pack": "node scripts/export-proof-pack.mjs",
     "prove:x402": "node scripts/prove-x402-source.mjs",
     "prove:paid-query": "node scripts/prove-paid-query.mjs",

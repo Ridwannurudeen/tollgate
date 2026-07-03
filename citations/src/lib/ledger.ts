@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import { sha256Hex } from "./hash";
+import { notifyCreatorReceipts } from "./notify";
 import type {
   AnswerEvidence,
   CreatorEarnings,
@@ -21,6 +23,7 @@ import type {
 const EMPTY_LEDGER: Ledger = { queries: [], receipts: [] };
 export const ZERO_HASH = `0x${"0".repeat(64)}`;
 const LEDGER_PATH = path.join(process.cwd(), "data", "ledger.json");
+const LEDGER_DB_PATH = path.join(process.cwd(), "data", "ledger.db");
 const SOURCE_ACCESS_PREFIX = "Paid source access:";
 let ledgerWriteLock: Promise<void> = Promise.resolve();
 
@@ -43,6 +46,10 @@ type ReceiptHashPayload = {
   sourceExcerptHash?: string;
   contentFetchedAt?: string;
   ownershipProof?: PaymentReceipt["ownershipProof"];
+  payoutPolicy?: PaymentReceipt["payoutPolicy"];
+  contributors?: PaymentReceipt["contributors"];
+  releasedReceiptHashes?: string[];
+  refundReason?: string;
   previousHash: string;
   createdAt: string;
 };
@@ -56,6 +63,10 @@ function isLedger(value: unknown): value is Ledger {
 export async function readLedger(
   filePath: string = LEDGER_PATH,
 ): Promise<Ledger> {
+  const dbPath = sqlitePathForLedger(filePath);
+  if (await fileExists(dbPath)) {
+    return readSqliteLedger(dbPath);
+  }
   try {
     const raw = await readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as unknown;
@@ -85,6 +96,134 @@ function withLedgerWriteLock<T>(write: () => Promise<T>): Promise<T> {
     () => undefined,
   );
   return run;
+}
+
+function sqlitePathForLedger(filePath: string): string {
+  if (filePath === LEDGER_PATH) return LEDGER_DB_PATH;
+  return filePath.endsWith(".json")
+    ? `${filePath.slice(0, -".json".length)}.db`
+    : `${filePath}.db`;
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath);
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function openLedgerDatabase(dbPath: string): Promise<DatabaseSync> {
+  const sqlite = await import("node:sqlite").catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "unknown error";
+    throw new Error(
+      `SQLite ledger requires Node with node:sqlite support: ${message}`,
+    );
+  });
+  const db = new sqlite.DatabaseSync(dbPath);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS queries (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      payload_json TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS receipts (
+      receipt_hash TEXT PRIMARY KEY,
+      query_id TEXT NOT NULL,
+      previous_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload_json TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS reader_payments (
+      payment_hash TEXT PRIMARY KEY,
+      query_id TEXT NOT NULL,
+      payload_json TEXT NOT NULL
+    );
+  `);
+  return db;
+}
+
+function parseLedgerRow<T>(row: { payload_json: string }): T {
+  return JSON.parse(row.payload_json) as T;
+}
+
+async function readSqliteLedger(dbPath: string): Promise<Ledger> {
+  const db = await openLedgerDatabase(dbPath);
+  try {
+    const queries = db
+      .prepare("SELECT payload_json FROM queries ORDER BY rowid DESC")
+      .all()
+      .map((row) => parseLedgerRow<QueryRecord>(row as { payload_json: string }));
+    const receipts = db
+      .prepare("SELECT payload_json FROM receipts ORDER BY rowid ASC")
+      .all()
+      .map((row) =>
+        parseLedgerRow<PaymentReceipt>(row as { payload_json: string }),
+      );
+    return { queries, receipts };
+  } finally {
+    db.close();
+  }
+}
+
+async function appendSqliteSettlement(
+  dbPath: string,
+  query: QueryRecord,
+  receipts: PaymentReceipt[],
+): Promise<void> {
+  await mkdir(path.dirname(dbPath), { recursive: true });
+  const db = await openLedgerDatabase(dbPath);
+  try {
+    db.exec("BEGIN IMMEDIATE");
+    db.prepare(
+      "INSERT INTO queries (id, created_at, payload_json) VALUES (?, ?, ?)",
+    ).run(query.id, query.createdAt, JSON.stringify(query));
+    if (query.readerPayment) {
+      db.prepare(
+        "INSERT OR IGNORE INTO reader_payments (payment_hash, query_id, payload_json) VALUES (?, ?, ?)",
+      ).run(
+        query.readerPayment.paymentHash,
+        query.id,
+        JSON.stringify(query.readerPayment),
+      );
+    }
+    const insertReceipt = db.prepare(
+      "INSERT INTO receipts (receipt_hash, query_id, previous_hash, created_at, payload_json) VALUES (?, ?, ?, ?, ?)",
+    );
+    for (const receipt of receipts) {
+      insertReceipt.run(
+        receipt.receiptHash,
+        receipt.queryId,
+        receipt.previousHash,
+        receipt.createdAt,
+        JSON.stringify(receipt),
+      );
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  } finally {
+    db.close();
+  }
+}
+
+async function updateSqliteQuery(
+  dbPath: string,
+  query: QueryRecord,
+): Promise<void> {
+  const db = await openLedgerDatabase(dbPath);
+  try {
+    db.prepare("UPDATE queries SET payload_json = ? WHERE id = ?").run(
+      JSON.stringify(query),
+      query.id,
+    );
+  } finally {
+    db.close();
+  }
 }
 
 function buildReceiptPayload(
@@ -137,6 +276,18 @@ function buildReceiptPayload(
   }
   if (evidence.ownershipProof !== undefined) {
     payload.ownershipProof = evidence.ownershipProof;
+  }
+  if (evidence.payoutPolicy !== undefined) {
+    payload.payoutPolicy = evidence.payoutPolicy;
+  }
+  if (evidence.contributors !== undefined) {
+    payload.contributors = evidence.contributors;
+  }
+  if (evidence.releasedReceiptHashes !== undefined) {
+    payload.releasedReceiptHashes = evidence.releasedReceiptHashes;
+  }
+  if (evidence.refundReason !== undefined) {
+    payload.refundReason = evidence.refundReason;
   }
   return payload;
 }
@@ -223,6 +374,18 @@ function payloadFromReceipt(
   }
   if (receipt.ownershipProof !== undefined) {
     payload.ownershipProof = receipt.ownershipProof;
+  }
+  if (receipt.payoutPolicy !== undefined) {
+    payload.payoutPolicy = receipt.payoutPolicy;
+  }
+  if (receipt.contributors !== undefined) {
+    payload.contributors = receipt.contributors;
+  }
+  if (receipt.releasedReceiptHashes !== undefined) {
+    payload.releasedReceiptHashes = receipt.releasedReceiptHashes;
+  }
+  if (receipt.refundReason !== undefined) {
+    payload.refundReason = receipt.refundReason;
   }
   return payload;
 }
@@ -331,6 +494,7 @@ export function createReceipts(
           contentFetchedAt:
             evidence.contentFetchedAt ?? citation.contentFetchedAt,
           ownershipProof: evidence.ownershipProof ?? citation.ownershipProof,
+          contributors: evidence.contributors ?? citation.contributors,
         },
         previousHash,
         query.createdAt,
@@ -355,16 +519,33 @@ export async function appendSettlement(
 ): Promise<SettlementResult> {
   return withLedgerWriteLock(async () => {
     const ledger = await readLedger(filePath);
+    const queryWithPayoutPolicy: QueryRecord = {
+      ...query,
+      citations: query.citations.map((citation) => {
+        const evidence = evidenceBySourceId[citation.sourceId];
+        if (!evidence?.payoutPolicy) return citation;
+        return { ...citation, payoutPolicy: evidence.payoutPolicy };
+      }),
+    };
     const receipts = createReceipts(query, ledger.receipts, evidenceBySourceId);
     const queryWithReceipts: QueryRecord = {
-      ...query,
+      ...queryWithPayoutPolicy,
       receiptHashes: receipts.map((receipt) => receipt.receiptHash),
     };
     const nextLedger: Ledger = {
       queries: [queryWithReceipts, ...ledger.queries],
       receipts: [...ledger.receipts, ...receipts],
     };
-    await writeLedger(nextLedger, filePath);
+    const dbPath = sqlitePathForLedger(filePath);
+    if (await fileExists(dbPath)) {
+      await appendSqliteSettlement(dbPath, queryWithReceipts, receipts);
+    } else {
+      await writeLedger(nextLedger, filePath);
+    }
+    await notifyCreatorReceipts(queryWithReceipts, receipts).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : "unknown error";
+      console.warn(`Creator notification failed: ${message}`);
+    });
     return { query: queryWithReceipts, receipts, ledger: nextLedger };
   });
 }
@@ -389,33 +570,50 @@ export async function attachTrackRecordEvidence(
         query.id === queryId ? { ...query, trackRecord } : query,
       ),
     };
-    await writeLedger(nextLedger, filePath);
+    const dbPath = sqlitePathForLedger(filePath);
+    if (await fileExists(dbPath)) {
+      const updated = nextLedger.queries.find((query) => query.id === queryId);
+      if (updated) await updateSqliteQuery(dbPath, updated);
+    } else {
+      await writeLedger(nextLedger, filePath);
+    }
     return nextLedger;
   });
+}
+
+function isCreatorEarnedReceipt(receipt: PaymentReceipt): boolean {
+  return (
+    receipt.settlementMode !== "escrowed" &&
+    receipt.settlementMode !== "refunded"
+  );
 }
 
 export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {
   const byWallet = new Map<string, CreatorEarnings>();
   const sourceIdsByWallet = new Map<string, Set<string>>();
 
-  for (const query of ledger.queries) {
-    for (const citation of query.citations) {
-      const current = byWallet.get(citation.wallet) ?? {
-        creator: citation.creator,
-        handle: citation.handle,
-        wallet: citation.wallet,
+  const queryById = new Map(ledger.queries.map((query) => [query.id, query]));
+  for (const receipt of ledger.receipts) {
+    if (!isCreatorEarnedReceipt(receipt)) continue;
+    const query = queryById.get(receipt.queryId);
+    const citation = query?.citations.find(
+      (candidate) => candidate.sourceId === receipt.sourceId,
+    );
+    const current = byWallet.get(receipt.wallet) ?? {
+        creator: receipt.creator,
+        handle: citation?.handle ?? "@unknown",
+        wallet: receipt.wallet,
         sourceCount: 0,
         citationCount: 0,
         earnedAtomicUsdc: 0,
-      };
-      current.citationCount += 1;
-      current.earnedAtomicUsdc += citation.amountAtomicUsdc;
-      byWallet.set(citation.wallet, current);
+    };
+    current.citationCount += 1;
+    current.earnedAtomicUsdc += receipt.amountAtomicUsdc;
+    byWallet.set(receipt.wallet, current);
 
-      const sourceIds = sourceIdsByWallet.get(citation.wallet) ?? new Set();
-      sourceIds.add(citation.sourceId);
-      sourceIdsByWallet.set(citation.wallet, sourceIds);
-    }
+    const sourceIds = sourceIdsByWallet.get(receipt.wallet) ?? new Set();
+    sourceIds.add(receipt.sourceId);
+    sourceIdsByWallet.set(receipt.wallet, sourceIds);
   }
 
   return Array.from(byWallet.values())
@@ -488,8 +686,10 @@ export function getCreatorEvidence(
       (candidate) => candidate.sourceId === receipt.sourceId,
     );
     current.title = citation?.title ?? current.title;
-    current.citationCount += 1;
-    current.earnedAtomicUsdc += receipt.amountAtomicUsdc;
+    current.citationCount += isCreatorEarnedReceipt(receipt) ? 1 : 0;
+    current.earnedAtomicUsdc += isCreatorEarnedReceipt(receipt)
+      ? receipt.amountAtomicUsdc
+      : 0;
     sourceStats.set(receipt.sourceId, current);
   }
 
@@ -498,9 +698,10 @@ export function getCreatorEvidence(
     handle: handle ?? "@unknown",
     wallet: latestReceipt.wallet,
     sourceCount: sourceStats.size,
-    citationCount: receipts.length,
+    citationCount: receipts.filter(isCreatorEarnedReceipt).length,
     earnedAtomicUsdc: receipts.reduce(
-      (sum, receipt) => sum + receipt.amountAtomicUsdc,
+      (sum, receipt) =>
+        sum + (isCreatorEarnedReceipt(receipt) ? receipt.amountAtomicUsdc : 0),
       0,
     ),
     receipts,
@@ -533,9 +734,10 @@ export function getSourceEvidence(
     title: citation?.title ?? sourceId,
     creator: latestReceipt.creator,
     wallet: latestReceipt.wallet,
-    citationCount: receipts.length,
+    citationCount: receipts.filter(isCreatorEarnedReceipt).length,
     earnedAtomicUsdc: receipts.reduce(
-      (sum, receipt) => sum + receipt.amountAtomicUsdc,
+      (sum, receipt) =>
+        sum + (isCreatorEarnedReceipt(receipt) ? receipt.amountAtomicUsdc : 0),
       0,
     ),
     receipts,

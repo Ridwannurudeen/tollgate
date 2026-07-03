@@ -2,11 +2,17 @@ import { readSources } from "./catalog";
 import { createAgentQueryRecord } from "./agent";
 import { routeCitationPayments } from "./fee-router";
 import { sha256Hex } from "./hash";
-import { appendSettlement, attachTrackRecordEvidence } from "./ledger";
+import { appendSettlement, attachTrackRecordEvidence, readLedger } from "./ledger";
 import { publishTrackRecordForAnswer } from "./track-record";
-import type { QueryPaymentEvidence, SettlementResult } from "./types";
+import type { CreatorSource, Ledger, QueryPaymentEvidence, SettlementResult } from "./types";
 
 const MAX_QUESTION_LENGTH = 280;
+const DEFAULT_PROBATION_DISTINCT_QUERY_THRESHOLD = 3;
+const DEFAULT_PROBATION_MAX_PAID_CITATIONS = 3;
+
+type SettleOptions = {
+  creatorWallet?: string;
+};
 
 export function normalizeQuestion(question: string): string {
   return question.replace(/\s+/g, " ").trim();
@@ -27,11 +33,16 @@ export function validateQuestion(question: string): string {
 
 export async function settleQuestion(
   question: string,
+  options: SettleOptions = {},
 ): Promise<SettlementResult> {
   const normalized = validateQuestion(question);
   const createdAt = new Date().toISOString();
-  const sources = await readSources();
-  const query = await createAgentQueryRecord(normalized, createdAt, sources);
+  const [sources, ledger] = await Promise.all([readSources(), readLedger()]);
+  const agentSources = filterSourcesForSettlement(
+    sourcesForAgent(sources, ledger),
+    options,
+  );
+  const query = await createAgentQueryRecord(normalized, createdAt, agentSources);
   const receiptEvidence = await routeCitationPayments(query);
   return settleAndAnchorTrackRecord(query, receiptEvidence);
 }
@@ -58,19 +69,84 @@ export function createQueryPaymentEvidence(
 export async function settlePaidQuestion(
   question: string,
   payment: Omit<QueryPaymentEvidence, "paymentHash">,
+  options: SettleOptions = {},
 ): Promise<SettlementResult> {
   const normalized = validateQuestion(question);
   const createdAt = new Date().toISOString();
-  const sources = await readSources();
+  const [sources, ledger] = await Promise.all([readSources(), readLedger()]);
+  const agentSources = filterSourcesForSettlement(
+    sourcesForAgent(sources, ledger),
+    options,
+  );
   const readerPayment = createQueryPaymentEvidence(payment);
   const query = await createAgentQueryRecord(
     normalized,
     createdAt,
-    sources,
+    agentSources,
     readerPayment,
   );
   const receiptEvidence = await routeCitationPayments(query);
   return settleAndAnchorTrackRecord(query, receiptEvidence);
+}
+
+export function filterSourcesForSettlement(
+  sources: CreatorSource[],
+  options: SettleOptions,
+): CreatorSource[] {
+  if (!options.creatorWallet) return sources;
+  const creatorWallet = options.creatorWallet.toLowerCase();
+  const filtered = sources.filter(
+    (source) => source.wallet.toLowerCase() === creatorWallet,
+  );
+  if (filtered.length === 0) {
+    throw new Error("No sources are registered for that creator wallet.");
+  }
+  return filtered;
+}
+
+function envPositiveInteger(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function sourcePaidQueryCount(ledger: Ledger, sourceId: string): number {
+  return new Set(
+    ledger.receipts
+      .filter(
+        (receipt) =>
+          receipt.sourceId === sourceId &&
+          receipt.settlementMode !== "escrowed" &&
+          receipt.settlementMode !== "refunded",
+      )
+      .map((receipt) => receipt.queryId),
+  ).size;
+}
+
+export function sourcesForAgent(
+  sources: CreatorSource[],
+  ledger: Ledger,
+): CreatorSource[] {
+  const matureAfter = envPositiveInteger(
+    "TOLLGATE_PROBATION_DISTINCT_QUERIES",
+    DEFAULT_PROBATION_DISTINCT_QUERY_THRESHOLD,
+  );
+  const maxProbationCitations = envPositiveInteger(
+    "TOLLGATE_PROBATION_MAX_PAID_CITATIONS",
+    DEFAULT_PROBATION_MAX_PAID_CITATIONS,
+  );
+
+  return sources
+    .map((source) => {
+      if (source.sourceKind !== "external") return source;
+      const paidQueryCount = sourcePaidQueryCount(ledger, source.id);
+      const probation =
+        !(source.verifiedCreator && paidQueryCount >= matureAfter);
+      return { ...source, probation };
+    })
+    .filter((source) => {
+      if (!source.probation) return true;
+      return sourcePaidQueryCount(ledger, source.id) < maxProbationCitations;
+    });
 }
 
 async function settleAndAnchorTrackRecord(

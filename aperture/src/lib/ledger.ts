@@ -1,5 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import type { Address, Hex } from "viem";
 import { sha256Hex } from "./hash";
 import type {
@@ -15,6 +16,7 @@ import type {
 export const ZERO_HASH = `0x${"0".repeat(64)}` as Hex;
 
 const LEDGER_PATH = path.join(process.cwd(), "data", "ledger.json");
+const LEDGER_DB_PATH = path.join(process.cwd(), "data", "ledger.db");
 const EMPTY_LEDGER: LicenseLedger = { receipts: [] };
 let ledgerWriteLock: Promise<void> = Promise.resolve();
 
@@ -40,6 +42,10 @@ function isLedger(value: unknown): value is LicenseLedger {
 export async function readLicenseLedger(
   filePath: string = LEDGER_PATH,
 ): Promise<LicenseLedger> {
+  const dbPath = sqlitePathForLedger(filePath);
+  if (await fileExists(dbPath)) {
+    return readSqliteLicenseLedger(dbPath);
+  }
   try {
     const parsed = JSON.parse(await readFile(filePath, "utf8")) as unknown;
     return isLedger(parsed) ? parsed : EMPTY_LEDGER;
@@ -67,6 +73,81 @@ function withLedgerWriteLock<T>(write: () => Promise<T>): Promise<T> {
     () => undefined,
   );
   return run;
+}
+
+function sqlitePathForLedger(filePath: string): string {
+  if (filePath === LEDGER_PATH) return LEDGER_DB_PATH;
+  return filePath.endsWith(".json")
+    ? `${filePath.slice(0, -".json".length)}.db`
+    : `${filePath}.db`;
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath);
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function openLedgerDatabase(dbPath: string): Promise<DatabaseSync> {
+  const sqlite = await import("node:sqlite").catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "unknown error";
+    throw new Error(
+      `SQLite ledger requires Node with node:sqlite support: ${message}`,
+    );
+  });
+  const db = new sqlite.DatabaseSync(dbPath);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS receipts (
+      receipt_hash TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      previous_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload_json TEXT NOT NULL
+    );
+  `);
+  return db;
+}
+
+async function readSqliteLicenseLedger(dbPath: string): Promise<LicenseLedger> {
+  const db = await openLedgerDatabase(dbPath);
+  try {
+    const receipts = db
+      .prepare("SELECT payload_json FROM receipts ORDER BY rowid ASC")
+      .all()
+      .map(
+        (row) =>
+          JSON.parse((row as { payload_json: string }).payload_json) as LicenseReceipt,
+      );
+    return { receipts };
+  } finally {
+    db.close();
+  }
+}
+
+async function insertSqliteReceipt(
+  dbPath: string,
+  receipt: LicenseReceipt,
+): Promise<void> {
+  await mkdir(path.dirname(dbPath), { recursive: true });
+  const db = await openLedgerDatabase(dbPath);
+  try {
+    db.prepare(
+      "INSERT INTO receipts (receipt_hash, event_id, previous_hash, created_at, payload_json) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      receipt.receiptHash,
+      receipt.eventId,
+      receipt.previousHash,
+      receipt.createdAt,
+      JSON.stringify(receipt),
+    );
+  } finally {
+    db.close();
+  }
 }
 
 function receiptPayload(receipt: LicenseReceipt): LicenseReceiptHashPayload {
@@ -127,7 +208,12 @@ export async function appendLicenseReceipt(
     const previousHash = ledger.receipts.at(-1)?.receiptHash ?? ZERO_HASH;
     const receipt = createReceipt(input, previousHash);
     const nextLedger = { receipts: [...ledger.receipts, receipt] };
-    await writeLicenseLedger(nextLedger, filePath);
+    const dbPath = sqlitePathForLedger(filePath);
+    if (await fileExists(dbPath)) {
+      await insertSqliteReceipt(dbPath, receipt);
+    } else {
+      await writeLicenseLedger(nextLedger, filePath);
+    }
     return { receipt, ledger: nextLedger, created: true };
   });
 }

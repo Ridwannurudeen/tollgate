@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Address } from "viem";
 import { findSource } from "@/lib/catalog";
 import { createSourceAccessRecord } from "@/lib/engine";
+import { shouldEscrowSource } from "@/lib/escrow";
 import { appendSettlement } from "@/lib/ledger";
+import { tollgateAgentWallet } from "@/lib/payments";
 import {
   PAYMENT_RESPONSE_HEADER,
   PAYMENT_SIGNATURE_HEADER,
@@ -26,10 +28,9 @@ export async function GET(request: NextRequest, context: Context) {
     return NextResponse.json({ error: "source not found" }, { status: 404 });
   }
 
-  const requirements = buildPaymentRequirements(
-    source.wallet as Address,
-    source.priceAtomicUsdc,
-  );
+  const escrowed = shouldEscrowSource(source);
+  const payTo = escrowed ? tollgateAgentWallet() : (source.wallet as Address);
+  const requirements = buildPaymentRequirements(payTo, source.priceAtomicUsdc);
   const resourceUrl =
     publicOrigin(request.headers, request.nextUrl.origin) +
     request.nextUrl.pathname;
@@ -56,17 +57,24 @@ export async function GET(request: NextRequest, context: Context) {
   const query = createSourceAccessRecord(source, new Date().toISOString());
   const ledgerResult = await appendSettlement(query, {
     [source.id]: {
-      settlementMode: settlement.mode,
+      settlementMode: escrowed ? "escrowed" : settlement.mode,
       payer: settlement.payer,
       transaction: settlement.transaction,
-      paymentResource: `/api/sources/${source.id}`,
+      paymentResource: escrowed
+        ? "tollgate-escrow:source-access"
+        : `/api/sources/${source.id}`,
+      ...(escrowed
+        ? {
+            payoutPolicy: "escrow-unverified" as const,
+          }
+        : {}),
     },
   });
 
   return NextResponse.json(
     {
       source,
-      settlementMode: settlement.mode,
+      settlementMode: escrowed ? "escrowed" : settlement.mode,
       payer: settlement.payer,
       transaction: settlement.transaction ?? null,
       receipt: ledgerResult.receipts[0],

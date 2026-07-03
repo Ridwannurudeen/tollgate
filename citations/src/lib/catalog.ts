@@ -1,10 +1,12 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { verifyMessage } from "viem";
+import { w3sMintWallet, type MintedWallet } from "./circle-w3s";
 import { sha256Hex } from "./hash";
 import { readRsshubSources } from "./sources/rsshub";
 import type {
   CreatorSource,
+  SourceContributor,
   SourceOwnershipProof,
   SourceRegistrationInput,
 } from "./types";
@@ -115,6 +117,9 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
 
 const SOURCE_REGISTRY_PATH = path.join(process.cwd(), "data", "sources.json");
 const WALLET_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+const REGISTRATION_FETCH_TIMEOUT_MS = 5_000;
+const DEFAULT_REGISTRATION_CAP_PER_WALLET_PER_DAY = 5;
+const W3S_BLOCKCHAIN = "ARC-TESTNET";
 
 function cleanText(value: unknown, field: string, maxLength: number): string {
   if (typeof value !== "string") {
@@ -155,6 +160,12 @@ function normalizeWallet(value: unknown): `0x${string}` {
     throw new SourceRegistryError("wallet must be a 20-byte EVM address.");
   }
   return wallet as `0x${string}`;
+}
+
+function normalizeOptionalWallet(value: unknown): `0x${string}` | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  return normalizeWallet(value);
 }
 
 function slugify(value: string): string {
@@ -200,6 +211,47 @@ function normalizePrice(
   return price;
 }
 
+function normalizeNotifyEmail(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const email = cleanText(value, "notifyEmail", 254).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new SourceRegistryError("notifyEmail must be a valid email address.");
+  }
+  return email;
+}
+
+function normalizeContributors(value: unknown): SourceContributor[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) {
+    throw new SourceRegistryError("contributors must be an array.");
+  }
+  if (value.length === 0) return undefined;
+  if (value.length > 4) {
+    throw new SourceRegistryError("contributors can include at most 4 wallets.");
+  }
+  const contributors = value.map((item, index) => {
+    if (!isRecord(item)) {
+      throw new SourceRegistryError(`contributors[${index}] must be an object.`);
+    }
+    const wallet = normalizeWallet(item.wallet);
+    const shareBps = Number(item.shareBps);
+    if (!Number.isInteger(shareBps) || shareBps < 1 || shareBps > 10_000) {
+      throw new SourceRegistryError(
+        `contributors[${index}].shareBps must be an integer from 1 to 10000.`,
+      );
+    }
+    return { wallet, shareBps };
+  });
+  const total = contributors.reduce(
+    (sum, contributor) => sum + contributor.shareBps,
+    0,
+  );
+  if (total !== 10_000) {
+    throw new SourceRegistryError("contributors shareBps must sum to 10000.");
+  }
+  return contributors;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object") return false;
   return true;
@@ -242,12 +294,36 @@ export function normalizeSourceInput(input: unknown): CreatorSource {
     : slugify(title);
   if (!sourceId) throw new SourceRegistryError("id could not be derived.");
 
+  const wallet = normalizeOptionalWallet(registration.wallet);
+  if (!wallet) {
+    throw new SourceRegistryError("wallet must be a 20-byte EVM address.");
+  }
+  const custody = registration.custody;
+  if (
+    custody !== undefined &&
+    custody !== "self" &&
+    custody !== "circle-w3s"
+  ) {
+    throw new SourceRegistryError("custody must be self or circle-w3s.");
+  }
+  const origin = registration.origin;
+  if (
+    origin !== undefined &&
+    origin !== "registered" &&
+    origin !== "discovered" &&
+    origin !== "rss-import"
+  ) {
+    throw new SourceRegistryError(
+      "origin must be registered, discovered, or rss-import.",
+    );
+  }
+
   return {
     id: sourceId,
     title,
     creator,
     handle: normalizeHandle(registration.handle),
-    wallet: normalizeWallet(registration.wallet),
+    wallet,
     url: normalizeUrl(registration.url),
     summary: cleanText(registration.summary, "summary", 340),
     tags: normalizeTags(registration.tags),
@@ -255,6 +331,56 @@ export function normalizeSourceInput(input: unknown): CreatorSource {
     sourceKind: "external",
     creatorKind: "external",
     verifiedCreator: false,
+    custody: custody ?? "self",
+    ...(registration.walletId
+      ? { walletId: cleanText(registration.walletId, "walletId", 96) }
+      : {}),
+    probation: true,
+    registeredAt: new Date().toISOString(),
+    ...(normalizeNotifyEmail(registration.notifyEmail)
+      ? { notifyEmail: normalizeNotifyEmail(registration.notifyEmail) }
+      : {}),
+    ...(normalizeContributors(registration.contributors)
+      ? { contributors: normalizeContributors(registration.contributors) }
+      : {}),
+    origin: origin ?? "registered",
+  };
+}
+
+type MintWallet = (args: {
+  walletSetId: string;
+  blockchain?: string;
+  refId?: string;
+}) => Promise<MintedWallet>;
+
+async function inputWithCustodialWallet(
+  input: unknown,
+  mintWallet: MintWallet,
+): Promise<unknown> {
+  if (!isRecord(input)) return input;
+  const wallet =
+    typeof input.wallet === "string" ? input.wallet.trim() : input.wallet;
+  if (wallet) return input;
+  const walletSetId = process.env.CIRCLE_WALLET_SET_ID;
+  if (
+    !process.env.CIRCLE_API_KEY ||
+    !process.env.CIRCLE_ENTITY_SECRET ||
+    !walletSetId
+  ) {
+    throw new SourceRegistryError("custodial onboarding not enabled.");
+  }
+  const title =
+    typeof input.title === "string" ? input.title.trim() : "source";
+  const minted = await mintWallet({
+    walletSetId,
+    blockchain: W3S_BLOCKCHAIN,
+    refId: `source-${slugify(title)}`,
+  });
+  return {
+    ...input,
+    wallet: minted.address,
+    custody: "circle-w3s",
+    walletId: minted.id,
   };
 }
 
@@ -357,6 +483,115 @@ async function writeCustomSources(
   await rename(tmpPath, filePath);
 }
 
+function normalizedUrlKey(value: string): string {
+  const url = new URL(value);
+  url.hash = "";
+  url.search = "";
+  const pathname = url.pathname.replace(/\/+$/, "") || "/";
+  return `${url.hostname.toLowerCase()}${pathname.toLowerCase()}`;
+}
+
+function sourceTitleKey(value: string): string {
+  return slugify(value);
+}
+
+function registrationCapPerWalletPerDay(): number {
+  const raw = Number(process.env.TOLLGATE_REGISTRATION_CAP_PER_WALLET_PER_DAY);
+  return Number.isInteger(raw) && raw > 0
+    ? raw
+    : DEFAULT_REGISTRATION_CAP_PER_WALLET_PER_DAY;
+}
+
+function sameUtcDay(a: string | undefined, b: string): boolean {
+  if (!a) return false;
+  return a.slice(0, 10) === b.slice(0, 10);
+}
+
+function assertWalletRegistrationCap(
+  existingSources: CreatorSource[],
+  source: CreatorSource,
+): void {
+  const cap = registrationCapPerWalletPerDay();
+  const registrationsToday = existingSources.filter(
+    (existing) =>
+      existing.sourceKind === "external" &&
+      existing.wallet.toLowerCase() === source.wallet.toLowerCase() &&
+      sameUtcDay(existing.registeredAt, source.registeredAt ?? ""),
+  ).length;
+  if (registrationsToday >= cap) {
+    throw new SourceRegistryError(
+      `wallet registration cap reached (${cap}/day).`,
+      429,
+    );
+  }
+}
+
+function assertNoDuplicateSource(
+  existingSources: CreatorSource[],
+  source: CreatorSource,
+): void {
+  const nextUrlKey = normalizedUrlKey(source.url);
+  const nextTitleKey = sourceTitleKey(source.title);
+  for (const existing of existingSources) {
+    if (normalizedUrlKey(existing.url) === nextUrlKey) {
+      throw new SourceRegistryError("source url already exists.", 409);
+    }
+    if (sourceTitleKey(existing.title) === nextTitleKey) {
+      throw new SourceRegistryError("source title already exists.", 409);
+    }
+  }
+}
+
+function isUnsafeFetchHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "0.0.0.0" ||
+    host.startsWith("127.") ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
+  );
+}
+
+async function registrationContentEvidence(
+  source: CreatorSource,
+): Promise<Pick<CreatorSource, "contentHash" | "contentFetchedAt">> {
+  if (process.env.TOLLGATE_REGISTRATION_FETCH !== "1") return {};
+  const url = new URL(source.url);
+  if (isUnsafeFetchHost(url.hostname)) {
+    throw new SourceRegistryError("url host is not allowed for content checks.");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    REGISTRATION_FETCH_TIMEOUT_MS,
+  );
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new SourceRegistryError(`url content check failed: HTTP ${response.status}.`);
+    }
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!/(text\/html|application\/xhtml\+xml|application\/rss\+xml|application\/atom\+xml|text\/xml|application\/xml)/i.test(contentType)) {
+      throw new SourceRegistryError(
+        "url content check requires HTML or XML content.",
+      );
+    }
+    const text = await response.text();
+    return {
+      contentHash: sha256Hex({
+        url: url.toString(),
+        body: text.slice(0, 200_000),
+      }),
+      contentFetchedAt: new Date().toISOString(),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function readSources(): Promise<CreatorSource[]> {
   const [customSources, liveSources] = await Promise.all([
     readCustomSources(),
@@ -386,13 +621,21 @@ function withRegistryLock<T>(task: () => Promise<T>): Promise<T> {
 export async function appendSource(
   input: unknown,
   filePath: string = SOURCE_REGISTRY_PATH,
+  mintWallet: MintWallet = w3sMintWallet,
 ): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
-  const normalized = normalizeSourceInput(input);
-  const ownershipProof = await ownershipProofFromInput(input, normalized);
+  const registrationInput = await inputWithCustodialWallet(input, mintWallet);
+  const normalized = normalizeSourceInput(registrationInput);
+  const ownershipProof = await ownershipProofFromInput(
+    registrationInput,
+    normalized,
+  );
+  const contentEvidence = await registrationContentEvidence(normalized);
   const source: CreatorSource = {
     ...normalized,
     verifiedCreator: ownershipProof !== undefined,
+    probation: ownershipProof === undefined,
     ...(ownershipProof ? { ownershipProof } : {}),
+    ...contentEvidence,
   };
   const liveSources = await readRsshubSources();
   return withRegistryLock(async () => {
@@ -410,10 +653,57 @@ export async function appendSource(
     if (existingSources.some((existing) => existing.id === source.id)) {
       throw new SourceRegistryError("source id already exists.", 409);
     }
+    assertNoDuplicateSource(existingSources, source);
+    assertWalletRegistrationCap(existingSources, source);
     const nextCustomSources = [...customSources, source];
     await writeCustomSources(nextCustomSources, filePath);
     return { source, sources: [...existingSources, source] };
   });
+}
+
+export async function updateSourceVerification(
+  sourceId: string,
+  ownershipProof: SourceOwnershipProof,
+  filePath: string = SOURCE_REGISTRY_PATH,
+): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
+  return withRegistryLock(async () => {
+    const customSources = await readCustomSources(filePath);
+    const index = customSources.findIndex((source) => source.id === sourceId);
+    if (index < 0) {
+      throw new SourceRegistryError("source not found.", 404);
+    }
+    const source: CreatorSource = {
+      ...customSources[index],
+      verifiedCreator: true,
+      probation: false,
+      ownershipProof,
+    };
+    const nextCustomSources = customSources.slice();
+    nextCustomSources[index] = source;
+    await writeCustomSources(nextCustomSources, filePath);
+    const liveSources = await readRsshubSources();
+    return {
+      source,
+      sources: [...liveSources, ...DEFAULT_CREATOR_SOURCES, ...nextCustomSources],
+    };
+  });
+}
+
+export async function verifySourceOwnership(
+  sourceId: string,
+  input: unknown,
+  filePath: string = SOURCE_REGISTRY_PATH,
+): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
+  const customSources = await readCustomSources(filePath);
+  const source = customSources.find((candidate) => candidate.id === sourceId);
+  if (!source) {
+    throw new SourceRegistryError("source not found.", 404);
+  }
+  const ownershipProof = await ownershipProofFromInput(input, source);
+  if (!ownershipProof) {
+    throw new SourceRegistryError("ownershipSignature is required.");
+  }
+  return updateSourceVerification(sourceId, ownershipProof, filePath);
 }
 
 export async function findSource(

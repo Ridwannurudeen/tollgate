@@ -321,4 +321,73 @@ describe("createAgentQueryRecord", () => {
     expect(ids).not.toContain("circle-gateway-nano");
     expect(query.totalAtomicUsdc).toBe(4_300);
   });
+
+  it("marks bought-but-unused sources for refund before payout", async () => {
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            {
+              sourceId: "forum-mandates",
+              verdict: "buy",
+              relevance: 90,
+              reason: "Primary support.",
+            },
+            {
+              sourceId: "arc-finality-usdc",
+              verdict: "buy",
+              relevance: 80,
+              reason: "Bought but not ultimately used.",
+            },
+          ],
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "Forum mandates bind budgets while Arc context is not needed in the final claim.",
+          claims: [
+            {
+              text: "Forum mandates bind budgets.",
+              sourceId: "forum-mandates",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        return JSON.stringify({
+          groundedAnswer:
+            "Forum mandates bind budgets and publish receipts for cited source purchases.",
+          verdict: "Only forum-mandates is cited in the final answer.",
+          sourceUsage: [
+            { sourceId: "forum-mandates", used: true },
+            { sourceId: "arc-finality-usdc", used: false },
+          ],
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await createAgentQueryRecord(
+      "How do Forum mandates bind paid citation budgets?",
+      "2026-06-25T00:00:00.000Z",
+      DEFAULT_CREATOR_SOURCES,
+      undefined,
+      { llmConfig: LLM_CONFIG, completeChat },
+    );
+
+    expect(query.refundSummary).toEqual({
+      boughtCount: 2,
+      citedCount: 1,
+      refundedCount: 1,
+      refundedAtomicUsdc: 2_200,
+    });
+    expect(
+      query.citations.find((citation) => citation.sourceId === "arc-finality-usdc")
+        ?.payoutPolicy,
+    ).toBe("refund-unused");
+  });
 });

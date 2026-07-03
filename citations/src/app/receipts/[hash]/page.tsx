@@ -49,6 +49,13 @@ export default async function ReceiptPage({ params }: Props) {
   const citation = query?.citations.find(
     (candidate) => candidate.sourceId === receipt.sourceId,
   );
+  const contributorRows =
+    receipt.contributors?.map((contributor) => ({
+      ...contributor,
+      amountAtomicUsdc: Math.floor(
+        (receipt.amountAtomicUsdc * contributor.shareBps) / 10_000,
+      ),
+    })) ?? [];
 
   return (
     <main className="shell receipt-page">
@@ -144,6 +151,14 @@ export default async function ReceiptPage({ params }: Props) {
           }
         />
         <EvidenceRow
+          label="contributors"
+          value={
+            contributorRows.length > 0
+              ? `${contributorRows.length} split recipients`
+              : "single recipient"
+          }
+        />
+        <EvidenceRow
           label="canonical URL"
           value={receipt.canonicalUrl ?? citation?.url ?? "not recorded"}
         />
@@ -168,6 +183,26 @@ export default async function ReceiptPage({ params }: Props) {
           value={receipt.ownershipProof?.signer ?? "not verified"}
         />
       </section>
+
+      {contributorRows.length > 0 && (
+        <section className="receipt-context profile-section">
+          <div className="panel-heading">
+            <p className="eyebrow">split recipients</p>
+            <h3>Contributor amounts</h3>
+          </div>
+          <div className="source-list">
+            {contributorRows.map((contributor) => (
+              <article className="source-card" key={contributor.wallet}>
+                <div>
+                  <p>{shortWallet(contributor.wallet)}</p>
+                  <span>{contributor.shareBps} bps</span>
+                </div>
+                <strong>{formatUsdc(contributor.amountAtomicUsdc)} USDC</strong>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {query && (
         <section className="receipt-context">

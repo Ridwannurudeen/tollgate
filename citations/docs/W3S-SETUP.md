@@ -38,6 +38,27 @@ Success = a real `x402-settled`/`x402-verified` receipt whose `payer` equals
 `CIRCLE_PAYER_ADDRESS`, `signedBy: "circle-w3s"`. This proves the keyless signing
 seam end-to-end.
 
+## Server payout signer switch
+
+The FeeRouter payout path now has the same signer boundary as the x402 reader
+path:
+
+```
+TOLLGATE_SIGNER=keystore
+```
+
+uses the existing local server key from `LEPTONWEB_FEE_ROUTER_PRIVATE_KEY`.
+
+```
+TOLLGATE_SIGNER=w3s
+```
+
+uses `CIRCLE_PAYER_WALLET_ID` + `CIRCLE_PAYER_ADDRESS` and submits FeeRouter
+`approve`, `createSplit`, and `pay` calls through Circle W3S contract execution.
+This is READY-needs-CIRCLE_API_KEY-and-CIRCLE_ENTITY_SECRET: the code path is
+implemented and typechecked locally, but it should only be live-tested after the
+Circle sandbox entity secret is registered and the W3S wallet is funded.
+
 ## Env var reference
 
 | Var | Set by | Purpose |
@@ -46,7 +67,8 @@ seam end-to-end.
 | `CIRCLE_ENTITY_SECRET` | you (register in Console) | RSA-encrypted per request; authorizes signing |
 | `CIRCLE_WALLET_SET_ID` | `create:circle-wallets` | wallet set holding the payer wallet |
 | `CIRCLE_PAYER_WALLET_ID` / `_ADDRESS` | `create:circle-wallets` | the keyless spending agent (fund the address) |
-| `LEPTONWEB_PAYER_MODE=local` | optional break-glass | force the local DPAPI keystore payer instead of W3S (infra fallback only) |
+| `TOLLGATE_SIGNER=keystore\|w3s` | operator | select local FeeRouter signer or W3S contract execution |
+| `LEPTONWEB_PAYER_MODE=local` | optional break-glass | force the local DPAPI keystore payer for x402 proof scripts |
 
 ## Honest scope
 

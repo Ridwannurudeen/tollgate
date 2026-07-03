@@ -33,9 +33,19 @@ export function configuredPaymentEconomics(): PaymentEconomics {
 }
 
 export function queryPaymentEconomics(query: QueryRecord): PaymentEconomics {
+  const creatorPayoutsAtomicUsdc =
+    query.refundSummary !== undefined
+      ? query.totalAtomicUsdc - query.refundSummary.refundedAtomicUsdc
+      : query.citations
+          .filter(
+            (citation) =>
+              citation.payoutPolicy !== "escrow-unverified" &&
+              citation.payoutPolicy !== "refund-unused",
+          )
+          .reduce((sum, citation) => sum + citation.amountAtomicUsdc, 0);
   return paymentEconomics(
     query.readerPayment?.amountAtomicUsdc ?? 0,
-    query.totalAtomicUsdc,
+    creatorPayoutsAtomicUsdc,
   );
 }
 
@@ -51,7 +61,11 @@ export function ledgerPaidQueryEconomics(ledger: Ledger): PaymentEconomics {
   );
   const creatorPayoutsAtomicUsdc = ledger.receipts.reduce(
     (sum, receipt) =>
-      paidQueryIds.has(receipt.queryId) ? sum + receipt.amountAtomicUsdc : sum,
+      paidQueryIds.has(receipt.queryId) &&
+      receipt.settlementMode !== "escrowed" &&
+      receipt.settlementMode !== "refunded"
+        ? sum + receipt.amountAtomicUsdc
+        : sum,
     0,
   );
 

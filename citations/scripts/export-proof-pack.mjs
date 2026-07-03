@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readLedger } from "./ledger-store.mjs";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -112,10 +113,7 @@ function verifyLedger(ledger) {
 }
 
 const outputPath = process.argv[2] ?? path.join(appDir, "data", "proof-pack.json");
-const ledger = await readJson(path.join(appDir, "data", "ledger.json"), {
-  queries: [],
-  receipts: [],
-});
+const ledger = await readLedger(appDir);
 const customSources = await readJson(path.join(appDir, "data", "sources.json"), []);
 const splitRegistry = await readJson(
   path.join(appDir, "data", "fee-router-splits.json"),

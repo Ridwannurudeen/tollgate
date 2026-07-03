@@ -28,10 +28,19 @@ function readQuestion(body: unknown): string {
   return validateQuestion(question);
 }
 
+function readCreator(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const creator = (body as Record<string, unknown>).creator;
+  return typeof creator === "string" && creator.trim()
+    ? creator.trim()
+    : undefined;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as unknown;
     const question = readQuestion(body);
+    const creatorWallet = readCreator(body);
     const payTo = tollgateAgentWallet();
     // Multi-accept: exact first (browser injected-wallet clients), Gateway
     // second (autonomous agents using @circle-fin/x402-batching → batched
@@ -71,6 +80,8 @@ export async function POST(request: NextRequest) {
       payer: settlement.payer,
       transaction: settlement.transaction,
       paymentResource: "/api/paid-query",
+    }, {
+      creatorWallet,
     });
 
     return NextResponse.json(result, {

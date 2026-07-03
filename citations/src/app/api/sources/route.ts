@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SourceRegistryError, appendSource, readSources } from "@/lib/catalog";
+import { assertSourceRegistrationRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitKey =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request.headers.get("x-real-ip") ??
+      "local";
+    assertSourceRegistrationRateLimit(rateLimitKey);
     const body = (await request.json()) as unknown;
     const result = await appendSource(body);
     return NextResponse.json(result, { status: 201 });

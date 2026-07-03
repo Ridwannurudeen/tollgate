@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SourceVerifyPanel } from "@/components/SourceVerifyPanel";
 import { findSource } from "@/lib/catalog";
 import {
   formatUsdc,
@@ -8,6 +9,7 @@ import {
   shortWallet,
 } from "@/lib/format";
 import { getSourceEvidence, readLedger } from "@/lib/ledger";
+import { verificationToken } from "@/lib/source-verification";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,13 @@ export default async function SourcePage({ params }: Props) {
   const receipts = evidence?.receipts ?? [];
   const earnedAtomicUsdc = evidence?.earnedAtomicUsdc ?? 0;
   const latestReceipt = receipts[0];
+  const token = (() => {
+    try {
+      return verificationToken(source.id);
+    } catch {
+      return null;
+    }
+  })();
 
   return (
     <main className="shell receipt-page">
@@ -100,6 +109,20 @@ export default async function SourcePage({ params }: Props) {
           <strong>{source.ownershipProof?.method ?? "not verified"}</strong>
         </div>
         <div className="evidence-row">
+          <span>probation</span>
+          <strong>{source.probation ? "active" : "cleared"}</strong>
+        </div>
+        <div className="evidence-row">
+          <span>origin</span>
+          <strong>{source.origin ?? "seed"}</strong>
+        </div>
+        <div className="evidence-row">
+          <span>content hash</span>
+          <strong>
+            {source.contentHash ? shortHash(source.contentHash) : "not fetched"}
+          </strong>
+        </div>
+        <div className="evidence-row">
           <span>verified at</span>
           <strong>{source.ownershipProof?.verifiedAt ?? "not verified"}</strong>
         </div>
@@ -116,6 +139,12 @@ export default async function SourcePage({ params }: Props) {
           ))}
         </div>
       </section>
+
+      <SourceVerifyPanel
+        sourceId={source.id}
+        token={token}
+        verified={source.verifiedCreator}
+      />
 
       <section className="receipt-ledger">
         <div className="panel-heading">

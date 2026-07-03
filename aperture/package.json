@@ -15,6 +15,7 @@
     "watch:access-log": "tsx scripts/watch-access-log.ts",
     "prove:demo-resolve": "tsx scripts/prove-demo-resolve.ts",
     "verify:ledger": "tsx scripts/verify-ledger.ts",
+    "migrate:ledger": "node scripts/migrate-ledger.mjs",
     "verify:payouts": "tsx scripts/verify-payouts.ts",
     "register:owner": "tsx scripts/register-owner.ts",
     "register:creator": "node --env-file-if-exists=.env.local --import tsx scripts/register-creator.ts",

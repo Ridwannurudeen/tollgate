@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -115,6 +115,40 @@ describe("license ledger", () => {
       expect(verification.latestHash).toBe(
         ledger.receipts.at(-1)?.receiptHash,
       );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reads and appends against SQLite when ledger.db exists", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-ledger-db-"));
+    const filePath = path.join(dir, "ledger.json");
+    const dbPath = path.join(dir, "ledger.db");
+    try {
+      await writeFile(dbPath, "");
+      await appendLicenseReceipt(
+        {
+          eventId:
+            "0x4444444444444444444444444444444444444444444444444444444444444444",
+          event,
+          sharedLinkId: "share-1",
+          assetId: "asset-1",
+          ownerId: "owner-1",
+          photographer,
+          amountAtomicUsdc: 2500,
+          evidence: {
+            settlementMode: "local-proof",
+            paymentResource: "immich-access-log",
+          },
+        },
+        filePath,
+      );
+
+      const ledger = await readLicenseLedger(filePath);
+      const verification = verifyLicenseLedger(ledger);
+
+      expect(ledger.receipts).toHaveLength(1);
+      expect(verification.ok).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

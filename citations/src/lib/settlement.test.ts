@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -16,6 +16,7 @@ import {
   planCitationMarket,
   selectSources,
 } from "./engine";
+import { releaseEscrowForSource } from "./escrow";
 import { configuredPaymentEconomics } from "./economics";
 import {
   appendSettlement,
@@ -30,8 +31,13 @@ import {
   ZERO_HASH,
 } from "./ledger";
 import { PAID_QUERY_PRICE_ATOMIC_USDC } from "./payments";
-import type { Ledger, PaymentReceipt, QueryRecord } from "./types";
-import { createQueryPaymentEvidence, validateQuestion } from "./settlement";
+import type { CreatorSource, Ledger, PaymentReceipt, QueryRecord } from "./types";
+import {
+  createQueryPaymentEvidence,
+  filterSourcesForSettlement,
+  sourcesForAgent,
+  validateQuestion,
+} from "./settlement";
 
 describe("LeptonWeb settlement engine", () => {
   it("selects creator sources that match the question", () => {
@@ -120,6 +126,125 @@ describe("LeptonWeb settlement engine", () => {
         (decision) => decision.sourceId === "expensive-relevant",
       )?.selected,
     ).toBe(false);
+  });
+
+  it("caps probation sources to one per deterministic answer", () => {
+    const probationSources: CreatorSource[] = [
+      {
+        id: "probation-a",
+        title: "Probation Agent Payments A",
+        creator: "Probation A",
+        handle: "@probationa",
+        wallet: "0x1111111111111111111111111111111111111111",
+        url: "https://example.com/probation-a",
+        summary: "AI agents pay creators with x402 citation receipts.",
+        tags: ["agents", "x402", "creators"],
+        priceAtomicUsdc: 900,
+        sourceKind: "external",
+        creatorKind: "external",
+        verifiedCreator: false,
+        probation: true,
+      },
+      {
+        id: "probation-b",
+        title: "Probation Agent Payments B",
+        creator: "Probation B",
+        handle: "@probationb",
+        wallet: "0x2222222222222222222222222222222222222222",
+        url: "https://example.com/probation-b",
+        summary: "AI agents pay creators with x402 citation receipts.",
+        tags: ["agents", "x402", "creators"],
+        priceAtomicUsdc: 950,
+        sourceKind: "external",
+        creatorKind: "external",
+        verifiedCreator: false,
+        probation: true,
+      },
+    ];
+
+    const plan = planCitationMarket(
+      "How should AI agents pay creators with x402?",
+      probationSources,
+    );
+
+    expect(plan.selectedSources).toHaveLength(1);
+    expect(plan.selectedSources[0]?.probation).toBe(true);
+  });
+
+  it("filters probation sources that hit the paid-citation cap", () => {
+    const previous = process.env.TOLLGATE_PROBATION_MAX_PAID_CITATIONS;
+    process.env.TOLLGATE_PROBATION_MAX_PAID_CITATIONS = "1";
+    const source: CreatorSource = {
+      id: "probation-cap",
+      title: "Probation Cap",
+      creator: "Probation Lab",
+      handle: "@probation",
+      wallet: "0x3333333333333333333333333333333333333333",
+      url: "https://example.com/probation-cap",
+      summary: "A probation source that already received one paid citation.",
+      tags: ["probation"],
+      priceAtomicUsdc: 1_000,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: false,
+      probation: true,
+    };
+    const query = createQueryRecord(
+      "How should probation caps work for paid citations?",
+      "2026-07-03T12:00:00.000Z",
+      [source],
+    );
+    const receipts = createReceipts(query, []);
+
+    try {
+      const filtered = sourcesForAgent([source], {
+        queries: [{ ...query, receiptHashes: receipts.map((receipt) => receipt.receiptHash) }],
+        receipts,
+      });
+
+      expect(filtered).toHaveLength(0);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TOLLGATE_PROBATION_MAX_PAID_CITATIONS;
+      } else {
+        process.env.TOLLGATE_PROBATION_MAX_PAID_CITATIONS = previous;
+      }
+    }
+  });
+
+  it("filters widget answers to one creator wallet", () => {
+    const first: CreatorSource = {
+      id: "creator-widget-a",
+      title: "Creator Widget A",
+      creator: "Creator A",
+      handle: "@a",
+      wallet: "0x1111111111111111111111111111111111111111",
+      url: "https://example.com/a",
+      summary: "Widget source A.",
+      tags: ["widget"],
+      priceAtomicUsdc: 1_000,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: true,
+    };
+    const second: CreatorSource = {
+      ...first,
+      id: "creator-widget-b",
+      title: "Creator Widget B",
+      wallet: "0x2222222222222222222222222222222222222222",
+      url: "https://example.com/b",
+    };
+
+    const filtered = filterSourcesForSettlement([first, second], {
+      creatorWallet: first.wallet,
+    });
+
+    expect(filtered).toEqual([first]);
+    expect(() =>
+      filterSourcesForSettlement([first], {
+        creatorWallet: "0x3333333333333333333333333333333333333333",
+      }),
+    ).toThrow("No sources");
   });
 
   it("keeps the configured source budget inside the reader payment", () => {
@@ -336,6 +461,116 @@ describe("LeptonWeb settlement engine", () => {
     ).toBe(true);
   });
 
+  it("records contributor splits in receipt hashes", () => {
+    const query = createQueryRecord(
+      "How should co-authored sources split AI citation payouts?",
+      "2026-07-03T13:30:00.000Z",
+    );
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      contributors: [
+        {
+          wallet: "0x8888888888888888888888888888888888888888",
+          shareBps: 7_000,
+        },
+        {
+          wallet: "0x9999999999999999999999999999999999999999",
+          shareBps: 3_000,
+        },
+      ],
+    }));
+
+    const receipts = createReceipts(query, []);
+
+    expect(receipts[0]?.contributors).toEqual(query.citations[0]?.contributors);
+    expect(
+      verifyLedgerIntegrity({
+        queries: [
+          {
+            ...query,
+            receiptHashes: receipts.map((receipt) => receipt.receiptHash),
+          },
+        ],
+        receipts,
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("keeps unverified escrow out of creator earnings until verification release", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-escrow-"));
+    const filePath = path.join(dir, "ledger.json");
+    const source: CreatorSource = {
+      id: "escrowed-research",
+      title: "Escrowed Research",
+      creator: "Escrow Lab",
+      handle: "@escrow",
+      wallet: "0x7777777777777777777777777777777777777777",
+      url: "https://example.com/escrowed-research",
+      summary: "Research about escrowed creator payments for Tollgate tests.",
+      tags: ["escrow", "payments"],
+      priceAtomicUsdc: 1_400,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: false,
+    };
+
+    try {
+      const query = createQueryRecord(
+        "How should escrowed payments protect unverified creators?",
+        "2026-07-03T12:00:00.000Z",
+        [source],
+      );
+      const escrowSettlement = await appendSettlement(
+        query,
+        {
+          [source.id]: {
+            settlementMode: "escrowed",
+            paymentResource: "tollgate-escrow:unverified-source",
+            payoutPolicy: "escrow-unverified",
+          },
+        },
+        filePath,
+      );
+
+      expect(escrowSettlement.receipts[0]?.settlementMode).toBe("escrowed");
+      expect(summarizeCreators(escrowSettlement.ledger)).toHaveLength(0);
+      expect(
+        getSourceEvidence(escrowSettlement.ledger, source.id)
+          ?.earnedAtomicUsdc,
+      ).toBe(0);
+
+      const verifiedSource: CreatorSource = {
+        ...source,
+        verifiedCreator: true,
+        ownershipProof: {
+          method: "wallet-signature",
+          signer: source.wallet,
+          signatureHash: `0x${"ab".repeat(32)}`,
+          verifiedAt: "2026-07-03T12:01:00.000Z",
+        },
+      };
+      const release = await releaseEscrowForSource(verifiedSource, {
+        ledgerPath: filePath,
+        enabled: false,
+      });
+      const releasedLedger = await readLedger(filePath);
+      const releaseReceipt = releasedLedger.receipts.at(-1);
+
+      expect(release.released).toBe(true);
+      expect(release.amountAtomicUsdc).toBe(source.priceAtomicUsdc);
+      expect(releaseReceipt?.payoutPolicy).toBe("escrow-release");
+      expect(releaseReceipt?.releasedReceiptHashes).toEqual([
+        escrowSettlement.receipts[0]?.receiptHash,
+      ]);
+      expect(getSourceEvidence(releasedLedger, source.id)?.earnedAtomicUsdc).toBe(
+        source.priceAtomicUsdc,
+      );
+      expect(verifyLedgerIntegrity(releasedLedger).ok).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects under-specified questions", () => {
     expect(() => validateQuestion("pay?")).toThrow(/at least 8/);
   });
@@ -398,6 +633,98 @@ describe("LeptonWeb settlement engine", () => {
         /^0x[0-9a-f]{64}$/,
       );
     } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects custodial source registration when W3S is not configured", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-sources-"));
+    const filePath = path.join(dir, "sources.json");
+    const previousKey = process.env.CIRCLE_API_KEY;
+    const previousSecret = process.env.CIRCLE_ENTITY_SECRET;
+    const previousSet = process.env.CIRCLE_WALLET_SET_ID;
+    delete process.env.CIRCLE_API_KEY;
+    delete process.env.CIRCLE_ENTITY_SECRET;
+    delete process.env.CIRCLE_WALLET_SET_ID;
+
+    try {
+      await expect(
+        appendSource(
+          {
+            title: "Custodial Research Feed",
+            creator: "Custody Lab",
+            handle: "@custody",
+            url: "https://example.com/custody",
+            summary: "Custodial onboarding should fail clearly without W3S.",
+            tags: ["custody"],
+            priceAtomicUsdc: 2500,
+          },
+          filePath,
+        ),
+      ).rejects.toThrow("custodial onboarding not enabled");
+    } finally {
+      if (previousKey !== undefined) process.env.CIRCLE_API_KEY = previousKey;
+      if (previousSecret !== undefined) {
+        process.env.CIRCLE_ENTITY_SECRET = previousSecret;
+      }
+      if (previousSet !== undefined) {
+        process.env.CIRCLE_WALLET_SET_ID = previousSet;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("registers a custodial source with an injected W3S mint", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-sources-"));
+    const filePath = path.join(dir, "sources.json");
+    const previousKey = process.env.CIRCLE_API_KEY;
+    const previousSecret = process.env.CIRCLE_ENTITY_SECRET;
+    const previousSet = process.env.CIRCLE_WALLET_SET_ID;
+    process.env.CIRCLE_API_KEY = "test";
+    process.env.CIRCLE_ENTITY_SECRET = "ab".repeat(32);
+    process.env.CIRCLE_WALLET_SET_ID = "wallet-set";
+
+    try {
+      const result = await appendSource(
+        {
+          title: "Custodial Research Feed",
+          creator: "Custody Lab",
+          handle: "@custody",
+          url: "https://example.com/custody",
+          summary: "Custodial onboarding stores a minted payout wallet.",
+          tags: ["custody"],
+          priceAtomicUsdc: 2500,
+        },
+        filePath,
+        async () => ({
+          id: "wallet-id",
+          address: "0x9999999999999999999999999999999999999999",
+          blockchain: "ARC-TESTNET",
+          state: "LIVE",
+        }),
+      );
+
+      expect(result.source.wallet).toBe(
+        "0x9999999999999999999999999999999999999999",
+      );
+      expect(result.source.custody).toBe("circle-w3s");
+      expect(result.source.walletId).toBe("wallet-id");
+    } finally {
+      if (previousKey === undefined) {
+        delete process.env.CIRCLE_API_KEY;
+      } else {
+        process.env.CIRCLE_API_KEY = previousKey;
+      }
+      if (previousSecret === undefined) {
+        delete process.env.CIRCLE_ENTITY_SECRET;
+      } else {
+        process.env.CIRCLE_ENTITY_SECRET = previousSecret;
+      }
+      if (previousSet === undefined) {
+        delete process.env.CIRCLE_WALLET_SET_ID;
+      } else {
+        process.env.CIRCLE_WALLET_SET_ID = previousSet;
+      }
       await rm(dir, { recursive: true, force: true });
     }
   });
@@ -573,6 +900,29 @@ describe("LeptonWeb settlement engine", () => {
       expect(ledger.receipts).toHaveLength(expectedReceiptCount);
       expect(verification.ok).toBe(true);
       expect(verification.latestHash).toBe(ledger.receipts.at(-1)?.receiptHash);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reads and appends against SQLite when ledger.db exists", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-ledger-db-"));
+    const filePath = path.join(dir, "ledger.json");
+    const dbPath = path.join(dir, "ledger.db");
+    try {
+      await writeFile(dbPath, "");
+      const query = createQueryRecord(
+        "How does SQLite preserve Tollgate receipt chains?",
+        "2026-07-03T13:00:00.000Z",
+      );
+
+      await appendSettlement(query, {}, filePath);
+      const ledger = await readLedger(filePath);
+      const verification = verifyLedgerIntegrity(ledger);
+
+      expect(ledger.queries).toHaveLength(1);
+      expect(ledger.receipts).toHaveLength(query.citations.length);
+      expect(verification.ok).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

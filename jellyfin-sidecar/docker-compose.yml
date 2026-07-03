@@ -1,0 +1,23 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    ports:
+      - "8096:8096"
+    volumes:
+      - ./demo/jellyfin/config:/config
+      - ./demo/jellyfin/cache:/cache
+      - ./demo/media:/media:ro
+
+  tollgate-jellyfin-sidecar:
+    build: .
+    environment:
+      JELLYFIN_SIDECAR_PORT: "4317"
+      JELLYFIN_REGISTRY_PATH: /app/data/registry.json
+      JELLYFIN_LEDGER_PATH: /app/data/ledger.json
+      JELLYFIN_SESSIONS_PATH: /app/data/sessions.json
+      JELLYFIN_USDC_ATOMIC_PER_MINUTE: "2500"
+      JELLYFIN_FEE_ROUTER_MODE: dry-run
+    ports:
+      - "4317:4317"
+    volumes:
+      - ./data:/app/data

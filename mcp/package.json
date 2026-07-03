@@ -1,0 +1,28 @@
+{
+  "name": "@tollgate/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Unpublished Tollgate MCP server for paying reader agents.",
+  "bin": {
+    "tollgate-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tollgate/reader": "file:../sdk",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
+  }
+}

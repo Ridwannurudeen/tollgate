@@ -61,11 +61,13 @@ type Draft = {
 type Critique = {
   groundedAnswer: string;
   verdict: string;
+  usedSourceIds?: Set<string>;
 };
 
 type AgentLoopResult = {
   answer: string;
   selected: CreatorSource[];
+  unusedSourceIds: Set<string>;
   steps: AgentStep[];
   rationale: string;
   appraisalReason: Map<string, string>;
@@ -198,7 +200,11 @@ function critiqueMessages(
         question,
         purchasedSourceIds,
         draft,
-        responseShape: { groundedAnswer: "string", verdict: "string" },
+        responseShape: {
+          groundedAnswer: "string",
+          verdict: "string",
+          sourceUsage: [{ sourceId: "string", used: "boolean" }],
+        },
       }),
     },
   ];
@@ -311,9 +317,27 @@ function parseCritique(text: string, fallbackAnswer: string): Critique {
   }
   const grounded = cleanModelText(parsed.groundedAnswer, MAX_ANSWER_LENGTH);
   const verdict = cleanModelText(parsed.verdict, MAX_REASON_LENGTH);
+  const sourceUsage = Array.isArray(parsed.sourceUsage)
+    ? parsed.sourceUsage
+        .map((item) => {
+          if (!isRecord(item)) return null;
+          const sourceId = cleanModelText(item.sourceId, 80);
+          if (!sourceId) return null;
+          return { sourceId, used: item.used === true };
+        })
+        .filter((item): item is { sourceId: string; used: boolean } => item !== null)
+    : [];
   return {
     groundedAnswer: grounded.length >= 40 ? grounded : fallbackAnswer,
     verdict,
+    usedSourceIds:
+      sourceUsage.length > 0
+        ? new Set(
+            sourceUsage
+              .filter((usage) => usage.used)
+              .map((usage) => usage.sourceId),
+          )
+        : undefined,
   };
 }
 
@@ -344,14 +368,17 @@ function allocateFromAppraisals(
   const selected: CreatorSource[] = [];
   const seen = new Set<string>();
   let remainingAtomicUsdc = sourceBudgetAtomicUsdc;
+  let probationSelected = false;
 
   for (const { source } of buys) {
     if (selected.length >= MAX_AGENT_SOURCES) break;
     if (seen.has(source.id)) continue;
     if (source.priceAtomicUsdc > remainingAtomicUsdc) continue;
+    if (source.probation && probationSelected) continue;
     seen.add(source.id);
     selected.push(source);
     remainingAtomicUsdc -= source.priceAtomicUsdc;
+    if (source.probation) probationSelected = true;
   }
 
   return { selected, remainingAtomicUsdc };
@@ -453,6 +480,13 @@ async function runAgentLoop(
   });
 
   let answer = critique.groundedAnswer;
+  let unusedSourceIds = new Set(
+    critique.usedSourceIds
+      ? selected
+          .filter((source) => !critique.usedSourceIds?.has(source.id))
+          .map((source) => source.id)
+      : [],
+  );
   let rationale =
     critique.verdict ||
     `Bought ${selected.length} source${
@@ -461,12 +495,14 @@ async function runAgentLoop(
 
   if (unsupported.length > 0 && selected.length < MAX_AGENT_SOURCES) {
     const sourceById = new Map(sources.map((source) => [source.id, source]));
+    const hasProbationSource = selected.some((source) => source.probation);
     const candidate = unsupported
       .map((claim) => sourceById.get(claim.sourceId))
       .find(
         (source): source is CreatorSource =>
           source !== undefined &&
           !boughtIds.has(source.id) &&
+          !(source.probation && hasProbationSource) &&
           source.priceAtomicUsdc <= remainingAtomicUsdc,
       );
     if (candidate) {
@@ -478,6 +514,7 @@ async function runAgentLoop(
       );
       draft = reDraft;
       answer = reDraft.answer;
+      unusedSourceIds = new Set();
       steps.push({
         index: 4,
         name: "reflect",
@@ -489,7 +526,7 @@ async function runAgentLoop(
     }
   }
 
-  return { answer, selected, steps, rationale, appraisalReason };
+  return { answer, selected, unusedSourceIds, steps, rationale, appraisalReason };
 }
 
 function buildLlmQueryRecord(
@@ -526,6 +563,7 @@ function buildLlmQueryRecord(
   };
   const citations: Citation[] = loop.selected.map((source) => {
     const content = buildSourceContent(source, createdAt);
+    const refunded = loop.unusedSourceIds.has(source.id);
     return {
       sourceId: source.id,
       title: source.title,
@@ -547,8 +585,17 @@ function buildLlmQueryRecord(
       creatorKind: source.creatorKind,
       verifiedCreator: source.verifiedCreator,
       ownershipProof: source.ownershipProof,
+      contributors: source.contributors,
+      ...(refunded ? { payoutPolicy: "refund-unused" as const } : {}),
     };
   });
+  const refundedAtomicUsdc = citations.reduce(
+    (sum, citation) =>
+      citation.payoutPolicy === "refund-unused"
+        ? sum + citation.amountAtomicUsdc
+        : sum,
+    0,
+  );
   const traceHash = sha256Hex(loop.steps);
   const queryHash = sha256Hex({
     question,
@@ -583,6 +630,12 @@ function buildLlmQueryRecord(
     traceHash,
     receiptHashes: [],
     readerPayment,
+    refundSummary: {
+      boughtCount: citations.length,
+      citedCount: citations.length - loop.unusedSourceIds.size,
+      refundedCount: loop.unusedSourceIds.size,
+      refundedAtomicUsdc,
+    },
     createdAt,
   };
 }

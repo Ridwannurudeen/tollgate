@@ -5,6 +5,8 @@
 - `citations/`: Next app for paid answers, source registration, x402 payment verification/settlement, FeeRouter creator payouts, receipt proofs, and Forum accountability surfaces.
 - `aperture/`: Next app for Immich shared-link download metering, owner-to-wallet registry, license receipts, proof-pack export, and optional FeeRouter payout routing.
 - `peertube-plugin-tollgate/`: permissionless PeerTube plugin that gates video downloads, routes USDC to the creator through FeeRouter, and writes hash-chained receipts. Self-contained (bundles the viem FeeRouter payout); installs from the npm plugin index with no upstream changes.
+- `sdk/`: unpublished `@tollgate/reader` package for local-proof and caller-supplied paid reader flows.
+- `mcp/`: unpublished stdio MCP server exposing `tollgate_ask` and `tollgate_sources`.
 - Forum contracts: FeeRouter, TrackRecord, CovenantVault, and SlashBond surfaces already deployed on Arc testnet.
 
 ## Core Lifecycle
@@ -30,6 +32,10 @@ question
   -> FeeRouter payout evidence per cited creator
   -> TrackRecord/Covenant/SlashBond accountability
 ```
+
+Unverified external sources can be escrowed instead of routed. Verification through wallet signature, meta tag, or DNS TXT can release accrued escrow as one aggregate payout.
+
+The source registry accepts direct registration, RSS import, and open-web discovery from `/.well-known/tollgate.json` or `<meta name="tollgate">`.
 
 ## Aperture Lifecycle
 
@@ -64,3 +70,9 @@ video download request
 - `x402-verified`: payment authorization verified.
 - `x402-settled`: x402 facilitator/Gateway settlement completed.
 - `forum-routed`: creator payout routed through FeeRouter.
+- `escrowed`: payout recorded but withheld until ownership verification.
+- `refunded`: bought source was not cited in the final answer.
+
+## Ledger Backends
+
+Each app can still read the legacy JSON ledger. When `data/ledger.db` exists, reads and appends use SQLite tables with JSON payloads and the same hash-chain rules. Migration scripts verify the chain before and after writing SQLite.

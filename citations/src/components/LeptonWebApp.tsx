@@ -44,7 +44,16 @@ type SourceFormState = {
   url: string;
   summary: string;
   tags: string;
+  notifyEmail: string;
+  contributors: string;
   priceAtomicUsdc: string;
+};
+
+type RssImportPost = {
+  title: string;
+  url: string;
+  summary: string;
+  tags: string[];
 };
 
 const EXAMPLE_QUESTIONS = [
@@ -61,6 +70,8 @@ const EMPTY_SOURCE_FORM: SourceFormState = {
   url: "",
   summary: "",
   tags: "",
+  notifyEmail: "",
+  contributors: "",
   priceAtomicUsdc: "1000",
 };
 
@@ -100,6 +111,11 @@ export function LeptonWebApp({
     useState<SourceFormState>(EMPTY_SOURCE_FORM);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [sourceRegistrationStatus, setSourceRegistrationStatus] = useState("");
+  const [feedUrl, setFeedUrl] = useState("");
+  const [rssPosts, setRssPosts] = useState<RssImportPost[]>([]);
+  const [selectedRssUrls, setSelectedRssUrls] = useState<Set<string>>(
+    new Set(),
+  );
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRegisteringSource, setIsRegisteringSource] = useState(false);
@@ -226,6 +242,34 @@ export function LeptonWebApp({
     setSourceForm((current) => ({ ...current, [field]: value }));
   }
 
+  function sourceRegistrationPayload(overrides: Record<string, unknown> = {}) {
+    const baseForm = {
+      title: sourceForm.title,
+      creator: sourceForm.creator,
+      handle: sourceForm.handle,
+      wallet: sourceForm.wallet,
+      url: sourceForm.url,
+      summary: sourceForm.summary,
+      tags: sourceForm.tags,
+      notifyEmail: sourceForm.notifyEmail,
+      priceAtomicUsdc: sourceForm.priceAtomicUsdc,
+    };
+    const contributors = sourceForm.contributors
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => {
+        const [wallet, share] = entry.split(":").map((part) => part.trim());
+        return { wallet, shareBps: Number(share) };
+      });
+    return {
+      ...baseForm,
+      ...overrides,
+      ...(sourceForm.notifyEmail ? { notifyEmail: sourceForm.notifyEmail } : {}),
+      ...(contributors.length > 0 ? { contributors } : {}),
+    };
+  }
+
   async function registerSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsRegisteringSource(true);
@@ -234,7 +278,7 @@ export function LeptonWebApp({
       const response = await fetch("/api/sources", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(sourceForm),
+        body: JSON.stringify(sourceRegistrationPayload()),
       });
       const body = (await response.json()) as SourceRegistryResponse;
       if (!response.ok) {
@@ -248,6 +292,73 @@ export function LeptonWebApp({
     } catch (error) {
       setSourceRegistrationStatus(
         error instanceof Error ? error.message : "Source registration failed.",
+      );
+    } finally {
+      setIsRegisteringSource(false);
+    }
+  }
+
+  async function discoverFeed() {
+    setSourceRegistrationStatus("Looking for feed posts...");
+    try {
+      const response = await fetch("/api/import/rss", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: feedUrl }),
+      });
+      const body = (await response.json()) as {
+        posts?: RssImportPost[];
+        error?: string;
+      };
+      if (!response.ok || !body.posts) {
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+      }
+      const posts = body.posts.slice(0, 20);
+      setRssPosts(posts);
+      setSelectedRssUrls(new Set(posts.map((post) => post.url)));
+      setSourceRegistrationStatus(`Found ${posts.length} feed post(s).`);
+    } catch (error) {
+      setSourceRegistrationStatus(
+        error instanceof Error ? error.message : "Feed discovery failed.",
+      );
+    }
+  }
+
+  async function registerSelectedFeedPosts() {
+    const selected = rssPosts.filter((post) => selectedRssUrls.has(post.url));
+    setIsRegisteringSource(true);
+    setSourceRegistrationStatus("Registering selected feed posts...");
+    try {
+      const results = await Promise.all(
+        selected.map((post) =>
+          fetch("/api/sources", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(
+              sourceRegistrationPayload({
+                title: post.title,
+                url: post.url,
+                summary: post.summary,
+                tags: [...post.tags, sourceForm.tags].join(","),
+                origin: "rss-import",
+              }),
+            ),
+          }),
+        ),
+      );
+      const failed = results.find((response) => !response.ok);
+      if (failed) {
+        const body = (await failed.json()) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${failed.status}`);
+      }
+      const latest = (await results.at(-1)?.json()) as
+        | SourceRegistryResponse
+        | undefined;
+      if (latest?.sources) setRegistrySources(latest.sources);
+      setSourceRegistrationStatus(`Registered ${selected.length} feed post(s).`);
+    } catch (error) {
+      setSourceRegistrationStatus(
+        error instanceof Error ? error.message : "Feed import failed.",
       );
     } finally {
       setIsRegisteringSource(false);
@@ -484,8 +595,8 @@ export function LeptonWebApp({
               }
             />
             <small className="field-hint">
-              Where your earnings are paid. Paste any Ethereum-style wallet
-              address (it starts with 0x).
+              Optional. Paste an Ethereum-style wallet, or leave blank and
+              Tollgate will create a custodial payout wallet when enabled.
             </small>
             <label htmlFor="source-url">Link to your work</label>
             <input
@@ -511,6 +622,24 @@ export function LeptonWebApp({
               value={sourceForm.tags}
               onChange={(event) => updateSourceForm("tags", event.target.value)}
             />
+            <label htmlFor="source-notify-email">Notification email</label>
+            <input
+              id="source-notify-email"
+              placeholder="ada@example.com"
+              value={sourceForm.notifyEmail}
+              onChange={(event) =>
+                updateSourceForm("notifyEmail", event.target.value)
+              }
+            />
+            <label htmlFor="source-contributors">Contributor splits</label>
+            <input
+              id="source-contributors"
+              placeholder="0xabc...:7000, 0xdef...:3000"
+              value={sourceForm.contributors}
+              onChange={(event) =>
+                updateSourceForm("contributors", event.target.value)
+              }
+            />
             <button
               type="submit"
               className="source-register-button"
@@ -523,6 +652,57 @@ export function LeptonWebApp({
                 "Add one link to your work — you'll be paid whenever the AI cites it."}
             </p>
           </form>
+          <div className="register-source-form">
+            <label htmlFor="feed-url">Import your feed</label>
+            <input
+              id="feed-url"
+              placeholder="https://yourblog.com"
+              value={feedUrl}
+              onChange={(event) => setFeedUrl(event.target.value)}
+            />
+            <button
+              type="button"
+              className="source-register-button"
+              disabled={!feedUrl || isRegisteringSource}
+              onClick={discoverFeed}
+            >
+              Find posts
+            </button>
+            {rssPosts.length > 0 && (
+              <>
+                <div className="source-list">
+                  {rssPosts.map((post) => (
+                    <label className="source-card" key={post.url}>
+                      <input
+                        type="checkbox"
+                        checked={selectedRssUrls.has(post.url)}
+                        onChange={(event) => {
+                          setSelectedRssUrls((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) next.add(post.url);
+                            else next.delete(post.url);
+                            return next;
+                          });
+                        }}
+                      />
+                      <span>
+                        <p>{post.title}</p>
+                        <small>{post.url}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="source-register-button"
+                  disabled={selectedRssUrls.size === 0 || isRegisteringSource}
+                  onClick={registerSelectedFeedPosts}
+                >
+                  Register selected posts
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </section>
 

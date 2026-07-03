@@ -18,6 +18,7 @@
 
 - Browser UI claims, localStorage, and client-side click state.
 - Self-registered source metadata until wallet-signature verification is present.
+- Discovered `tollgate.json`, RSS import, meta-tag verification fetches, and DNS TXT records until server-side validation completes.
 - Aperture owner-to-wallet mappings until operator approval or wallet-signature approval is present.
 - Any raw shared-link key, IP address, user-agent, API key, or private key in public output.
 
@@ -32,11 +33,15 @@
 - Both ledgers serialize read-modify-write appends inside each app process.
 - FeeRouter routing uses the `createSplit` simulation result and persists one split per creator wallet for reuse.
 - Creator/source records are labeled as external, seed, or internal-test; verified creator status requires wallet-signature proof in Citations and operator/wallet approval in Aperture.
+- Unverified external citation payouts can be recorded as `escrowed` and released only after verification.
+- New external sources start on probation; allocation caps probation exposure and registration caps limit wallet/IP spam.
+- Registration and discovery fetches reject local/private hosts unless explicitly allowed by a fixture command.
+- Refund receipts mark bought-but-uncited sources before creator payout routing.
 - Aperture `POST /aperture/api/license-download` returns x402 payment requirements before unlock and records receipts after verified/local-proof unlock.
 
 ## Known Limits
 
-- File-ledger locking is in-process only; production should run one writer per app instance or move ledgers to a transactional store.
+- Legacy JSON ledgers still use in-process locking. SQLite ledgers use transactional writes when `data/ledger.db` exists.
 - Credentialed `x402-settled` and Gateway paths require facilitator/Gateway credentials and are user-run on the VPS.
 
 ## Privacy

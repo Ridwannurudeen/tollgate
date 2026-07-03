@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { readLedger } from "./ledger-store.mjs";
 
 const ZERO_HASH = `0x${"0".repeat(64)}`;
-const ledgerPath = new URL("../data/ledger.json", import.meta.url);
+const appDir = fileURLToPath(new URL("..", import.meta.url));
 
 function stableStringify(value) {
   if (value === undefined) return "null";
@@ -93,6 +94,18 @@ function receiptPayload(receipt, includeUndefinedOptionals) {
   }
   if (receipt.ownershipProof !== undefined) {
     payload.ownershipProof = receipt.ownershipProof;
+  }
+  if (receipt.payoutPolicy !== undefined) {
+    payload.payoutPolicy = receipt.payoutPolicy;
+  }
+  if (receipt.contributors !== undefined) {
+    payload.contributors = receipt.contributors;
+  }
+  if (receipt.releasedReceiptHashes !== undefined) {
+    payload.releasedReceiptHashes = receipt.releasedReceiptHashes;
+  }
+  if (receipt.refundReason !== undefined) {
+    payload.refundReason = receipt.refundReason;
   }
   return payload;
 }
@@ -232,7 +245,7 @@ function verifyLedger(ledger) {
   };
 }
 
-const ledger = JSON.parse(await readFile(ledgerPath, "utf8"));
+const ledger = await readLedger(appDir);
 const result = verifyLedger(ledger);
 console.log(JSON.stringify(result, null, 2));
 if (!result.ok) process.exit(1);

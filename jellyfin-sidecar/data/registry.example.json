@@ -1,0 +1,12 @@
+{
+  "videos": [
+    {
+      "itemId": "video-demo-001",
+      "title": "Demo Independent Film",
+      "displayName": "Demo Creator",
+      "wallet": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      "priceAtomicUsdcPerMinute": 2500,
+      "approvalStatus": "operator-approved"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+node_modules
+dist
+data/registry.json
+data/ledger.json
+data/sessions.json
+*.log

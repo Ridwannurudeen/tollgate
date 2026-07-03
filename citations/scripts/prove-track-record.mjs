@@ -1,5 +1,12 @@
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { rename, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, encodeAbiParameters, http, keccak256, toHex } from "viem";
+import {
+  hasSqliteLedger,
+  ledgerJsonPath,
+  readLedger,
+  updateSqliteQuery,
+} from "./ledger-store.mjs";
 import { loadWallet } from "./wallet-keystore.mjs";
 
 const ARC_RPC_URL =
@@ -239,8 +246,9 @@ const walletClient = createWalletClient({
   transport: http(ARC_RPC_URL),
 });
 
-const ledgerPath = new URL("../data/ledger.json", import.meta.url);
-const ledger = JSON.parse(await readFile(ledgerPath, "utf8"));
+const appDir = fileURLToPath(new URL("..", import.meta.url));
+const ledgerPath = ledgerJsonPath(appDir);
+const ledger = await readLedger(appDir);
 const query = pickQuery(ledger);
 const receipts = receiptsForQuery(ledger, query);
 if (receipts.length === 0) {
@@ -365,9 +373,13 @@ query.trackRecord = {
   publishedAt,
 };
 
-const tmpPath = new URL("../data/ledger.json.tmp", import.meta.url);
-await writeFile(tmpPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
-await rename(tmpPath, ledgerPath);
+if (await hasSqliteLedger(appDir)) {
+  await updateSqliteQuery(appDir, query);
+} else {
+  const tmpPath = `${ledgerPath}.tmp`;
+  await writeFile(tmpPath, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+  await rename(tmpPath, ledgerPath);
+}
 
 console.log(
   JSON.stringify(

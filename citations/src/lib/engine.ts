@@ -127,14 +127,17 @@ export function planCitationMarket(
   const selectedIds = new Set<string>();
   const selectedSources: CreatorSource[] = [];
   let remainingAtomicUsdc = sourceBudgetAtomicUsdc;
+  let probationSelected = false;
 
   for (const item of ranked) {
     if (selectedSources.length >= limit) break;
     if (item.score <= 0) continue;
     if (item.source.priceAtomicUsdc > remainingAtomicUsdc) continue;
+    if (item.source.probation && probationSelected) continue;
     selectedIds.add(item.source.id);
     selectedSources.push(item.source);
     remainingAtomicUsdc -= item.source.priceAtomicUsdc;
+    if (item.source.probation) probationSelected = true;
   }
 
   if (selectedSources.length === 0) {
@@ -284,6 +287,7 @@ export function createQueryRecord(
       creatorKind: source.creatorKind,
       verifiedCreator: source.verifiedCreator,
       ownershipProof: source.ownershipProof,
+      contributors: source.contributors,
     };
   });
   const answer = buildAnswer(question, selectedSources, contentBySourceId);
@@ -360,6 +364,7 @@ export function createSourceAccessRecord(
     creatorKind: source.creatorKind,
     verifiedCreator: source.verifiedCreator,
     ownershipProof: source.ownershipProof,
+    contributors: source.contributors,
   };
   const answer = `The agent paid ${source.creator} for direct access to "${source.title}", consumed excerpt hash ${content.excerptHash}, and wrote the purchase into the public attribution ledger.`;
   const queryHash = sha256Hex({ question, citations: [citation] });

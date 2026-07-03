@@ -57,6 +57,17 @@ export default async function AnswerPage({ params }: Props) {
   const agentSteps = query.agentSteps ?? [];
   const economics = queryPaymentEconomics(query);
   const latestChainHash = receipts.at(-1)?.receiptHash ?? "none";
+  const refundSummary = query.refundSummary ?? {
+    boughtCount: query.citations.length,
+    citedCount: query.citations.filter(
+      (citation) => citation.payoutPolicy !== "refund-unused",
+    ).length,
+    refundedCount: receipts.filter((receipt) => receipt.settlementMode === "refunded")
+      .length,
+    refundedAtomicUsdc: receipts
+      .filter((receipt) => receipt.settlementMode === "refunded")
+      .reduce((sum, receipt) => sum + receipt.amountAtomicUsdc, 0),
+  };
   const agentModeLabel =
     query.agentMode === "llm"
       ? "agentic reasoning loop"
@@ -86,6 +97,11 @@ export default async function AnswerPage({ params }: Props) {
           </p>
           <h2>{query.question}</h2>
           <p className="hero-text">{query.answer}</p>
+          <p className="status-line">
+            {refundSummary.boughtCount} sources bought /{" "}
+            {refundSummary.citedCount} cited / {refundSummary.refundedCount}{" "}
+            refunded
+          </p>
         </div>
       </section>
 
