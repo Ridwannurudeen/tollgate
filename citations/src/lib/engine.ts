@@ -1,4 +1,8 @@
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
+import {
+  groundingYieldValue,
+  type GroundingYieldMap,
+} from "./grounding-yield";
 import { sha256Hex } from "./hash";
 import { buildSourceContent, type SourceContent } from "./source-content";
 import type {
@@ -76,20 +80,37 @@ export function selectSources(
   return planCitationMarket(question, sources, limit).selectedSources;
 }
 
-function rankSources(question: string, sources: CreatorSource[]) {
+function rankSources(
+  question: string,
+  sources: CreatorSource[],
+  groundingYields?: GroundingYieldMap,
+) {
   const tokens = tokenize(question);
+  const applyYields = groundingYields !== undefined;
   const ranked = sources
-    .map((source, index) => ({
-      source,
-      score: scoreSource(tokens, source),
-      index,
-    }))
-    .sort(
-      (a, b) =>
+    .map((source, index) => {
+      const score = scoreSource(tokens, source);
+      const valuePerAtomicUsdc = score / source.priceAtomicUsdc;
+      return {
+        source,
+        score,
+        index,
+        valuePerAtomicUsdc,
+        adjustedValue: applyYields
+          ? valuePerAtomicUsdc * groundingYieldValue(groundingYields, source.id)
+          : valuePerAtomicUsdc,
+      };
+    })
+    .sort((a, b) => {
+      if (applyYields && b.adjustedValue !== a.adjustedValue) {
+        return b.adjustedValue - a.adjustedValue;
+      }
+      return (
         b.score - a.score ||
         a.source.priceAtomicUsdc - b.source.priceAtomicUsdc ||
-        a.index - b.index,
-    );
+        a.index - b.index
+      );
+    });
 
   const matched = ranked.filter((item) => item.score > 0);
   return matched.length > 0 ? matched : ranked;
@@ -118,12 +139,13 @@ export function planCitationMarket(
   sources: CreatorSource[] = DEFAULT_CREATOR_SOURCES,
   limit = 3,
   sourceBudgetAtomicUsdc = DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
+  groundingYields?: GroundingYieldMap,
 ): {
   selectedSources: CreatorSource[];
   decisions: SourceDecision[];
   budget: AgentBudget;
 } {
-  const ranked = rankSources(question, sources);
+  const ranked = rankSources(question, sources, groundingYields);
   const selectedIds = new Set<string>();
   const selectedSources: CreatorSource[] = [];
   let remainingAtomicUsdc = sourceBudgetAtomicUsdc;
@@ -161,7 +183,7 @@ export function planCitationMarket(
       priceAtomicUsdc: item.source.priceAtomicUsdc,
       score: item.score,
       valuePerAtomicUsdc:
-        Math.round((item.score / item.source.priceAtomicUsdc) * 1_000_000) /
+        Math.round(item.adjustedValue * 1_000_000) /
         1_000_000,
       selected,
       reason: decisionReason(
@@ -229,7 +251,7 @@ function deterministicSteps(
         budget.candidateCount,
       )} by keyword relevance.`,
       detail:
-        "Deterministic scoring weighted exact term matches, tag hits, and price per source.",
+        "Deterministic scoring weighted exact term matches, tag hits, price per source, and historical grounding yield.",
     },
     {
       index: 1,
@@ -257,8 +279,15 @@ export function createQueryRecord(
   createdAt: string,
   sources: CreatorSource[] = DEFAULT_CREATOR_SOURCES,
   readerPayment?: QueryPaymentEvidence,
+  groundingYields?: GroundingYieldMap,
 ): QueryRecord {
-  const citationMarket = planCitationMarket(question, sources);
+  const citationMarket = planCitationMarket(
+    question,
+    sources,
+    3,
+    DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
+    groundingYields,
+  );
   const selectedSources = citationMarket.selectedSources;
   const contentBySourceId = new Map(
     selectedSources.map((source) => [

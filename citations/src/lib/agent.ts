@@ -7,6 +7,10 @@ import {
   EXTERNAL_PROVIDERS,
   type ExternalProvider,
 } from "./external-providers";
+import {
+  groundingYieldValue,
+  type GroundingYieldMap,
+} from "./grounding-yield";
 import { sha256Hex } from "./hash";
 import { buildSourceContent } from "./source-content";
 import type {
@@ -45,6 +49,7 @@ export type AgentOptions = {
   llmConfig?: LlmConfig | null;
   completeChat?: CompleteChat;
   externalProvider?: ExternalProvider;
+  groundingYields?: GroundingYieldMap;
 };
 
 type Appraisal = {
@@ -401,6 +406,7 @@ function allocateFromAppraisals(
   appraisals: Appraisal[],
   sources: CreatorSource[],
   sourceBudgetAtomicUsdc: number,
+  groundingYields?: GroundingYieldMap,
 ): { selected: CreatorSource[]; remainingAtomicUsdc: number } {
   const sourceById = new Map(sources.map((source) => [source.id, source]));
   // Buy the most grounding per USDC: rank "buy" verdicts by relevance-per-cost,
@@ -417,8 +423,12 @@ function allocateFromAppraisals(
         buy.source !== undefined && buy.source.priceAtomicUsdc > 0,
     )
     .sort((a, b) => {
-      const valueA = a.appraisal.relevance / a.source.priceAtomicUsdc;
-      const valueB = b.appraisal.relevance / b.source.priceAtomicUsdc;
+      const valueA =
+        (a.appraisal.relevance / a.source.priceAtomicUsdc) *
+        groundingYieldValue(groundingYields, a.source.id);
+      const valueB =
+        (b.appraisal.relevance / b.source.priceAtomicUsdc) *
+        groundingYieldValue(groundingYields, b.source.id);
       return valueB - valueA || b.appraisal.relevance - a.appraisal.relevance;
     });
   const selected: CreatorSource[] = [];
@@ -457,6 +467,7 @@ async function runAgentLoop(
   completeChat: CompleteChat,
   llmConfig: LlmConfig,
   externalProvider: ExternalProvider,
+  groundingYields?: GroundingYieldMap,
 ): Promise<AgentLoopResult> {
   const steps: AgentStep[] = [];
   const externalAssists: ExternalAssist[] = [];
@@ -488,6 +499,7 @@ async function runAgentLoop(
     appraisals,
     sources,
     sourceBudgetAtomicUsdc,
+    groundingYields,
   );
   if (selected.length === 0) {
     throw new Error("LLM appraisal selected no affordable known source.");
@@ -497,7 +509,7 @@ async function runAgentLoop(
     name: "allocate",
     summary: `Allocated the budget to ${selected.length} source${
       selected.length === 1 ? "" : "s"
-    } by best grounding-per-USDC.`,
+    } by best yield-adjusted grounding-per-USDC.`,
     detail: selected.map((source) => source.title).join(", "),
     spentAtomicUsdc: sourceBudgetAtomicUsdc - remainingAtomicUsdc,
   });
@@ -635,12 +647,14 @@ function buildLlmQueryRecord(
   sources: CreatorSource[],
   loop: AgentLoopResult,
   readerPayment: QueryPaymentEvidence | undefined,
+  groundingYields?: GroundingYieldMap,
 ): QueryRecord {
   const citationMarket = planCitationMarket(
     question,
     sources,
     MAX_AGENT_SOURCES,
     DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
+    groundingYields,
   );
   const selectedIds = new Set(loop.selected.map((source) => source.id));
   const decisions: SourceDecision[] = citationMarket.decisions.map(
@@ -749,9 +763,16 @@ function deterministicFallback(
   sources: CreatorSource[],
   readerPayment: QueryPaymentEvidence | undefined,
   reason: string,
+  groundingYields?: GroundingYieldMap,
 ): QueryRecord {
   return {
-    ...createQueryRecord(question, createdAt, sources, readerPayment),
+    ...createQueryRecord(
+      question,
+      createdAt,
+      sources,
+      readerPayment,
+      groundingYields,
+    ),
     agentMode: "deterministic",
     agentRationale: reason,
   };
@@ -773,6 +794,7 @@ export async function createAgentQueryRecord(
       sources,
       readerPayment,
       "No LLM planner is configured; deterministic budget policy selected the citations.",
+      options.groundingYields,
     );
   }
 
@@ -785,6 +807,7 @@ export async function createAgentQueryRecord(
       completeChat,
       llmConfig,
       options.externalProvider ?? EXTERNAL_PROVIDERS.citepay,
+      options.groundingYields,
     );
     return buildLlmQueryRecord(
       question,
@@ -792,6 +815,7 @@ export async function createAgentQueryRecord(
       sources,
       loop,
       readerPayment,
+      options.groundingYields,
     );
   } catch (error) {
     const message =
@@ -802,6 +826,7 @@ export async function createAgentQueryRecord(
       sources,
       readerPayment,
       `LLM planner fallback: ${message}`,
+      options.groundingYields,
     );
   }
 }

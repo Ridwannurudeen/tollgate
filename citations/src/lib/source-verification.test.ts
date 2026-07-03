@@ -79,9 +79,11 @@ describe("wallet-free source verification", () => {
     };
 
     try {
-      await expect(verifyMetaTagSource(localSource)).rejects.toThrow(
-        "resolves to a blocked address",
-      );
+      await expect(
+        verifyMetaTagSource(localSource, {
+          resolveHost: async () => ["127.0.0.1"],
+        }),
+      ).rejects.toThrow("resolves to a blocked address");
       process.env.TOLLGATE_VERIFY_ALLOW_PRIVATE_HOSTS = "1";
       await expect(
         verifyMetaTagSource(localSource, {

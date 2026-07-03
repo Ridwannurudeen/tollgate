@@ -1,6 +1,7 @@
 import { readSources } from "./catalog";
 import { createAgentQueryRecord } from "./agent";
 import { routeCitationPayments } from "./fee-router";
+import { groundingYieldsBySource } from "./grounding-yield";
 import { sha256Hex } from "./hash";
 import { appendSettlement, attachTrackRecordEvidence, readLedger } from "./ledger";
 import { publishTrackRecordForAnswer } from "./track-record";
@@ -42,7 +43,13 @@ export async function settleQuestion(
     sourcesForAgent(sources, ledger),
     options,
   );
-  const query = await createAgentQueryRecord(normalized, createdAt, agentSources);
+  const query = await createAgentQueryRecord(
+    normalized,
+    createdAt,
+    agentSources,
+    undefined,
+    { groundingYields: groundingYieldsBySource(ledger) },
+  );
   const receiptEvidence = await routeCitationPayments(query);
   return settleAndAnchorTrackRecord(query, receiptEvidence);
 }
@@ -84,6 +91,7 @@ export async function settlePaidQuestion(
     createdAt,
     agentSources,
     readerPayment,
+    { groundingYields: groundingYieldsBySource(ledger) },
   );
   const receiptEvidence = await routeCitationPayments(query);
   return settleAndAnchorTrackRecord(query, receiptEvidence);

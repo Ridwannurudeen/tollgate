@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createAgentQueryRecord } from "./agent";
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
 import type { ExternalProvider } from "./external-providers";
+import type { CreatorSource } from "./types";
 
 const LLM_CONFIG = {
   baseUrl: "https://example.com/v1",
@@ -641,6 +642,129 @@ describe("createAgentQueryRecord", () => {
     ]);
     expect(ids).not.toContain("circle-gateway-nano");
     expect(query.totalAtomicUsdc).toBe(4_300);
+  });
+
+  it("allocates by learned grounding yield when appraisals are tied", async () => {
+    const sources: CreatorSource[] = [
+      {
+        id: "low-yield-agent-payments",
+        title: "Low Yield Agent Payments",
+        creator: "Low Yield Lab",
+        handle: "@low",
+        wallet: "0x1111111111111111111111111111111111111111",
+        url: "https://example.com/low",
+        summary: "AI agents pay creators with citation receipts.",
+        tags: ["agents", "creators"],
+        priceAtomicUsdc: 1_000,
+        sourceKind: "internal-test",
+        creatorKind: "internal-test",
+        verifiedCreator: false,
+      },
+      {
+        id: "high-yield-agent-payments-a",
+        title: "High Yield Agent Payments A",
+        creator: "High Yield Lab A",
+        handle: "@higha",
+        wallet: "0x2222222222222222222222222222222222222222",
+        url: "https://example.com/high-a",
+        summary: "AI agents pay creators with citation receipts.",
+        tags: ["agents", "creators"],
+        priceAtomicUsdc: 1_000,
+        sourceKind: "internal-test",
+        creatorKind: "internal-test",
+        verifiedCreator: false,
+      },
+      {
+        id: "high-yield-agent-payments-b",
+        title: "High Yield Agent Payments B",
+        creator: "High Yield Lab B",
+        handle: "@highb",
+        wallet: "0x3333333333333333333333333333333333333333",
+        url: "https://example.com/high-b",
+        summary: "AI agents pay creators with citation receipts.",
+        tags: ["agents", "creators"],
+        priceAtomicUsdc: 1_000,
+        sourceKind: "internal-test",
+        creatorKind: "internal-test",
+        verifiedCreator: false,
+      },
+      {
+        id: "high-yield-agent-payments-c",
+        title: "High Yield Agent Payments C",
+        creator: "High Yield Lab C",
+        handle: "@highc",
+        wallet: "0x4444444444444444444444444444444444444444",
+        url: "https://example.com/high-c",
+        summary: "AI agents pay creators with citation receipts.",
+        tags: ["agents", "creators"],
+        priceAtomicUsdc: 1_000,
+        sourceKind: "internal-test",
+        creatorKind: "internal-test",
+        verifiedCreator: false,
+      },
+    ];
+    const groundingYields = new Map(
+      sources.map((source) => [
+        source.id,
+        {
+          sourceId: source.id,
+          used: source.id.startsWith("high-yield") ? 8 : 1,
+          bought: 10,
+          value: source.id.startsWith("high-yield") ? 0.75 : 1 / 6,
+        },
+      ]),
+    );
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: sources.map((source) => ({
+            sourceId: source.id,
+            verdict: "buy",
+            relevance: 80,
+            reason: "Tied relevance and price.",
+          })),
+        });
+      }
+      if (stage === "draft") {
+        return JSON.stringify({
+          answer:
+            "High-yield sources explain how AI agents pay creators with citation receipts.",
+          claims: [
+            {
+              text: "AI agents pay creators with citation receipts.",
+              sourceId: "high-yield-agent-payments-a",
+            },
+          ],
+        });
+      }
+      if (stage === "critique") {
+        return JSON.stringify({
+          groundedAnswer:
+            "High-yield sources explain how AI agents pay creators with citation receipts.",
+          verdict: "Grounded in the purchased sources.",
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await createAgentQueryRecord(
+      "How should AI agents pay creators?",
+      "2026-07-03T00:00:00.000Z",
+      sources,
+      undefined,
+      { llmConfig: LLM_CONFIG, completeChat, groundingYields },
+    );
+
+    const ids = query.citations.map((citation) => citation.sourceId).sort();
+    expect(ids).toEqual([
+      "high-yield-agent-payments-a",
+      "high-yield-agent-payments-b",
+      "high-yield-agent-payments-c",
+    ]);
+    expect(ids).not.toContain("low-yield-agent-payments");
   });
 
   it("marks bought-but-unused sources for refund before payout", async () => {

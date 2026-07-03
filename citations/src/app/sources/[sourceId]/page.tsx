@@ -8,6 +8,7 @@ import {
   shortHash,
   shortWallet,
 } from "@/lib/format";
+import { groundingYield } from "@/lib/grounding-yield";
 import { getSourceEvidence, readLedger } from "@/lib/ledger";
 import { verificationToken } from "@/lib/source-verification";
 
@@ -16,6 +17,10 @@ export const dynamic = "force-dynamic";
 type Props = {
   params: Promise<{ sourceId: string }>;
 };
+
+function formatGroundingYield(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
 
 export default async function SourcePage({ params }: Props) {
   const { sourceId } = await params;
@@ -29,6 +34,7 @@ export default async function SourcePage({ params }: Props) {
   const receipts = evidence?.receipts ?? [];
   const earnedAtomicUsdc = evidence?.earnedAtomicUsdc ?? 0;
   const latestReceipt = receipts[0];
+  const sourceYield = groundingYield(ledger, sourceId);
   const token = (() => {
     try {
       return verificationToken(source.id);
@@ -92,6 +98,14 @@ export default async function SourcePage({ params }: Props) {
             {latestReceipt ? shortHash(latestReceipt.receiptHash) : "none"}
           </strong>
         </div>
+        {sourceYield.bought >= 3 && (
+          <div className="evidence-row">
+            <span>grounding yield</span>
+            <strong>
+              {`${formatGroundingYield(sourceYield.value)} / ${sourceYield.used}/${sourceYield.bought} citations kept`}
+            </strong>
+          </div>
+        )}
         <div className="evidence-row">
           <span>source url</span>
           <strong>{source.url}</strong>

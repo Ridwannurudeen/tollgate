@@ -30,6 +30,7 @@ import {
   verifyLedgerIntegrity,
   ZERO_HASH,
 } from "./ledger";
+import { groundingYieldsBySource } from "./grounding-yield";
 import { PAID_QUERY_PRICE_ATOMIC_USDC } from "./payments";
 import type {
   CreatorSource,
@@ -43,6 +44,25 @@ import {
   sourcesForAgent,
   validateQuestion,
 } from "./settlement";
+
+function testReceipt(
+  sourceId: string,
+  settlementMode: PaymentReceipt["settlementMode"],
+  index: number,
+): PaymentReceipt {
+  return {
+    id: `receipt-${sourceId}-${index}`,
+    queryId: `query-${index}`,
+    sourceId,
+    creator: "Yield Lab",
+    wallet: "0x1111111111111111111111111111111111111111",
+    amountAtomicUsdc: 1_000,
+    settlementMode,
+    previousHash: `0x${"0".repeat(64)}`,
+    receiptHash: `0x${String(index).repeat(64)}`,
+    createdAt: "2026-07-03T00:00:00.000Z",
+  };
+}
 
 describe("LeptonWeb settlement engine", () => {
   it("selects creator sources that match the question", () => {
@@ -131,6 +151,64 @@ describe("LeptonWeb settlement engine", () => {
         (decision) => decision.sourceId === "expensive-relevant",
       )?.selected,
     ).toBe(false);
+  });
+
+  it("uses grounding yield to break equal deterministic allocations", () => {
+    const lowYieldSource: CreatorSource = {
+      id: "low-yield-agent-payments",
+      title: "Low Yield Agent Payments",
+      creator: "Low Yield Lab",
+      handle: "@low",
+      wallet: "0x1111111111111111111111111111111111111111",
+      url: "https://example.com/low",
+      summary: "AI agents pay creators with citation receipts.",
+      tags: ["agents", "creators"],
+      priceAtomicUsdc: 1_000,
+      sourceKind: "internal-test",
+      creatorKind: "internal-test",
+      verifiedCreator: false,
+    };
+    const highYieldSource: CreatorSource = {
+      ...lowYieldSource,
+      id: "high-yield-agent-payments",
+      title: "High Yield Agent Payments",
+      creator: "High Yield Lab",
+      handle: "@high",
+      wallet: "0x2222222222222222222222222222222222222222",
+      url: "https://example.com/high",
+    };
+    const yields = groundingYieldsBySource({
+      queries: [],
+      receipts: [
+        testReceipt(lowYieldSource.id, "refunded", 1),
+        testReceipt(lowYieldSource.id, "refunded", 2),
+        testReceipt(lowYieldSource.id, "refunded", 3),
+        testReceipt(highYieldSource.id, "local-proof", 4),
+        testReceipt(highYieldSource.id, "local-proof", 5),
+        testReceipt(highYieldSource.id, "local-proof", 6),
+      ],
+    });
+
+    const plan = planCitationMarket(
+      "How should AI agents pay creators?",
+      [lowYieldSource, highYieldSource],
+      1,
+      1_000,
+      yields,
+    );
+
+    expect(plan.selectedSources.map((source) => source.id)).toEqual([
+      highYieldSource.id,
+    ]);
+    expect(
+      plan.decisions.find(
+        (decision) => decision.sourceId === highYieldSource.id,
+      )?.valuePerAtomicUsdc,
+    ).toBeGreaterThan(
+      plan.decisions.find(
+        (decision) => decision.sourceId === lowYieldSource.id,
+      )?.valuePerAtomicUsdc ?? 0,
+    );
   });
 
   it("caps probation sources to one per deterministic answer", () => {
