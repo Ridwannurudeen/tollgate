@@ -1,0 +1,20 @@
+{
+  "sourceId": "p1-custodial-form-proof-20260703162450",
+  "wallet": "0xdc661b8a978dd5e6a3f364c269187f0ec97a85a6",
+  "custody": "circle-w3s",
+  "question": "What does the P1 custodial proof explain about Tollgate walletless creator onboarding?",
+  "queryId": "0x3d6230202d592c70",
+  "answerUrl": "http://127.0.0.1:3101/answers/0x3d6230202d592c70",
+  "sourceUrl": "http://127.0.0.1:3101/sources/p1-custodial-form-proof-20260703162450",
+  "creatorUrl": "http://127.0.0.1:3101/creators/0xdc661b8a978dd5e6a3f364c269187f0ec97a85a6",
+  "queryCitationIds": [
+    "p1-custodial-form-proof-20260703162450"
+  ],
+  "receiptCount": 1,
+  "claimStatus": 200,
+  "claimPayload": {
+    "claimed": false,
+    "claimableAtomicUsdc": "0",
+    "message": "nothing to claim"
+  }
+}

@@ -67,4 +67,45 @@ describe("wallet-free source verification", () => {
       }
     }
   });
+
+  it("keeps private-host verification blocked unless the local E2E flag is enabled", async () => {
+    const previousSecret = process.env.TOLLGATE_VERIFY_SECRET;
+    const previousAllow = process.env.TOLLGATE_VERIFY_ALLOW_PRIVATE_HOSTS;
+    process.env.TOLLGATE_VERIFY_SECRET = "secret";
+    delete process.env.TOLLGATE_VERIFY_ALLOW_PRIVATE_HOSTS;
+    const localSource = {
+      ...source,
+      url: "http://p1-custodial-proof.lvh.me:3102/verified",
+    };
+
+    try {
+      await expect(verifyMetaTagSource(localSource)).rejects.toThrow(
+        "resolves to a blocked address",
+      );
+      process.env.TOLLGATE_VERIFY_ALLOW_PRIVATE_HOSTS = "1";
+      await expect(
+        verifyMetaTagSource(localSource, {
+          fetchImpl: async () =>
+            new Response(
+              `<meta name="tollgate-verification" content="${verificationToken(
+                localSource.id,
+              )}">`,
+              { status: 200 },
+            ),
+          resolveHost: async () => ["93.184.216.34"],
+        }),
+      ).resolves.toMatchObject({ method: "meta-tag" });
+    } finally {
+      if (previousSecret === undefined) {
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      } else {
+        process.env.TOLLGATE_VERIFY_SECRET = previousSecret;
+      }
+      if (previousAllow === undefined) {
+        delete process.env.TOLLGATE_VERIFY_ALLOW_PRIVATE_HOSTS;
+      } else {
+        process.env.TOLLGATE_VERIFY_ALLOW_PRIVATE_HOSTS = previousAllow;
+      }
+    }
+  });
 });

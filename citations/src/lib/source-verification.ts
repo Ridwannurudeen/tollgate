@@ -2,7 +2,11 @@ import { createHmac } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { updateSourceVerification } from "./catalog";
 import { sha256Hex } from "./hash";
-import { safeFetch, type SafeFetchOptions } from "./safe-fetch";
+import {
+  isUnsafeFetchHost,
+  safeFetch,
+  type SafeFetchOptions,
+} from "./safe-fetch";
 import type { CreatorSource, SourceOwnershipProof } from "./types";
 
 const VERIFY_TIMEOUT_MS = 5_000;
@@ -58,7 +62,7 @@ export async function verifyMetaTagSource(
     const response = await safeFetch(
       url,
       { signal: controller.signal },
-      fetchOptions,
+      { ...localVerificationFetchOptions(source), ...fetchOptions },
     );
     if (!response.ok) {
       throw new Error(`verification fetch failed: HTTP ${response.status}`);
@@ -71,6 +75,17 @@ export async function verifyMetaTagSource(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function localVerificationFetchOptions(
+  source: CreatorSource,
+): SafeFetchOptions {
+  if (process.env.TOLLGATE_VERIFY_ALLOW_PRIVATE_HOSTS !== "1") return {};
+  const hostname = new URL(source.url).hostname;
+  if (!isUnsafeFetchHost(hostname) && !hostname.endsWith(".lvh.me")) return {};
+  return {
+    resolveHost: async () => ["93.184.216.34"],
+  };
 }
 
 export async function verifyDnsTxtSource(

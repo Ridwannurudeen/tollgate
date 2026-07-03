@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "body": {
+    "claimed": false,
+    "claimableAtomicUsdc": "0",
+    "message": "nothing to claim"
+  }
+}
