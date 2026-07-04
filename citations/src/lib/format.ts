@@ -10,8 +10,11 @@ export function formatAtomicUsdc(value: bigint | string): string {
 export function formatDollars(value: number | bigint | string): string {
   const dollars = Number(value) / 1_000_000;
   if (!Number.isFinite(dollars) || dollars === 0) return "$0";
-  const trimmed = dollars.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
-  return `$${trimmed}`;
+  const trimmed = Math.abs(dollars)
+    .toFixed(6)
+    .replace(/0+$/, "")
+    .replace(/\.$/, "");
+  return `${dollars < 0 ? "−" : ""}$${trimmed}`;
 }
 
 export function shortHash(hash: string): string {

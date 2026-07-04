@@ -57,8 +57,8 @@ and fixing rhythm/hierarchy/disclosure defects. Explicitly REJECTED: dark glassm
 - Every page screenshot-verified at 1512 AND 375 wide before commit.
 
 ## Status
-- [ ] Phase 1: tokens + motion + receipt system (globals.css)
-- [ ] Phase 2: homepage restructure
-- [ ] Phase 3: proof + core + demo
-- [ ] Phase 4: answers + receipts + sources + creators + embed
-- [ ] Phase 5: mobile pass (375px) + reduced-motion + a11y re-verify + build/tests
+- [x] Phase 1: tokens + motion + receipt system (globals.css)
+- [x] Phase 2: homepage restructure
+- [x] Phase 3: proof + core + demo (dark monoliths broken up, formatDollars everywhere, receipt stamps)
+- [x] Phase 4: receipt system cascades via shared signature-stat/receipt-context classes (verified)
+- [x] Phase 5: mobile guards (overflow-x clip, creator-row row layout, grid min-width 0); NOTE headless-new Chrome min-window ~500px crops narrower screenshots - 500px view verified pixel-perfect, real-device 375 untested

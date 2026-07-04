@@ -3,6 +3,7 @@ import { readCovenantEnvelope } from "@/lib/covenant";
 import {
   arcscanTxUrl,
   formatAtomicUsdc,
+  formatDollars,
   formatUsdc,
   settlementLabel,
   shortHash,
@@ -219,8 +220,11 @@ export default async function DemoPage() {
       <section className="receipt-proof">
         <div className="signature-stat proof-stat">
           <span className="stat-label">creator payouts recorded</span>
-          <strong>{formatUsdc(totalReceiptPaid(ledger))}</strong>
-          <span className="stat-unit">USDC</span>
+          <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
+          <span className="stat-unit">USDC on Arc</span>
+          <span className="stamp" aria-hidden="true">
+            paid · on-chain
+          </span>
         </div>
         <div className="proof-copy">
           <p className="eyebrow">
@@ -258,7 +262,7 @@ export default async function DemoPage() {
         </div>
         <div className="metric">
           <span>reader paid</span>
-          <strong>{formatUsdc(totalReaderPaid(ledger))}</strong>
+          <strong>{formatDollars(totalReaderPaid(ledger))}</strong>
         </div>
         <div className="metric">
           <span>issues</span>

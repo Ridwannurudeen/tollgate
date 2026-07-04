@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { readSources } from "@/lib/catalog";
-import { formatUsdc } from "@/lib/format";
+import { formatDollars } from "@/lib/format";
 import {
   readLedger,
   summarizeCreators,
@@ -156,7 +156,7 @@ export default async function CorePage() {
           </div>
           <div className="evidence-row">
             <span>total test USDC</span>
-            <strong>{formatUsdc(citationRouted)} USDC</strong>
+            <strong>{formatDollars(citationRouted)} USDC</strong>
           </div>
         </div>
       </section>
@@ -186,7 +186,7 @@ export default async function CorePage() {
             </div>
             <div className="metric wide">
               <span>routed</span>
-              <strong>{formatUsdc(citationRouted)} USDC</strong>
+              <strong>{formatDollars(citationRouted)} USDC</strong>
             </div>
           </div>
           <p className="eyebrow">
@@ -221,13 +221,13 @@ export default async function CorePage() {
                 <div className="metric">
                   <span>per download</span>
                   <strong>
-                    {formatUsdc(aperture.totals.licenseFeeAtomicUsdc)}
+                    {formatDollars(aperture.totals.licenseFeeAtomicUsdc)}
                   </strong>
                 </div>
                 <div className="metric wide">
                   <span>earned</span>
                   <strong>
-                    {formatUsdc(aperture.totals.totalEarnedAtomicUsdc)} USDC
+                    {formatDollars(aperture.totals.totalEarnedAtomicUsdc)} USDC
                   </strong>
                 </div>
               </div>

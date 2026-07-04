@@ -8,6 +8,7 @@ import {
 import {
   arcscanTxUrl,
   formatAtomicUsdc,
+  formatDollars,
   formatUsdc,
   settlementLabel,
   shortHash,
@@ -119,8 +120,18 @@ export default async function ProofPage() {
       <section className="receipt-proof">
         <div className="signature-stat proof-stat">
           <span className="stat-label">creator payouts recorded</span>
-          <strong>{formatUsdc(totalReceiptPaid(ledger))}</strong>
-          <span className="stat-unit">USDC</span>
+          <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
+          <div className="receipt-lines">
+            <span className="receipt-line">
+              receipts <strong>{ledger.receipts.length}</strong>
+            </span>
+            <span className="receipt-line">
+              chain <strong>{verification.ok ? "valid" : "review"}</strong>
+            </span>
+          </div>
+          <span className="stamp" aria-hidden="true">
+            {verification.ok ? "verified" : "review"}
+          </span>
         </div>
         <div className="proof-copy">
           <p className="eyebrow">
@@ -150,15 +161,15 @@ export default async function ProofPage() {
         </div>
         <div className="metric">
           <span>reader paid</span>
-          <strong>{formatUsdc(economics.readerPaidAtomicUsdc)}</strong>
+          <strong>{formatDollars(economics.readerPaidAtomicUsdc)}</strong>
         </div>
         <div className="metric">
           <span>creator payouts</span>
-          <strong>{formatUsdc(economics.creatorPayoutsAtomicUsdc)}</strong>
+          <strong>{formatDollars(economics.creatorPayoutsAtomicUsdc)}</strong>
         </div>
         <div className="metric">
           <span>protocol retained</span>
-          <strong>{formatUsdc(economics.protocolRetainedAtomicUsdc)}</strong>
+          <strong>{formatDollars(economics.protocolRetainedAtomicUsdc)}</strong>
         </div>
         <div className="metric">
           <span>budget utilization</span>
@@ -175,7 +186,7 @@ export default async function ProofPage() {
         <div className="metric">
           <span>bond at stake</span>
           <strong>
-            {slashBond ? formatAtomicUsdc(slashBond.bondBalance) : "0.000000"}
+            {slashBond ? formatDollars(slashBond.bondBalance.toString()) : "$0"}
           </strong>
         </div>
         <div className="metric wide">
@@ -190,24 +201,6 @@ export default async function ProofPage() {
         <div className="evidence-row">
           <span>receipt chain</span>
           <strong>{verification.ok ? "valid" : "invalid"}</strong>
-        </div>
-        <div className="evidence-row">
-          <span>paid-query reader paid</span>
-          <strong>{formatUsdc(economics.readerPaidAtomicUsdc)} USDC</strong>
-        </div>
-        <div className="evidence-row">
-          <span>paid-query creator payouts</span>
-          <strong>{formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC</strong>
-        </div>
-        <div className="evidence-row">
-          <span>paid-query protocol retained</span>
-          <strong>
-            {formatUsdc(economics.protocolRetainedAtomicUsdc)} USDC
-          </strong>
-        </div>
-        <div className="evidence-row">
-          <span>paid-query budget utilization</span>
-          <strong>{formatBudgetUtilization(economics)}</strong>
         </div>
         <div className="evidence-row">
           <span>verification issues</span>
@@ -253,7 +246,9 @@ export default async function ProofPage() {
         </div>
         <div className="evidence-row">
           <span>latest previous hash</span>
-          <strong>{latestReceipt?.previousHash ?? "none"}</strong>
+          <strong title={latestReceipt?.previousHash ?? undefined}>
+            {latestReceipt ? shortHash(latestReceipt.previousHash) : "none"}
+          </strong>
         </div>
       </section>
 
@@ -262,44 +257,44 @@ export default async function ProofPage() {
           <p className="eyebrow">traction quality</p>
           <h3>Real, seed, and internal activity are separated</h3>
         </div>
-        <div className="evidence-grid">
-          <div className="evidence-row">
+        <div className="metrics-band profile-metrics">
+          <div className="metric">
             <span>external sources</span>
             <strong>{externalSources.length}</strong>
           </div>
-          <div className="evidence-row">
+          <div className="metric">
             <span>seed/demo sources</span>
             <strong>{seedSources.length}</strong>
           </div>
-          <div className="evidence-row">
+          <div className="metric">
             <span>internal-test sources</span>
             <strong>{internalSources.length}</strong>
           </div>
-          <div className="evidence-row">
+          <div className="metric">
             <span>verified creators</span>
             <strong>
               {sources.filter((source) => source.verifiedCreator).length}
             </strong>
           </div>
-          <div className="evidence-row">
+          <div className="metric">
             <span>paid queries</span>
             <strong>{paidQueries.length}</strong>
           </div>
-          <div className="evidence-row">
+          <div className="metric">
             <span>payout receipts</span>
             <strong>{ledger.receipts.length}</strong>
           </div>
-          <div className="evidence-row">
+          <div className="metric">
             <span>unique payer wallets</span>
             <strong>{uniquePayers.size}</strong>
           </div>
-          <div className="evidence-row">
+          <div className="metric">
             <span>unique creator wallets</span>
             <strong>{uniqueCreatorWallets.size}</strong>
           </div>
-          <div className="evidence-row">
+          <div className="metric">
             <span>total test USDC</span>
-            <strong>{formatUsdc(totalReceiptPaid(ledger))} USDC</strong>
+            <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
           </div>
         </div>
       </section>

@@ -2072,3 +2072,32 @@ textarea:focus {
 .creator-earnings-section {
   margin-top: var(--space-8);
 }
+
+/* --- mobile guards (375px pass) --- */
+html,
+body {
+  overflow-x: clip;
+}
+
+.hero > *,
+.lower-grid > *,
+.metrics-band > * {
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  /* chips restored the row layout; the old column stack predates them */
+  .creator-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .creator-row .numeric-cell {
+    text-align: right;
+  }
+
+  .signature-stat {
+    transform: none;
+  }
+}
