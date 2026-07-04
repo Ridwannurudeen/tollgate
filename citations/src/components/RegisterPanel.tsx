@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { formatDollars } from "@/lib/format";
+import { formatDollars, shortWallet } from "@/lib/format";
 import type { CreatorSource } from "@/lib/types";
 
 type SourceRegistryResponse = {
@@ -30,6 +31,12 @@ type RssImportPost = {
   tags: string[];
 };
 
+type FeedRegistrationSummary = {
+  count: number;
+  wallet: CreatorSource["wallet"];
+  message: string;
+};
+
 const EMPTY_SOURCE_FORM: SourceFormState = {
   title: "",
   creator: "",
@@ -47,6 +54,10 @@ export function RegisterPanel() {
   const [sourceForm, setSourceForm] =
     useState<SourceFormState>(EMPTY_SOURCE_FORM);
   const [sourceRegistrationStatus, setSourceRegistrationStatus] = useState("");
+  const [registeredSource, setRegisteredSource] =
+    useState<CreatorSource | null>(null);
+  const [feedRegistration, setFeedRegistration] =
+    useState<FeedRegistrationSummary | null>(null);
   const [feedUrl, setFeedUrl] = useState("");
   const [rssPosts, setRssPosts] = useState<RssImportPost[]>([]);
   const [selectedRssUrls, setSelectedRssUrls] = useState<Set<string>>(
@@ -88,6 +99,8 @@ export function RegisterPanel() {
   async function registerSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsRegisteringSource(true);
+    setRegisteredSource(null);
+    setFeedRegistration(null);
     setSourceRegistrationStatus("Registering priced source...");
     try {
       const response = await fetch("/api/sources", {
@@ -100,6 +113,7 @@ export function RegisterPanel() {
         throw new Error(body.error ?? `HTTP ${response.status}`);
       }
       setSourceForm(EMPTY_SOURCE_FORM);
+      setRegisteredSource(body.source ?? null);
       setSourceRegistrationStatus(
         `${body.source?.creator ?? "Creator"} source registered.`,
       );
@@ -113,6 +127,7 @@ export function RegisterPanel() {
   }
 
   async function discoverFeed() {
+    setFeedRegistration(null);
     setSourceRegistrationStatus("Looking for feed posts...");
     try {
       const response = await fetch("/api/import/rss", {
@@ -141,9 +156,12 @@ export function RegisterPanel() {
   async function registerSelectedFeedPosts() {
     const selected = rssPosts.filter((post) => selectedRssUrls.has(post.url));
     setIsRegisteringSource(true);
+    setRegisteredSource(null);
+    setFeedRegistration(null);
     setSourceRegistrationStatus("Registering selected feed posts...");
     let registeredCount = 0;
     let firstError: string | null = null;
+    let firstRegisteredSource: CreatorSource | null = null;
     try {
       for (const post of selected) {
         const response = await fetch("/api/sources", {
@@ -164,23 +182,39 @@ export function RegisterPanel() {
           firstError = body.error ?? `HTTP ${response.status}`;
           break;
         }
+        if (body.source && firstRegisteredSource === null) {
+          firstRegisteredSource = body.source;
+        }
         registeredCount += 1;
       }
-      setSourceRegistrationStatus(
-        firstError
-          ? `Registered ${registeredCount} of ${selected.length} feed post(s), then stopped: ${firstError}`
-          : `Registered ${registeredCount} feed post(s).`,
-      );
+      const message = firstError
+        ? `Registered ${registeredCount} of ${selected.length} feed post(s), then stopped: ${firstError}`
+        : `Registered ${registeredCount} feed post(s).`;
+      setSourceRegistrationStatus(message);
+      if (registeredCount > 0 && firstRegisteredSource) {
+        setFeedRegistration({
+          count: registeredCount,
+          wallet: firstRegisteredSource.wallet,
+          message,
+        });
+      }
     } catch (error) {
-      setSourceRegistrationStatus(
+      const message =
         registeredCount > 0
           ? `Registered ${registeredCount} of ${selected.length} feed post(s), then failed: ${
               error instanceof Error ? error.message : "Feed import failed."
             }`
           : error instanceof Error
             ? error.message
-            : "Feed import failed.",
-      );
+            : "Feed import failed.";
+      setSourceRegistrationStatus(message);
+      if (registeredCount > 0 && firstRegisteredSource) {
+        setFeedRegistration({
+          count: registeredCount,
+          wallet: firstRegisteredSource.wallet,
+          message,
+        });
+      }
     } finally {
       setIsRegisteringSource(false);
     }
@@ -192,127 +226,207 @@ export function RegisterPanel() {
         <p className="eyebrow">get listed</p>
         <h3>Register your work</h3>
       </div>
-      <form className="register-source-form" onSubmit={registerSource}>
-        <div className="form-grid">
-          <div>
-            <label htmlFor="source-title">Title of your work</label>
-            <input
-              id="source-title"
-              placeholder="Agent Payments, Explained"
-              value={sourceForm.title}
-              onChange={(event) =>
-                updateSourceForm("title", event.target.value)
-              }
-            />
+      {registeredSource ? (
+        <div className="registration-receipt" aria-live="polite">
+          <div className="signature-stat registration-receipt-artifact">
+            <span className="stamp">REGISTERED</span>
+            <p className="eyebrow">you're listed</p>
+            <h3>{registeredSource.title}</h3>
+            <div className="receipt-lines">
+              <span className="receipt-line">
+                <span>creator</span>
+                <strong>{registeredSource.creator}</strong>
+              </span>
+              <span className="receipt-line">
+                <span>price</span>
+                <strong>
+                  {formatDollars(registeredSource.priceAtomicUsdc)} / citation
+                </strong>
+              </span>
+              <span className="receipt-line">
+                <span>wallet</span>
+                <strong>{shortWallet(registeredSource.wallet)}</strong>
+              </span>
+            </div>
           </div>
-          <div>
-            <label htmlFor="source-creator">Your name</label>
-            <input
-              id="source-creator"
-              placeholder="Ada Rivera"
-              value={sourceForm.creator}
-              onChange={(event) =>
-                updateSourceForm("creator", event.target.value)
-              }
-            />
+          <p className="status-line source-status">
+            {registeredSource.custody === "circle-w3s"
+              ? `We created a custodial payout wallet for you: ${shortWallet(
+                  registeredSource.wallet,
+                )}.`
+              : `Payouts go to ${shortWallet(registeredSource.wallet)}.`}
+          </p>
+          <p className="hero-text">
+            Verified creators leave probation and get paid in full - takes 30
+            seconds with a meta tag or DNS record.
+          </p>
+          <div className="hero-cta registration-actions">
+            <Link
+              className="cta-primary"
+              href={`/sources/${registeredSource.id}`}
+            >
+              Verify you own this →
+            </Link>
+            <Link
+              className="cta-secondary"
+              href={`/sources/${registeredSource.id}`}
+            >
+              View your source page
+            </Link>
           </div>
-          <div>
-            <label htmlFor="source-price">Price per citation</label>
-            <input
-              id="source-price"
-              inputMode="numeric"
-              placeholder="1500"
-              value={sourceForm.priceAtomicUsdc}
-              onChange={(event) =>
-                updateSourceForm("priceAtomicUsdc", event.target.value)
-              }
-            />
-            <small className="field-hint">
-              {Number(sourceForm.priceAtomicUsdc) > 0
-                ? `You'll earn ${formatDollars(
-                    Number(sourceForm.priceAtomicUsdc),
-                  )} each time the AI cites your work.`
-                : "How much you earn each time the AI cites your work."}
-            </small>
-          </div>
+          <ol className="registration-next-list">
+            <li>Verify ownership to leave probation.</li>
+            <li>
+              The answer agent cites you when relevant, then pays per citation
+              in USDC.
+            </li>
+            <li>
+              Withdraw anytime; every payment is an on-chain receipt on{" "}
+              <Link
+                className="inline-link"
+                href={`/creators/${registeredSource.wallet}`}
+              >
+                your earnings board
+              </Link>
+              .
+            </li>
+          </ol>
+          <button
+            type="button"
+            className="source-register-button"
+            onClick={() => {
+              setRegisteredSource(null);
+              setSourceRegistrationStatus("");
+            }}
+          >
+            Register another
+          </button>
         </div>
-        <label htmlFor="source-url">Link to your work</label>
-        <input
-          id="source-url"
-          type="url"
-          placeholder="https://yourblog.com/post"
-          value={sourceForm.url}
-          onChange={(event) => updateSourceForm("url", event.target.value)}
-        />
-        <label htmlFor="source-wallet">Payout wallet</label>
-        <input
-          id="source-wallet"
-          placeholder="0x..."
-          value={sourceForm.wallet}
-          onChange={(event) => updateSourceForm("wallet", event.target.value)}
-        />
-        <small className="field-hint">
-          Paste an EVM payout wallet. When custodial onboarding is enabled,
-          Tollgate can mint a Circle W3S wallet for creators without one.
-        </small>
-        <details className="form-advanced">
-          <summary>More options - handle, topics, email, splits</summary>
-          <label htmlFor="source-handle">Handle</label>
+      ) : (
+        <form className="register-source-form" onSubmit={registerSource}>
+          <div className="form-grid">
+            <div>
+              <label htmlFor="source-title">Title of your work</label>
+              <input
+                id="source-title"
+                placeholder="Agent Payments, Explained"
+                value={sourceForm.title}
+                onChange={(event) =>
+                  updateSourceForm("title", event.target.value)
+                }
+              />
+            </div>
+            <div>
+              <label htmlFor="source-creator">Your name</label>
+              <input
+                id="source-creator"
+                placeholder="Ada Rivera"
+                value={sourceForm.creator}
+                onChange={(event) =>
+                  updateSourceForm("creator", event.target.value)
+                }
+              />
+            </div>
+            <div>
+              <label htmlFor="source-price">Price per citation</label>
+              <input
+                id="source-price"
+                inputMode="numeric"
+                placeholder="1500"
+                value={sourceForm.priceAtomicUsdc}
+                onChange={(event) =>
+                  updateSourceForm("priceAtomicUsdc", event.target.value)
+                }
+              />
+              <small className="field-hint">
+                {Number(sourceForm.priceAtomicUsdc) > 0
+                  ? `You'll earn ${formatDollars(
+                      Number(sourceForm.priceAtomicUsdc),
+                    )} each time the AI cites your work.`
+                  : "How much you earn each time the AI cites your work."}
+              </small>
+            </div>
+          </div>
+          <label htmlFor="source-url">Link to your work</label>
           <input
-            id="source-handle"
-            placeholder="@adawrites"
-            value={sourceForm.handle}
-            onChange={(event) => updateSourceForm("handle", event.target.value)}
+            id="source-url"
+            type="url"
+            placeholder="https://yourblog.com/post"
+            value={sourceForm.url}
+            onChange={(event) => updateSourceForm("url", event.target.value)}
           />
-          <label htmlFor="source-summary">What it covers</label>
-          <textarea
-            id="source-summary"
-            placeholder="One line on what it's about - helps the AI know when to cite you."
-            value={sourceForm.summary}
-            rows={3}
-            onChange={(event) =>
-              updateSourceForm("summary", event.target.value)
-            }
-          />
-          <label htmlFor="source-tags">Topics</label>
+          <label htmlFor="source-wallet">Payout wallet</label>
           <input
-            id="source-tags"
-            placeholder="agents, payments, x402"
-            value={sourceForm.tags}
-            onChange={(event) => updateSourceForm("tags", event.target.value)}
+            id="source-wallet"
+            placeholder="0x..."
+            value={sourceForm.wallet}
+            onChange={(event) => updateSourceForm("wallet", event.target.value)}
           />
-          <label htmlFor="source-notify-email">Notification email</label>
-          <input
-            id="source-notify-email"
-            type="email"
-            placeholder="ada@example.com"
-            value={sourceForm.notifyEmail}
-            onChange={(event) =>
-              updateSourceForm("notifyEmail", event.target.value)
-            }
-          />
-          <label htmlFor="source-contributors">Contributor splits</label>
-          <input
-            id="source-contributors"
-            placeholder="0xabc...:7000, 0xdef...:3000"
-            value={sourceForm.contributors}
-            onChange={(event) =>
-              updateSourceForm("contributors", event.target.value)
-            }
-          />
-        </details>
-        <button
-          type="submit"
-          className="source-register-button"
-          disabled={isRegisteringSource}
-        >
-          {isRegisteringSource ? "registering..." : "Register my work"}
-        </button>
-        <p className="status-line source-status" aria-live="polite">
-          {sourceRegistrationStatus ||
-            "Add one link to your work - you'll be paid whenever the AI cites it."}
-        </p>
-      </form>
+          <small className="field-hint">
+            Paste an EVM payout wallet. When custodial onboarding is enabled,
+            Tollgate can mint a Circle W3S wallet for creators without one.
+          </small>
+          <details className="form-advanced">
+            <summary>More options - handle, topics, email, splits</summary>
+            <label htmlFor="source-handle">Handle</label>
+            <input
+              id="source-handle"
+              placeholder="@adawrites"
+              value={sourceForm.handle}
+              onChange={(event) =>
+                updateSourceForm("handle", event.target.value)
+              }
+            />
+            <label htmlFor="source-summary">What it covers</label>
+            <textarea
+              id="source-summary"
+              placeholder="One line on what it's about - helps the AI know when to cite you."
+              value={sourceForm.summary}
+              rows={3}
+              onChange={(event) =>
+                updateSourceForm("summary", event.target.value)
+              }
+            />
+            <label htmlFor="source-tags">Topics</label>
+            <input
+              id="source-tags"
+              placeholder="agents, payments, x402"
+              value={sourceForm.tags}
+              onChange={(event) => updateSourceForm("tags", event.target.value)}
+            />
+            <label htmlFor="source-notify-email">Notification email</label>
+            <input
+              id="source-notify-email"
+              type="email"
+              placeholder="ada@example.com"
+              value={sourceForm.notifyEmail}
+              onChange={(event) =>
+                updateSourceForm("notifyEmail", event.target.value)
+              }
+            />
+            <label htmlFor="source-contributors">Contributor splits</label>
+            <input
+              id="source-contributors"
+              placeholder="0xabc...:7000, 0xdef...:3000"
+              value={sourceForm.contributors}
+              onChange={(event) =>
+                updateSourceForm("contributors", event.target.value)
+              }
+            />
+          </details>
+          <button
+            type="submit"
+            className="source-register-button"
+            disabled={isRegisteringSource}
+          >
+            {isRegisteringSource ? "registering..." : "Register my work"}
+          </button>
+          <p className="status-line source-status" aria-live="polite">
+            {sourceRegistrationStatus ||
+              "Add one link to your work - you'll be paid whenever the AI cites it."}
+          </p>
+        </form>
+      )}
       <div className="register-source-form">
         <label htmlFor="feed-url">Import your feed</label>
         <input
@@ -362,6 +476,36 @@ export function RegisterPanel() {
               Register selected posts
             </button>
           </>
+        )}
+        {feedRegistration && (
+          <div className="feed-registration-receipt" aria-live="polite">
+            <div>
+              <p className="eyebrow">feed import</p>
+              <h3>
+                Registered {feedRegistration.count}{" "}
+                {feedRegistration.count === 1 ? "source" : "sources"}
+              </h3>
+            </div>
+            <p className="status-line">{feedRegistration.message}</p>
+            <div className="hero-cta registration-actions">
+              <Link
+                className="receipt-link"
+                href={`/creators/${feedRegistration.wallet}`}
+              >
+                View earnings board
+              </Link>
+              <button
+                type="button"
+                className="source-register-button"
+                onClick={() => {
+                  setFeedRegistration(null);
+                  setSourceRegistrationStatus("");
+                }}
+              >
+                Import another feed
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

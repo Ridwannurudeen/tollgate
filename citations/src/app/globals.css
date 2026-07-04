@@ -2415,6 +2415,75 @@ textarea:focus {
   display: none;
 }
 
+/* --- creator registration receipt --- */
+.registration-receipt {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+}
+
+.registration-receipt-artifact {
+  transform: none;
+  animation: none;
+}
+
+.registration-receipt-artifact h3 {
+  max-width: calc(100% - 120px);
+  margin-top: 10px;
+  color: #fdfaf0;
+  font-size: clamp(24px, 4vw, 34px);
+}
+
+.registration-receipt .receipt-line strong {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.registration-actions {
+  align-items: center;
+  margin-top: 0;
+}
+
+.registration-actions .cta-primary,
+.registration-actions .cta-secondary {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+.registration-next-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 22px;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.registration-next-list li::marker {
+  color: var(--gold);
+  font-family: var(--font-num);
+}
+
+.feed-registration-receipt {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+}
+
+.feed-registration-receipt .receipt-link {
+  display: inline-flex;
+  align-items: center;
+}
+
 /* --- who-got-paid: identity chips + row craft --- */
 .creator-chip {
   flex: none;
