@@ -48,10 +48,42 @@
   --radius-md: 10px;
   --radius-lg: 14px;
 
+  /* warm elevation scale — never pure gray */
+  --shadow-1: 0 1px 2px rgba(28, 27, 21, 0.05), 0 2px 6px rgba(28, 27, 21, 0.04);
+  --shadow-2: 0 2px 4px rgba(28, 27, 21, 0.06),
+    0 10px 24px rgba(28, 27, 21, 0.09);
+  --shadow-3: 0 4px 10px rgba(28, 27, 21, 0.1),
+    0 24px 48px rgba(28, 27, 21, 0.16);
+
+  /* spacing rhythm (4-pt) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* motion */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 150ms;
+  --dur-2: 240ms;
+  --dur-3: 420ms;
+
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas,
     monospace;
+}
+
+/* every amount and count reads as ledger figures */
+.num,
+.stat-sub,
+.signature-stat strong,
+.stat-cell strong {
+  font-variant-numeric: tabular-nums;
 }
 
 * {
@@ -1446,19 +1478,6 @@ textarea:focus {
   box-shadow: 0 1px 2px var(--shadow), 0 16px 44px var(--shadow);
 }
 
-.step-num {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  background: var(--green);
-  color: #f6f2e7;
-  font-family: var(--font-num);
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .step-card h3 {
   font-size: 20px;
 }
@@ -1762,4 +1781,294 @@ textarea:focus {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============================================================
+   2026-07 award pass — "the receipt is the brand"
+   Systematizes the receipt as the signature element, adds a
+   restrained motion system, and repairs rhythm + hierarchy.
+   ============================================================ */
+
+/* --- signature receipt artifact (hero money stat) --- */
+.signature-stat {
+  position: relative;
+  transform: rotate(-1.2deg);
+  border-radius: var(--radius-sm) var(--radius-sm) var(--radius) var(--radius);
+  box-shadow: var(--shadow-3);
+  padding: 30px 26px 24px;
+}
+
+/* punch-hole perforation strip along the top edge */
+.signature-stat::before,
+.receipt-context .evidence-grid::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 14px;
+  right: 14px;
+  height: 10px;
+  background-image: radial-gradient(circle 3px, var(--bg) 98%, transparent 100%);
+  background-size: 18px 10px;
+  background-repeat: repeat-x;
+  pointer-events: none;
+}
+
+.receipt-context .evidence-grid {
+  position: relative;
+}
+
+/* itemized receipt rows inside the hero artifact */
+.receipt-lines {
+  margin: 18px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px dashed rgba(239, 233, 214, 0.25);
+  display: grid;
+  gap: 7px;
+}
+
+.receipt-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-family: var(--font-num);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: rgba(239, 233, 214, 0.62);
+}
+
+.receipt-line strong {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  color: #fdfaf0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the stamp --- */
+.stamp {
+  display: inline-block;
+  transform: rotate(-4deg);
+  padding: 3px 9px;
+  border: 1.5px solid var(--green-bright);
+  border-radius: 3px;
+  color: var(--green-bright);
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.signature-stat .stamp {
+  position: absolute;
+  top: 24px;
+  right: 20px;
+  opacity: 0.9;
+}
+
+/* --- perforation rule between major sections --- */
+.perf-rule {
+  height: 0;
+  margin: var(--space-8) 0;
+  border: 0;
+  border-top: 2px dotted var(--line-strong);
+}
+
+/* --- motion system (transform/opacity only, spring easing) --- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .hero-copy > *,
+  .hero-stat-column > * {
+    animation: rise-in var(--dur-3) var(--ease-spring) both;
+  }
+
+  .hero-copy > :nth-child(2) { animation-delay: 60ms; }
+  .hero-copy > :nth-child(3) { animation-delay: 120ms; }
+  .hero-copy > :nth-child(4) { animation-delay: 180ms; }
+  .hero-stat-column > * { animation-delay: 240ms; }
+
+  /* keep the receipt's resting tilt while it rises */
+  .signature-stat {
+    animation: rise-in var(--dur-3) var(--ease-spring) both;
+    animation-delay: 240ms;
+  }
+
+  .step-card,
+  .source-card,
+  .creator-row,
+  .integration-card {
+    transition:
+      transform var(--dur-2) var(--ease-spring),
+      box-shadow var(--dur-2) var(--ease-spring);
+  }
+
+  .step-card:hover,
+  .integration-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-2);
+  }
+
+  button,
+  .primary-button,
+  .cta-primary,
+  .source-register-button {
+    transition:
+      transform var(--dur-1) ease-out,
+      background-color var(--dur-1) ease-out,
+      box-shadow var(--dur-2) var(--ease-spring);
+  }
+
+  button:active,
+  .primary-button:active,
+  .cta-primary:active {
+    transform: scale(0.98);
+  }
+}
+
+/* --- CTA hierarchy repair: one green primary everywhere --- */
+.source-register-button {
+  background: var(--green);
+  border: 1px solid var(--green-deep);
+  color: #fdfaf0;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  box-shadow: var(--shadow-1);
+}
+
+.source-register-button:hover:not(:disabled) {
+  background: var(--green-deep);
+}
+
+/* --- register form: progressive disclosure --- */
+.form-advanced {
+  margin-top: var(--space-4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0 var(--space-4);
+}
+
+.form-advanced[open] {
+  padding-bottom: var(--space-4);
+  background: var(--paper);
+}
+
+.form-advanced > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: var(--space-3) 0;
+  font-family: var(--font-num);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+
+.form-advanced > summary::before {
+  content: "+";
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.form-advanced[open] > summary::before {
+  content: "−";
+}
+
+.form-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* --- who-got-paid: identity chips + row craft --- */
+.creator-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--green-deep);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.creator-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--radius);
+}
+
+.creator-row:hover {
+  background: var(--paper);
+}
+
+.creator-row .creator-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- ticker: receipt strip --- */
+.ticker {
+  border-top: 1px dashed var(--line-strong);
+  border-bottom: 1px dashed var(--line-strong);
+  background: var(--paper);
+}
+
+.ticker-track span strong {
+  color: var(--green-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- step cards: icon system --- */
+.step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper-raised);
+  color: var(--green);
+  margin-bottom: 12px;
+}
+
+.step-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.75;
+}
+
+.step-index {
+  float: right;
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--ink-4);
+  letter-spacing: 0.1em;
+}
+
+/* --- rhythm: give major home sections air --- */
+.how-it-works,
+.workbench,
+.creator-earnings-section {
+  margin-top: var(--space-8);
 }

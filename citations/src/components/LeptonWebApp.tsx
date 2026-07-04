@@ -443,12 +443,24 @@ export function LeptonWebApp({
         <div className="signature-stat" aria-live="polite">
           <span className="stat-label">citation payments made</span>
           <strong>{stats.receiptCount}</strong>
-          <span className="stat-sub">
-            to {stats.creatorCount} creators · {formatDollars(stats.totalPaid)}{" "}
-            paid ·{" "}
-            <Link className="stat-link" href="/proof">
-              verifiable on-chain →
-            </Link>
+          <div className="receipt-lines">
+            <span className="receipt-line">
+              creators paid <strong>{stats.creatorCount}</strong>
+            </span>
+            <span className="receipt-line">
+              settled in USDC <strong>{formatDollars(stats.totalPaid)}</strong>
+            </span>
+            <span className="receipt-line">
+              proof{" "}
+              <strong>
+                <Link className="stat-link" href="/proof">
+                  verifiable on-chain →
+                </Link>
+              </strong>
+            </span>
+          </div>
+          <span className="stamp" aria-hidden="true">
+            paid · on-chain
           </span>
         </div>
       </section>
@@ -511,7 +523,21 @@ export function LeptonWebApp({
       <section className="how-it-works" id="how" aria-label="How it works">
         <ol className="step-grid">
           <li className="step-card">
-            <span className="step-num">1</span>
+            <span className="step-index" aria-hidden="true">
+              01
+            </span>
+            <span className="step-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </span>
             <h3>Register your work</h3>
             <p>
               Add a link to one thing you&apos;ve made — an article, a photo, a
@@ -519,7 +545,21 @@ export function LeptonWebApp({
             </p>
           </li>
           <li className="step-card">
-            <span className="step-num">2</span>
+            <span className="step-index" aria-hidden="true">
+              02
+            </span>
+            <span className="step-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v10M15.5 9.2c-.8-.8-2.1-1.2-3.5-1.2-1.8 0-3 .8-3 2s1.2 1.8 3 2 3 .8 3 2-1.2 2-3 2c-1.4 0-2.7-.4-3.5-1.2" />
+              </svg>
+            </span>
             <h3>AI cites it and pays you</h3>
             <p>
               When the answer agent uses your work, it pays you for that
@@ -527,7 +567,22 @@ export function LeptonWebApp({
             </p>
           </li>
           <li className="step-card">
-            <span className="step-num">3</span>
+            <span className="step-index" aria-hidden="true">
+              03
+            </span>
+            <span className="step-icon" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 7H5a2 2 0 0 1 0-4h13v4" />
+                <path d="M4 6v12a2 2 0 0 0 2 2h14v-8" />
+                <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+              </svg>
+            </span>
             <h3>Withdraw anytime</h3>
             <p>
               Your earnings collect in your wallet. Cash out whenever you like —
@@ -546,14 +601,24 @@ export function LeptonWebApp({
           {creators.length > 0 ? (
             creators.map((creator) => (
               <div className="creator-row" key={creator.wallet}>
-                <div>
+                <span className="creator-chip" aria-hidden="true">
+                  {creator.creator
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((word) => word[0])
+                    .join("")
+                    .toUpperCase()}
+                </span>
+                <div className="creator-meta">
                   <strong>{creator.creator}</strong>
                   <span>
                     {creator.handle} / {shortWallet(creator.wallet)}
                   </span>
                 </div>
                 <div className="numeric-cell">
-                  <strong>{formatDollars(creator.earnedAtomicUsdc)}</strong>
+                  <strong className="num">
+                    {formatDollars(creator.earnedAtomicUsdc)}
+                  </strong>
                   <Link
                     className="receipt-link"
                     href={`/creators/${creator.wallet}`}
@@ -601,17 +666,6 @@ export function LeptonWebApp({
                 />
               </div>
               <div>
-                <label htmlFor="source-handle">Handle</label>
-                <input
-                  id="source-handle"
-                  placeholder="@adawrites"
-                  value={sourceForm.handle}
-                  onChange={(event) =>
-                    updateSourceForm("handle", event.target.value)
-                  }
-                />
-              </div>
-              <div>
                 <label htmlFor="source-price">Price per citation</label>
                 <input
                   id="source-price"
@@ -631,6 +685,13 @@ export function LeptonWebApp({
                 </small>
               </div>
             </div>
+            <label htmlFor="source-url">Link to your work</label>
+            <input
+              id="source-url"
+              placeholder="https://yourblog.com/post"
+              value={sourceForm.url}
+              onChange={(event) => updateSourceForm("url", event.target.value)}
+            />
             <label htmlFor="source-wallet">Payout wallet</label>
             <input
               id="source-wallet"
@@ -644,48 +705,55 @@ export function LeptonWebApp({
               Optional. Paste an Ethereum-style wallet, or leave blank and
               Tollgate will create a custodial payout wallet when enabled.
             </small>
-            <label htmlFor="source-url">Link to your work</label>
-            <input
-              id="source-url"
-              placeholder="https://yourblog.com/post"
-              value={sourceForm.url}
-              onChange={(event) => updateSourceForm("url", event.target.value)}
-            />
-            <label htmlFor="source-summary">What it covers</label>
-            <textarea
-              id="source-summary"
-              placeholder="One line on what it's about — helps the AI know when to cite you."
-              value={sourceForm.summary}
-              rows={3}
-              onChange={(event) =>
-                updateSourceForm("summary", event.target.value)
-              }
-            />
-            <label htmlFor="source-tags">Topics</label>
-            <input
-              id="source-tags"
-              placeholder="agents, payments, x402"
-              value={sourceForm.tags}
-              onChange={(event) => updateSourceForm("tags", event.target.value)}
-            />
-            <label htmlFor="source-notify-email">Notification email</label>
-            <input
-              id="source-notify-email"
-              placeholder="ada@example.com"
-              value={sourceForm.notifyEmail}
-              onChange={(event) =>
-                updateSourceForm("notifyEmail", event.target.value)
-              }
-            />
-            <label htmlFor="source-contributors">Contributor splits</label>
-            <input
-              id="source-contributors"
-              placeholder="0xabc...:7000, 0xdef...:3000"
-              value={sourceForm.contributors}
-              onChange={(event) =>
-                updateSourceForm("contributors", event.target.value)
-              }
-            />
+            <details className="form-advanced">
+              <summary>More options — handle, topics, email, splits</summary>
+              <label htmlFor="source-handle">Handle</label>
+              <input
+                id="source-handle"
+                placeholder="@adawrites"
+                value={sourceForm.handle}
+                onChange={(event) =>
+                  updateSourceForm("handle", event.target.value)
+                }
+              />
+              <label htmlFor="source-summary">What it covers</label>
+              <textarea
+                id="source-summary"
+                placeholder="One line on what it's about — helps the AI know when to cite you."
+                value={sourceForm.summary}
+                rows={3}
+                onChange={(event) =>
+                  updateSourceForm("summary", event.target.value)
+                }
+              />
+              <label htmlFor="source-tags">Topics</label>
+              <input
+                id="source-tags"
+                placeholder="agents, payments, x402"
+                value={sourceForm.tags}
+                onChange={(event) =>
+                  updateSourceForm("tags", event.target.value)
+                }
+              />
+              <label htmlFor="source-notify-email">Notification email</label>
+              <input
+                id="source-notify-email"
+                placeholder="ada@example.com"
+                value={sourceForm.notifyEmail}
+                onChange={(event) =>
+                  updateSourceForm("notifyEmail", event.target.value)
+                }
+              />
+              <label htmlFor="source-contributors">Contributor splits</label>
+              <input
+                id="source-contributors"
+                placeholder="0xabc...:7000, 0xdef...:3000"
+                value={sourceForm.contributors}
+                onChange={(event) =>
+                  updateSourceForm("contributors", event.target.value)
+                }
+              />
+            </details>
             <button
               type="submit"
               className="source-register-button"
