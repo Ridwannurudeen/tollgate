@@ -431,8 +431,9 @@ export function RegisterPanel() {
             onChange={(event) => updateSourceForm("wallet", event.target.value)}
           />
           <small className="field-hint">
-            Paste an EVM payout wallet. When custodial onboarding is enabled,
-            Tollgate can mint a Circle W3S wallet for creators without one.
+            <strong>No wallet? Leave this blank.</strong> Tollgate creates a
+            custodial payout wallet for you automatically. Or paste any
+            Ethereum-style wallet (0x...) to receive payouts directly.
           </small>
           <details className="form-advanced">
             <summary>More options - handle, topics, email, splits</summary>

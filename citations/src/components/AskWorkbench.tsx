@@ -28,6 +28,65 @@ export const EXAMPLE_QUESTIONS = [
   "How can a spend-controlled agent buy publisher content without abusing its budget?",
 ];
 
+const CIRCLE_FAUCET_URL = "https://faucet.circle.com";
+
+function errorValue(error: unknown, key: string): unknown {
+  if (!error || typeof error !== "object" || !(key in error)) return undefined;
+  return (error as Record<string, unknown>)[key];
+}
+
+function paidQueryErrorText(error: unknown): string {
+  const parts: string[] = [];
+  if (error instanceof Error) {
+    parts.push(error.name, error.message);
+  }
+  for (const key of ["code", "shortMessage", "details"]) {
+    const value = errorValue(error, key);
+    if (typeof value === "string" || typeof value === "number") {
+      parts.push(String(value));
+    }
+  }
+  const cause = errorValue(error, "cause");
+  if (cause instanceof Error) {
+    parts.push(cause.name, cause.message);
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+export function paidQueryErrorMessage(
+  error: unknown,
+  priceText: string,
+): string {
+  const errorText = paidQueryErrorText(error);
+  if (errorText.includes("no injected wallet found")) {
+    return "No wallet detected. Install MetaMask (or any Arc-compatible wallet) and try again.";
+  }
+  if (
+    errorText.includes("4001") ||
+    errorText.includes("user rejected") ||
+    errorText.includes("rejected the request") ||
+    errorText.includes("denied") ||
+    errorText.includes("cancelled") ||
+    errorText.includes("canceled")
+  ) {
+    return `Payment cancelled - approve the wallet prompt to pay ${priceText} and get your answer.`;
+  }
+  if (
+    errorText.includes("invalid_exact_evm_insufficient_balance") ||
+    errorText.includes("invalid_batch_settlement_evm_insufficient_balance") ||
+    errorText.includes("permit2_insufficient_balance") ||
+    errorText.includes("erc20insufficientbalance") ||
+    errorText.includes("transfer exceeds balance") ||
+    errorText.includes("transfer failed") ||
+    errorText.includes("insufficient balance") ||
+    errorText.includes("insufficient funds") ||
+    errorText.includes("insufficient usdc")
+  ) {
+    return "Your wallet needs a little Arc-testnet USDC. Get it free at faucet.circle.com, then retry.";
+  }
+  return error instanceof Error ? error.message : "Paid query failed.";
+}
+
 export function AskWorkbench({ initialLedger }: Props) {
   const [question, setQuestion] = useState(EXAMPLE_QUESTIONS[0]);
   const [ledger, setLedger] = useState(initialLedger);
@@ -47,6 +106,8 @@ export function AskWorkbench({ initialLedger }: Props) {
   const displayedBudget = displayedQuery?.agentBudget ?? null;
   const displayedDecisions = displayedQuery?.sourceDecisions ?? [];
   const displayedSteps = displayedQuery?.agentSteps ?? [];
+  const paidQueryPrice = settlementStatus?.paidQueryPriceAtomicUsdc ?? 10_000;
+  const paidQueryPriceText = formatDollars(paidQueryPrice);
 
   function updateLedger(nextLedger: Ledger) {
     setLedger(nextLedger);
@@ -137,7 +198,7 @@ export function AskWorkbench({ initialLedger }: Props) {
       await Promise.all([refreshLedger(), refreshSettlementStatus()]);
       setStatus("Reader paid, answer recorded, and citations receipted.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Paid query failed.");
+      setStatus(paidQueryErrorMessage(error, paidQueryPriceText));
     } finally {
       setIsSubmitting(false);
     }
@@ -163,12 +224,7 @@ export function AskWorkbench({ initialLedger }: Props) {
               ? "verified ledger"
               : "ledger review"}
           </span>
-          <span className="mode-badge">
-            {formatDollars(
-              settlementStatus?.paidQueryPriceAtomicUsdc ?? 10_000,
-            )}{" "}
-            reader price
-          </span>
+          <span className="mode-badge">{paidQueryPriceText} reader price</span>
         </div>
         <label htmlFor="question">Question</label>
         <textarea
@@ -207,9 +263,20 @@ export function AskWorkbench({ initialLedger }: Props) {
         </button>
         <p className="status-line" aria-live="polite">
           {status ||
-            `A paid answer costs ${formatDollars(
-              settlementStatus?.paidQueryPriceAtomicUsdc ?? 10_000,
-            )} and pays every creator it cites.`}
+            `A paid answer costs ${paidQueryPriceText} and pays every creator it cites.`}
+        </p>
+        <p className="field-hint">
+          Pay from any Arc-testnet wallet - connect MetaMask when prompted. Need
+          test USDC?{" "}
+          <a
+            className="inline-link"
+            href={CIRCLE_FAUCET_URL}
+            target="_blank"
+            rel="noopener"
+          >
+            Get it free at faucet.circle.com
+          </a>
+          .
         </p>
       </div>
       <LatestAnswer
