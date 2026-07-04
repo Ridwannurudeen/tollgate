@@ -11,10 +11,13 @@ const CLAIM_WINDOW_MS = 60 * 60 * 1000;
 const CLAIM_LIMIT = 3;
 const RSS_IMPORT_WINDOW_MS = 60 * 60 * 1000;
 const RSS_IMPORT_LIMIT = 10;
+const DISCOVERY_WINDOW_MS = 60 * 60 * 1000;
+const DISCOVERY_LIMIT = 10;
 const buckets = new Map<string, RateLimitBucket>();
 const registrationBuckets = new Map<string, RateLimitBucket>();
 const claimBuckets = new Map<string, RateLimitBucket>();
 const rssImportBuckets = new Map<string, RateLimitBucket>();
+const discoveryBuckets = new Map<string, RateLimitBucket>();
 
 export function assertQueryRateLimit(key: string, now = Date.now()): void {
   const bucketKey = key || "anonymous";
@@ -90,6 +93,26 @@ export function assertRssImportRateLimit(key: string, now = Date.now()): void {
   }
   if (current.count >= RSS_IMPORT_LIMIT) {
     throw new Error("Too many feed imports. Wait an hour and retry.");
+  }
+  current.count += 1;
+}
+
+export function assertDiscoveryRateLimit(key: string, now = Date.now()): void {
+  const bucketKey = key || "anonymous";
+  for (const [existingKey, bucket] of discoveryBuckets) {
+    if (now - bucket.windowStart >= DISCOVERY_WINDOW_MS) {
+      discoveryBuckets.delete(existingKey);
+    }
+  }
+  const current = discoveryBuckets.get(bucketKey);
+  if (!current || now - current.windowStart >= DISCOVERY_WINDOW_MS) {
+    discoveryBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= DISCOVERY_LIMIT) {
+    throw new Error(
+      "Too many site discovery attempts. Wait an hour and retry.",
+    );
   }
   current.count += 1;
 }

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   discoveryRegistrations,
@@ -70,5 +71,28 @@ describe("tollgate discovery", () => {
         "https://publisher.example",
       ),
     ).toThrow("wallet");
+  });
+
+  it("parses Tollgate's own public discovery declaration", () => {
+    const raw = readFileSync(
+      new URL("../../public/.well-known/tollgate.json", import.meta.url),
+      "utf8",
+    );
+    const declaration = parseTollgateJson(
+      JSON.parse(raw) as unknown,
+      "https://tollgate.gudman.xyz",
+    );
+
+    expect(declaration.wallet).toBe(
+      "0x22949cA9A470181c66a034E81a743E2518579E95",
+    );
+    expect(
+      discoveryRegistrations(declaration, "https://tollgate.gudman.xyz"),
+    ).toMatchObject([
+      {
+        title: "Tollgate x402 citation notes",
+        origin: "discovered",
+      },
+    ]);
   });
 });

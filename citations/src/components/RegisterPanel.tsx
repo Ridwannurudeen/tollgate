@@ -11,6 +11,13 @@ type SourceRegistryResponse = {
   error?: string;
 };
 
+type DiscoveryResponse = {
+  registered?: CreatorSource[];
+  count?: number;
+  error?: string;
+  note?: string;
+};
+
 type SourceFormState = {
   title: string;
   creator: string;
@@ -35,6 +42,9 @@ type FeedRegistrationSummary = {
   count: number;
   wallet: CreatorSource["wallet"];
   message: string;
+  eyebrow: string;
+  linkLabel: string;
+  resetLabel: string;
 };
 
 const EMPTY_SOURCE_FORM: SourceFormState = {
@@ -58,6 +68,7 @@ export function RegisterPanel() {
     useState<CreatorSource | null>(null);
   const [feedRegistration, setFeedRegistration] =
     useState<FeedRegistrationSummary | null>(null);
+  const [discoveryUrl, setDiscoveryUrl] = useState("");
   const [feedUrl, setFeedUrl] = useState("");
   const [rssPosts, setRssPosts] = useState<RssImportPost[]>([]);
   const [selectedRssUrls, setSelectedRssUrls] = useState<Set<string>>(
@@ -196,6 +207,9 @@ export function RegisterPanel() {
           count: registeredCount,
           wallet: firstRegisteredSource.wallet,
           message,
+          eyebrow: "feed import",
+          linkLabel: "View earnings board",
+          resetLabel: "Import another feed",
         });
       }
     } catch (error) {
@@ -213,8 +227,62 @@ export function RegisterPanel() {
           count: registeredCount,
           wallet: firstRegisteredSource.wallet,
           message,
+          eyebrow: "feed import",
+          linkLabel: "View earnings board",
+          resetLabel: "Import another feed",
         });
       }
+    } finally {
+      setIsRegisteringSource(false);
+    }
+  }
+
+  async function discoverSite() {
+    setIsRegisteringSource(true);
+    setRegisteredSource(null);
+    setFeedRegistration(null);
+    setSourceRegistrationStatus("Looking for Tollgate declaration...");
+    try {
+      const response = await fetch("/api/sources/discover", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: discoveryUrl }),
+      });
+      const body = (await response.json()) as DiscoveryResponse;
+      if (!response.ok) {
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+      }
+      const registered = body.registered ?? [];
+      const count = body.count ?? registered.length;
+      if (registered.length === 1 && !body.error) {
+        setRegisteredSource(registered[0]);
+        setSourceRegistrationStatus(
+          body.note ?? "Discovered source registered.",
+        );
+        return;
+      }
+      if (registered.length > 0) {
+        setFeedRegistration({
+          count,
+          wallet: registered[0].wallet,
+          message:
+            body.error ??
+            `${count} discovered source(s) registered. Verify ownership to leave probation.`,
+          eyebrow: "site discovery",
+          linkLabel: "View earnings board",
+          resetLabel: "Discover another site",
+        });
+        setSourceRegistrationStatus(
+          body.error ??
+            `${count} discovered source(s) registered. Verify ownership to leave probation.`,
+        );
+        return;
+      }
+      setSourceRegistrationStatus(body.error ?? "No sources registered.");
+    } catch (error) {
+      setSourceRegistrationStatus(
+        error instanceof Error ? error.message : "Site discovery failed.",
+      );
     } finally {
       setIsRegisteringSource(false);
     }
@@ -428,6 +496,35 @@ export function RegisterPanel() {
         </form>
       )}
       <div className="register-source-form">
+        <label htmlFor="discovery-url">
+          Already have a <code>tollgate.json</code> or a{" "}
+          <code>&lt;meta name=&quot;tollgate&quot;&gt;</code> tag?
+        </label>
+        <input
+          id="discovery-url"
+          type="url"
+          placeholder="https://yourblog.com"
+          value={discoveryUrl}
+          onChange={(event) => setDiscoveryUrl(event.target.value)}
+        />
+        <small className="field-hint">
+          Paste your homepage URL. Tollgate checks the public declaration,
+          registers up to 20 sources, and keeps them probationary until you
+          verify ownership.{" "}
+          <Link className="inline-link" href="/docs/SPEC-DISCOVERY.md">
+            Declaration examples
+          </Link>
+        </small>
+        <button
+          type="button"
+          className="source-register-button"
+          disabled={!discoveryUrl || isRegisteringSource}
+          onClick={discoverSite}
+        >
+          {isRegisteringSource ? "discovering..." : "Discover my site"}
+        </button>
+      </div>
+      <div className="register-source-form">
         <label htmlFor="feed-url">Import your feed</label>
         <input
           id="feed-url"
@@ -480,7 +577,7 @@ export function RegisterPanel() {
         {feedRegistration && (
           <div className="feed-registration-receipt" aria-live="polite">
             <div>
-              <p className="eyebrow">feed import</p>
+              <p className="eyebrow">{feedRegistration.eyebrow}</p>
               <h3>
                 Registered {feedRegistration.count}{" "}
                 {feedRegistration.count === 1 ? "source" : "sources"}
@@ -492,7 +589,7 @@ export function RegisterPanel() {
                 className="receipt-link"
                 href={`/creators/${feedRegistration.wallet}`}
               >
-                View earnings board
+                {feedRegistration.linkLabel}
               </Link>
               <button
                 type="button"
@@ -502,7 +599,7 @@ export function RegisterPanel() {
                   setSourceRegistrationStatus("");
                 }}
               >
-                Import another feed
+                {feedRegistration.resetLabel}
               </button>
             </div>
           </div>
