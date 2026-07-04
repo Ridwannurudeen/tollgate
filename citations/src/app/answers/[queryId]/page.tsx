@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SiteNav } from "@/components/SiteNav";
 import {
   formatBudgetUtilization,
   queryPaymentEconomics,
@@ -76,7 +77,9 @@ export default async function AnswerPage({ params }: Props) {
       : "deterministic policy";
 
   return (
-    <main className="shell receipt-page">
+    <>
+      <SiteNav />
+      <main className="shell receipt-page" id="main">
       <header className="receipt-header">
         <div>
           <p className="eyebrow">answer evidence</p>
@@ -516,6 +519,7 @@ export default async function AnswerPage({ params }: Props) {
           ))}
         </div>
       </section>
-    </main>
+      </main>
+    </>
   );
 }

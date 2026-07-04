@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CreatorWithdrawPanel } from "@/components/CreatorWithdrawPanel";
+import { SiteNav } from "@/components/SiteNav";
 import { readSources } from "@/lib/catalog";
 import { readFeeRouterClaimable } from "@/lib/fee-router";
 import {
@@ -23,32 +24,35 @@ export default async function CreatorPage({ params }: Props) {
   const creator = getCreatorEvidence(ledger, wallet);
   if (!creator) {
     return (
-      <main className="shell receipt-page">
-        <header className="receipt-header">
-          <div>
-            <p className="eyebrow">your earnings</p>
-            <h1>{shortWallet(wallet)}</h1>
-          </div>
-          <Link className="wallet-button receipt-back" href="/">
-            Back to Tollgate
-          </Link>
-        </header>
+      <>
+        <SiteNav />
+        <main className="shell receipt-page" id="main">
+          <header className="receipt-header">
+            <div>
+              <p className="eyebrow">your earnings</p>
+              <h1>{shortWallet(wallet)}</h1>
+            </div>
+            <Link className="wallet-button receipt-back" href="/">
+              Back to Tollgate
+            </Link>
+          </header>
 
-        <section className="receipt-proof">
-          <div className="signature-stat proof-stat">
-            <span className="stat-label">earned so far</span>
-            <strong>{formatDollars(0)}</strong>
-          </div>
-          <div className="proof-copy">
-            <h2>No earnings yet</h2>
-            <p className="hero-text">
-              This wallet has not been cited yet. Once Tollgate&apos;s agent
-              cites a registered source paying this wallet, earnings and
-              receipts will appear here automatically.
-            </p>
-          </div>
-        </section>
-      </main>
+          <section className="receipt-proof">
+            <div className="signature-stat proof-stat">
+              <span className="stat-label">earned so far</span>
+              <strong>{formatDollars(0)}</strong>
+            </div>
+            <div className="proof-copy">
+              <h2>No earnings yet</h2>
+              <p className="hero-text">
+                This wallet has not been cited yet. Once Tollgate&apos;s agent
+                cites a registered source paying this wallet, earnings and
+                receipts will appear here automatically.
+              </p>
+            </div>
+          </section>
+        </main>
+      </>
     );
   }
 
@@ -95,7 +99,9 @@ export default async function CreatorPage({ params }: Props) {
   );
 
   return (
-    <main className="shell receipt-page">
+    <>
+      <SiteNav />
+      <main className="shell receipt-page" id="main">
       <header className="receipt-header">
         <div>
           <p className="eyebrow">your earnings</p>
@@ -304,6 +310,7 @@ export default async function CreatorPage({ params }: Props) {
           </article>
         ))}
       </section>
-    </main>
+      </main>
+    </>
   );
 }

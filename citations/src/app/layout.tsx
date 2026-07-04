@@ -40,14 +40,17 @@ export default function RootLayout({
             <nav className="footer-cols" aria-label="Footer">
               <div className="footer-col">
                 <p className="footer-head">Product</p>
-                <a href="/">Citations</a>
+                <a href="/">Landing</a>
+                <a href="/register">Register</a>
+                <a href="/ask">Ask the AI</a>
+                <a href="/creators">Creators</a>
                 <a href="/core">Settlement core</a>
                 <a href="/aperture">Photo licensing</a>
               </div>
               <div className="footer-col">
                 <p className="footer-head">Proof</p>
                 <a href="/proof">Payout ledger</a>
-                <a href="/demo">Judge demo</a>
+                <a href="/ask">Live demo</a>
               </div>
               <div className="footer-col">
                 <p className="footer-head">Network</p>

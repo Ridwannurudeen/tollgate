@@ -2,6 +2,7 @@
 
 **Format:** screen recording + voiceover. Target 2:45. Lead with the creator problem, not crypto. Show live product and proof pages, not slides.
 **Tabs to pre-open:** `tollgate.gudman.xyz`, `tollgate.gudman.xyz/answers/0xe7c1a7397fdbb323`, `tollgate.gudman.xyz/creators/0x5389688243328c26a92b301faEEAb5fbf9AFf105`, `tollgate.gudman.xyz/aperture`, `peertube-plugin-tollgate/README.md`, `testnet.arcscan.app`.
+**Route flag:** the former `/demo` surface now redirects to `/ask`; use `/ask` for the live workbench shot.
 
 ---
 

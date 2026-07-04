@@ -27,7 +27,7 @@ and fixing rhythm/hierarchy/disclosure defects. Explicitly REJECTED: dark glassm
 4. Hero stat card → a physical receipt artifact: itemized rows (payments / creators / USDC),
    perforated edges, slight -1.2deg rotation, stamp footer, shadow-2.
 
-## C. Homepage restructure (LeptonWebApp.tsx)
+## C. Homepage restructure (route components)
 - CTA hierarchy: exactly ONE filled green primary per view; form submit becomes primary green
   (kills the competing tan block); secondary = outline.
 - Register form progressive disclosure: visible = Title, Link, Your name, Price, Wallet
@@ -41,7 +41,7 @@ and fixing rhythm/hierarchy/disclosure defects. Explicitly REJECTED: dark glassm
 - Entrance choreography: hero elements stagger in (opacity + 8px rise, dur-3, 60ms steps);
   cards hover-lift translateY(-2px)+shadow-2; buttons press scale(0.98).
 
-## D. Deep pages (proof/core/demo/answers/receipts/sources/creators)
+## D. Deep pages (proof/core/ask/answers/receipts/sources/creators)
 - Break dark monoliths: numeric summaries → light stat tiles (big tabular numerals, mono
   labels); ONLY hash rows stay in receipt-blocks. Alternate light/dark rhythm down the page.
 - ALL USDC amounts through formatDollars (kills `0.081000` artifacts); negative internal
@@ -62,3 +62,12 @@ and fixing rhythm/hierarchy/disclosure defects. Explicitly REJECTED: dark glassm
 - [x] Phase 3: proof + core + demo (dark monoliths broken up, formatDollars everywhere, receipt stamps)
 - [x] Phase 4: receipt system cascades via shared signature-stat/receipt-context classes (verified)
 - [x] Phase 5: mobile guards (overflow-x clip, creator-row row layout, grid min-width 0); NOTE headless-new Chrome min-window ~500px crops narrower screenshots - 500px view verified pixel-perfect, real-device 375 untested
+
+## F. v2 route restructure appendix
+
+- `/` is now a landing-only route: hero receipt artifact, live ticker, how-it-works, traction, integrations, proof teaser, creator earnings preview, and CTA routing.
+- `/register` owns creator onboarding, RSS import, verification/custody explainers, and an earnings preview rail.
+- `/ask` owns the live answer workbench formerly buried on the homepage; `/demo` redirects to `/ask` with an explicit `301`.
+- `/creators` owns the earnings board and links into `/creators/<wallet>`.
+- Persistent navigation is shared across landing, action routes, and proof/detail pages; `/embed`, `/widget.js`, and API routes remain untouched.
+- CSS compatibility rule held: existing receipt/proof/form selectors were not renamed; route-specific styling uses additive `site-nav-*`, `landing-*`, and `route-*` selectors.

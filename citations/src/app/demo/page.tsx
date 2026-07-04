@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteNav } from "@/components/SiteNav";
 import { readCovenantEnvelope } from "@/lib/covenant";
 import {
   arcscanTxUrl,
@@ -201,309 +202,314 @@ export default async function DemoPage() {
   ];
 
   return (
-    <main className="shell receipt-page">
-      <header className="receipt-header">
-        <div>
-          <p className="eyebrow">judge demo</p>
-          <h1>Tollgate proof run</h1>
-        </div>
-        <div className="top-actions">
-          <Link className="wallet-button receipt-back" href="/proof">
-            Proof
-          </Link>
-          <Link className="wallet-button receipt-back" href="/">
-            Back to Tollgate
-          </Link>
-        </div>
-      </header>
-
-      <section className="receipt-proof">
-        <div className="signature-stat proof-stat">
-          <span className="stat-label">creator payouts recorded</span>
-          <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
-          <span className="stat-unit">USDC on Arc</span>
-          <span className="stamp" aria-hidden="true">
-            paid · on-chain
-          </span>
-        </div>
-        <div className="proof-copy">
-          <p className="eyebrow">
-            ledger {verification.ok ? "verified" : "needs review"}
-          </p>
-          <h2>{ledger.queries.length} answer events</h2>
-          <p className="hero-text">
-            This route turns the seeded ledger into a single judge path:
-            aggregate proof, budgeted source selection, reader-paid answer, and
-            direct source purchase.
-          </p>
-        </div>
-      </section>
-
-      <section className="metrics-band profile-metrics">
-        <div className="metric">
-          <span>receipts</span>
-          <strong>{ledger.receipts.length}</strong>
-        </div>
-        <div className="metric">
-          <span>x402 verified</span>
-          <strong>{verifiedReceiptCount}</strong>
-        </div>
-        <div className="metric">
-          <span>x402 settled</span>
-          <strong>{settledReceiptCount}</strong>
-        </div>
-        <div className="metric">
-          <span>Forum routed</span>
-          <strong>{forumRoutedReceiptCount}</strong>
-        </div>
-        <div className="metric">
-          <span>track records</span>
-          <strong>{trackRecordQueries.length}</strong>
-        </div>
-        <div className="metric">
-          <span>reader paid</span>
-          <strong>{formatDollars(totalReaderPaid(ledger))}</strong>
-        </div>
-        <div className="metric">
-          <span>issues</span>
-          <strong>{verification.issues.length}</strong>
-        </div>
-        <div className="metric">
-          <span>slashed</span>
-          <strong>
-            {demoSlash
-              ? formatAtomicUsdc(demoSlash.statusAfterSlash.totalSlashed)
-              : slashBond
-                ? formatAtomicUsdc(slashBond.totalSlashed)
-                : "0.000000"}
-          </strong>
-        </div>
-        <div className="metric wide">
-          <span>latest hash</span>
-          <strong>
-            {latestReceipt ? shortHash(latestReceipt.receiptHash) : "none"}
-          </strong>
-        </div>
-      </section>
-
-      {tracedQuery && tracedSteps.length > 0 && (
-        <section className="receipt-context profile-section">
-          <div className="panel-heading">
-            <p className="eyebrow">agentic reasoning</p>
-            <h3>How the agent buys and grounds an answer</h3>
+    <>
+      <SiteNav proofOk={verification.ok} />
+      <main className="shell receipt-page" id="main">
+        <header className="receipt-header">
+          <div>
+            <p className="eyebrow">judge demo</p>
+            <h1>Tollgate proof run</h1>
           </div>
-          <p className="hero-text">{tracedQuery.question}</p>
-          <div className="decision-list">
-            {tracedSteps.map((step) => (
-              <article className="decision-row selected" key={step.index}>
-                <div>
-                  <strong>
-                    {step.index + 1}. {step.name}
-                  </strong>
-                  <span>
-                    {step.summary}
-                    {step.spentAtomicUsdc !== undefined
-                      ? ` / spent ${formatUsdc(step.spentAtomicUsdc)} USDC`
-                      : ""}
-                  </span>
-                </div>
-                <small>{step.detail}</small>
-              </article>
-            ))}
-          </div>
-          <div className="source-action">
-            <Link className="receipt-link" href={`/answers/${tracedQuery.id}`}>
-              Open full answer
+          <div className="top-actions">
+            <Link className="wallet-button receipt-back" href="/proof">
+              Proof
             </Link>
           </div>
-        </section>
-      )}
+        </header>
 
-      <section className="receipt-context profile-section">
-        <div className="panel-heading">
-          <p className="eyebrow">Forum proof stack</p>
-          <h3>Live surfaces</h3>
-        </div>
-        <div className="source-list">
-          {latestTrackRecord && latestTrackRecordQuery ? (
-            <article className="source-card">
-              <div>
-                <p>TrackRecordV2 answer anchor</p>
-                <span>
-                  seq {latestTrackRecord.seq} /{" "}
-                  {shortHash(latestTrackRecord.recordHash)}
-                </span>
-              </div>
-              <div className="source-action">
-                <strong>{shortHash(latestTrackRecord.transaction)}</strong>
-                <Link
-                  className="receipt-link"
-                  href={`/answers/${latestTrackRecordQuery.id}`}
-                >
-                  Answer
-                </Link>
-                <a
-                  className="receipt-link"
-                  href={arcscanTxUrl(latestTrackRecord.transaction)}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Arcscan
-                </a>
-              </div>
-            </article>
-          ) : (
-            <div className="empty-state compact">
-              <strong>No TrackRecord evidence.</strong>
-              <span>Run a gateway-enabled answer to publish one.</span>
-            </div>
-          )}
-
-          {covenant?.latestVault ? (
-            <article className="source-card">
-              <div>
-                <p>CovenantVault budget envelope</p>
-                <span>
-                  {covenant.latestVault.state} /{" "}
-                  {shortWallet(covenant.latestVault.mandate.operator)}
-                </span>
-              </div>
-              <div className="source-action">
-                <strong>
-                  {formatAtomicUsdc(covenant.latestVault.mandate.budgetUsdc)}{" "}
-                  USDC
-                </strong>
-                <span className="receipt-link">
-                  {shortWallet(covenant.latestVault.address)}
-                </span>
-              </div>
-            </article>
-          ) : (
-            <div className="empty-state compact">
-              <strong>No CovenantVault evidence.</strong>
-              <span>Run the covenant proof script to create one.</span>
-            </div>
-          )}
-
-          {demoSlash ? (
-            <article className="source-card">
-              <div>
-                <p>SlashBond bad citation slash</p>
-                <span>
-                  {formatAtomicUsdc(demoSlash.slashAmountAtomicUsdc)} USDC /{" "}
-                  {shortWallet(demoSlash.address)}
-                </span>
-              </div>
-              <div className="source-action">
-                <strong>
-                  {formatAtomicUsdc(demoSlash.statusAfterSlash.totalSlashed)}{" "}
-                  slashed
-                </strong>
-                <a
-                  className="receipt-link"
-                  href={arcscanTxUrl(demoSlash.slashTx)}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Slash tx
-                </a>
-              </div>
-            </article>
-          ) : (
-            <div className="empty-state compact">
-              <strong>No demo slash evidence.</strong>
-              <span>Run npm run prove:slashbond-demo.</span>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="receipt-context profile-section">
-        <div className="panel-heading">
-          <p className="eyebrow">proof sequence</p>
-          <h3>Demo anchors</h3>
-        </div>
-        <div className="source-list">
-          {steps.map((step) => (
-            <StepCard key={step.number} step={step} />
-          ))}
-        </div>
-      </section>
-
-      <section className="lower-grid">
-        <div className="creator-table">
-          <div className="panel-heading">
-            <p className="eyebrow">answer anchors</p>
-            <h3>What to show</h3>
+        <section className="receipt-proof">
+          <div className="signature-stat proof-stat">
+            <span className="stat-label">payouts recorded</span>
+            <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
+            <span className="stat-unit">USDC on Arc</span>
+            <span className="stamp" aria-hidden="true">
+              paid · on-chain
+            </span>
           </div>
-          {[demo.localAnswer, demo.paidAnswer].map((evidence) =>
-            evidence ? (
-              <article className="receipt-row" key={evidence.query.id}>
+          <div className="proof-copy">
+            <p className="eyebrow">
+              ledger {verification.ok ? "verified" : "needs review"}
+            </p>
+            <h2>{ledger.queries.length} answer events</h2>
+            <p className="hero-text">
+              This route turns the seeded ledger into a single judge path:
+              aggregate proof, budgeted source selection, reader-paid answer,
+              and direct source purchase.
+            </p>
+          </div>
+        </section>
+
+        <section className="metrics-band profile-metrics">
+          <div className="metric">
+            <span>receipts</span>
+            <strong>{ledger.receipts.length}</strong>
+          </div>
+          <div className="metric">
+            <span>x402 verified</span>
+            <strong>{verifiedReceiptCount}</strong>
+          </div>
+          <div className="metric">
+            <span>x402 settled</span>
+            <strong>{settledReceiptCount}</strong>
+          </div>
+          <div className="metric">
+            <span>Forum routed</span>
+            <strong>{forumRoutedReceiptCount}</strong>
+          </div>
+          <div className="metric">
+            <span>track records</span>
+            <strong>{trackRecordQueries.length}</strong>
+          </div>
+          <div className="metric">
+            <span>reader paid</span>
+            <strong>{formatDollars(totalReaderPaid(ledger))}</strong>
+          </div>
+          <div className="metric">
+            <span>issues</span>
+            <strong>{verification.issues.length}</strong>
+          </div>
+          <div className="metric">
+            <span>slashed</span>
+            <strong>
+              {demoSlash
+                ? formatAtomicUsdc(demoSlash.statusAfterSlash.totalSlashed)
+                : slashBond
+                  ? formatAtomicUsdc(slashBond.totalSlashed)
+                  : "0.000000"}
+            </strong>
+          </div>
+          <div className="metric wide">
+            <span>latest hash</span>
+            <strong>
+              {latestReceipt ? shortHash(latestReceipt.receiptHash) : "none"}
+            </strong>
+          </div>
+        </section>
+
+        {tracedQuery && tracedSteps.length > 0 && (
+          <section className="receipt-context profile-section">
+            <div className="panel-heading">
+              <p className="eyebrow">agentic reasoning</p>
+              <h3>How the agent buys and grounds an answer</h3>
+            </div>
+            <p className="hero-text">{tracedQuery.question}</p>
+            <div className="decision-list">
+              {tracedSteps.map((step) => (
+                <article className="decision-row selected" key={step.index}>
+                  <div>
+                    <strong>
+                      {step.index + 1}. {step.name}
+                    </strong>
+                    <span>
+                      {step.summary}
+                      {step.spentAtomicUsdc !== undefined
+                        ? ` / spent ${formatUsdc(step.spentAtomicUsdc)} USDC`
+                        : ""}
+                    </span>
+                  </div>
+                  <small>{step.detail}</small>
+                </article>
+              ))}
+            </div>
+            <div className="source-action">
+              <Link
+                className="receipt-link"
+                href={`/answers/${tracedQuery.id}`}
+              >
+                Open full answer
+              </Link>
+            </div>
+          </section>
+        )}
+
+        <section className="receipt-context profile-section">
+          <div className="panel-heading">
+            <p className="eyebrow">Forum proof stack</p>
+            <h3>Live surfaces</h3>
+          </div>
+          <div className="source-list">
+            {latestTrackRecord && latestTrackRecordQuery ? (
+              <article className="source-card">
                 <div>
-                  <strong>{evidence.query.question}</strong>
+                  <p>TrackRecordV2 answer anchor</p>
                   <span>
-                    {evidence.query.readerPayment
-                      ? settlementLabel(
-                          evidence.query.readerPayment.settlementMode,
-                        )
-                      : "local proof"}{" "}
-                    / {evidence.query.citations.length} citations
+                    seq {latestTrackRecord.seq} /{" "}
+                    {shortHash(latestTrackRecord.recordHash)}
                   </span>
                 </div>
-                <div className="numeric-cell">
-                  <strong>{formatUsdc(evidence.query.totalAtomicUsdc)}</strong>
+                <div className="source-action">
+                  <strong>{shortHash(latestTrackRecord.transaction)}</strong>
                   <Link
                     className="receipt-link"
-                    href={`/answers/${evidence.query.id}`}
+                    href={`/answers/${latestTrackRecordQuery.id}`}
                   >
-                    {shortHash(evidence.query.answerHash)}
+                    Answer
+                  </Link>
+                  <a
+                    className="receipt-link"
+                    href={arcscanTxUrl(latestTrackRecord.transaction)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Arcscan
+                  </a>
+                </div>
+              </article>
+            ) : (
+              <div className="empty-state compact">
+                <strong>No TrackRecord evidence.</strong>
+                <span>Run a gateway-enabled answer to publish one.</span>
+              </div>
+            )}
+
+            {covenant?.latestVault ? (
+              <article className="source-card">
+                <div>
+                  <p>CovenantVault budget envelope</p>
+                  <span>
+                    {covenant.latestVault.state} /{" "}
+                    {shortWallet(covenant.latestVault.mandate.operator)}
+                  </span>
+                </div>
+                <div className="source-action">
+                  <strong>
+                    {formatAtomicUsdc(covenant.latestVault.mandate.budgetUsdc)}{" "}
+                    USDC
+                  </strong>
+                  <span className="receipt-link">
+                    {shortWallet(covenant.latestVault.address)}
+                  </span>
+                </div>
+              </article>
+            ) : (
+              <div className="empty-state compact">
+                <strong>No CovenantVault evidence.</strong>
+                <span>Run the covenant proof script to create one.</span>
+              </div>
+            )}
+
+            {demoSlash ? (
+              <article className="source-card">
+                <div>
+                  <p>SlashBond bad citation slash</p>
+                  <span>
+                    {formatAtomicUsdc(demoSlash.slashAmountAtomicUsdc)} USDC /{" "}
+                    {shortWallet(demoSlash.address)}
+                  </span>
+                </div>
+                <div className="source-action">
+                  <strong>
+                    {formatAtomicUsdc(demoSlash.statusAfterSlash.totalSlashed)}{" "}
+                    slashed
+                  </strong>
+                  <a
+                    className="receipt-link"
+                    href={arcscanTxUrl(demoSlash.slashTx)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Slash tx
+                  </a>
+                </div>
+              </article>
+            ) : (
+              <div className="empty-state compact">
+                <strong>No demo slash evidence.</strong>
+                <span>Run npm run prove:slashbond-demo.</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="receipt-context profile-section">
+          <div className="panel-heading">
+            <p className="eyebrow">proof sequence</p>
+            <h3>Demo anchors</h3>
+          </div>
+          <div className="source-list">
+            {steps.map((step) => (
+              <StepCard key={step.number} step={step} />
+            ))}
+          </div>
+        </section>
+
+        <section className="lower-grid">
+          <div className="creator-table">
+            <div className="panel-heading">
+              <p className="eyebrow">answer anchors</p>
+              <h3>What to show</h3>
+            </div>
+            {[demo.localAnswer, demo.paidAnswer].map((evidence) =>
+              evidence ? (
+                <article className="receipt-row" key={evidence.query.id}>
+                  <div>
+                    <strong>{evidence.query.question}</strong>
+                    <span>
+                      {evidence.query.readerPayment
+                        ? settlementLabel(
+                            evidence.query.readerPayment.settlementMode,
+                          )
+                        : "local proof"}{" "}
+                      / {evidence.query.citations.length} citations
+                    </span>
+                  </div>
+                  <div className="numeric-cell">
+                    <strong>
+                      {formatUsdc(evidence.query.totalAtomicUsdc)}
+                    </strong>
+                    <Link
+                      className="receipt-link"
+                      href={`/answers/${evidence.query.id}`}
+                    >
+                      {shortHash(evidence.query.answerHash)}
+                    </Link>
+                  </div>
+                </article>
+              ) : null,
+            )}
+          </div>
+
+          <div className="source-registry">
+            <div className="panel-heading">
+              <p className="eyebrow">source purchase</p>
+              <h3>Direct source proof</h3>
+            </div>
+            {demo.sourcePurchase && sourceReceipt ? (
+              <article className="source-card">
+                <div>
+                  <p>{demo.sourcePurchase.query.citations[0]?.title}</p>
+                  <span>
+                    {settlementLabel(sourceReceipt.settlementMode)} /{" "}
+                    {sourceReceipt.createdAt}
+                  </span>
+                </div>
+                <div className="source-action">
+                  <strong>
+                    {formatUsdc(sourceReceipt.amountAtomicUsdc)} USDC
+                  </strong>
+                  <Link
+                    className="receipt-link"
+                    href={`/sources/${sourceReceipt.sourceId}`}
+                  >
+                    Source page
+                  </Link>
+                  <Link
+                    className="receipt-link"
+                    href={`/receipts/${sourceReceipt.receiptHash}`}
+                  >
+                    {shortHash(sourceReceipt.receiptHash)}
                   </Link>
                 </div>
               </article>
-            ) : null,
-          )}
-        </div>
-
-        <div className="source-registry">
-          <div className="panel-heading">
-            <p className="eyebrow">source purchase</p>
-            <h3>Direct source proof</h3>
+            ) : (
+              <div className="empty-state compact">
+                <strong>No source purchase evidence.</strong>
+                <span>The ledger has no direct source purchase yet.</span>
+              </div>
+            )}
           </div>
-          {demo.sourcePurchase && sourceReceipt ? (
-            <article className="source-card">
-              <div>
-                <p>{demo.sourcePurchase.query.citations[0]?.title}</p>
-                <span>
-                  {settlementLabel(sourceReceipt.settlementMode)} /{" "}
-                  {sourceReceipt.createdAt}
-                </span>
-              </div>
-              <div className="source-action">
-                <strong>
-                  {formatUsdc(sourceReceipt.amountAtomicUsdc)} USDC
-                </strong>
-                <Link
-                  className="receipt-link"
-                  href={`/sources/${sourceReceipt.sourceId}`}
-                >
-                  Source page
-                </Link>
-                <Link
-                  className="receipt-link"
-                  href={`/receipts/${sourceReceipt.receiptHash}`}
-                >
-                  {shortHash(sourceReceipt.receiptHash)}
-                </Link>
-              </div>
-            </article>
-          ) : (
-            <div className="empty-state compact">
-              <strong>No source purchase evidence.</strong>
-              <span>The ledger has no direct source purchase yet.</span>
-            </div>
-          )}
-        </div>
-      </section>
-    </main>
+        </section>
+      </main>
+    </>
   );
 }

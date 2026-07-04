@@ -17,8 +17,17 @@ Unified overview: `https://tollgate.gudman.xyz/core`
 ## Verify it is real
 
 - Settlement status: `https://tollgate.gudman.xyz/api/settlement/status`
+- Product routes: `/`, `/register`, `/ask`, `/creators`
 - Proof pages: `/proof`, `/core`, `/answers/<queryId>`, `/creators/<wallet>`, `/sources/<sourceId>`, `/receipts/<hash>`
+- Legacy demo route: `/demo` redirects to `/ask`
 - Arc explorer: `https://testnet.arcscan.app`
+
+## Screenshot proof
+
+The v2 route restructure is verified with desktop and mobile screenshots for
+`/`, `/register`, `/ask`, `/creators`, `/proof`, `/core`, and representative
+answer/source/receipt/creator evidence pages. Store captures under
+`docs/screenshots/` when publishing a reviewed build.
 
 ## API surface
 

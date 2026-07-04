@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteNav } from "@/components/SiteNav";
 import { readSources } from "@/lib/catalog";
 import { formatDollars } from "@/lib/format";
 import {
@@ -66,7 +67,9 @@ export default async function CorePage() {
   );
 
   return (
-    <main className="shell receipt-page">
+    <>
+      <SiteNav proofOk={verification.ok} />
+      <main className="shell receipt-page" id="main">
       <header className="receipt-header">
         <div>
           <p className="eyebrow">tollgate · settlement core</p>
@@ -259,6 +262,7 @@ export default async function CorePage() {
           </p>
         </div>
       </section>
-    </main>
+      </main>
+    </>
   );
 }

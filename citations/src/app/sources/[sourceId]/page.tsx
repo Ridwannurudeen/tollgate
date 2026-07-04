@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SiteNav } from "@/components/SiteNav";
 import { SourceVerifyPanel } from "@/components/SourceVerifyPanel";
 import { findSource } from "@/lib/catalog";
 import {
@@ -44,7 +45,9 @@ export default async function SourcePage({ params }: Props) {
   })();
 
   return (
-    <main className="shell receipt-page">
+    <>
+      <SiteNav />
+      <main className="shell receipt-page" id="main">
       <header className="receipt-header">
         <div>
           <p className="eyebrow">source evidence</p>
@@ -203,6 +206,7 @@ export default async function SourcePage({ params }: Props) {
           </div>
         )}
       </section>
-    </main>
+      </main>
+    </>
   );
 }

@@ -36,4 +36,4 @@ Loaded via `<link>` to Google Fonts in `layout.tsx` (NOT `next/font/google`, bec
 
 ## Verify
 
-`npm run typecheck` · `npm run build` · `npm run dev` then open the homepage, `/core`, `/proof`, `/demo`, `/answers/<id>`, `/creators/<wallet>` — all share `globals.css`, so the system is consistent across them. 40 unit tests unaffected (lib-only).
+`npm run typecheck` · `npm run build` · `npm run dev` then open the homepage, `/core`, `/proof`, `/ask`, `/answers/<id>`, `/creators/<wallet>` — all share `globals.css`, so the system is consistent across them. 92 unit tests must stay green.

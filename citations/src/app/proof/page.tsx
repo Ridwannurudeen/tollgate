@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteNav } from "@/components/SiteNav";
 import { readSources } from "@/lib/catalog";
 import { readCovenantEnvelope } from "@/lib/covenant";
 import {
@@ -106,7 +107,9 @@ export default async function ProofPage() {
   const latestTrackRecord = trackRecordQueries[0]?.trackRecord;
 
   return (
-    <main className="shell receipt-page">
+    <>
+      <SiteNav proofOk={verification.ok} />
+      <main className="shell receipt-page" id="main">
       <header className="receipt-header">
         <div>
           <p className="eyebrow">network proof</p>
@@ -119,7 +122,7 @@ export default async function ProofPage() {
 
       <section className="receipt-proof">
         <div className="signature-stat proof-stat">
-          <span className="stat-label">creator payouts recorded</span>
+          <span className="stat-label">payouts recorded</span>
           <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
           <div className="receipt-lines">
             <span className="receipt-line">
@@ -573,6 +576,7 @@ export default async function ProofPage() {
             </article>
           ))}
       </section>
-    </main>
+      </main>
+    </>
   );
 }
