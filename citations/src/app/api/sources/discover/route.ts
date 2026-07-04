@@ -14,14 +14,54 @@ export const runtime = "nodejs";
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
 const MAX_DISCOVERY_SOURCES = 20;
+const MAX_DISCOVERY_BODY_BYTES = 512 * 1024;
 const DISCOVERY_NOTE =
   "Discovered sources are registered as probationary until ownership is verified.";
 
+// Prefer the proxy-set x-real-ip (nginx/edge) over the client-controlled
+// left-most x-forwarded-for, so the rate-limit bucket key cannot be spoofed
+// by rotating the XFF header.
 function requestIp(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "local"
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const parts = forwarded.split(",").map((part) => part.trim());
+    // right-most entry is the closest trusted hop when no x-real-ip exists
+    const last = parts[parts.length - 1];
+    if (last) return last;
+  }
+  return "local";
+}
+
+// Reads a discovery response body with a hard size cap so a malicious host
+// cannot stream a huge body to exhaust memory within the timeout window.
+async function readCappedText(response: Response): Promise<string | null> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_DISCOVERY_BODY_BYTES) {
+    return null;
+  }
+  if (!response.body) return response.text();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_DISCOVERY_BODY_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(
+    chunks.reduce<Uint8Array>((acc, chunk) => {
+      const merged = new Uint8Array(acc.length + chunk.length);
+      merged.set(acc);
+      merged.set(chunk, acc.length);
+      return merged;
+    }, new Uint8Array(0)),
   );
 }
 
@@ -41,17 +81,22 @@ function publisherUrl(value: unknown): URL {
   return url;
 }
 
+// safeFetch failures (blocked address, no resolve, timeout) are swallowed to
+// null so the response can't be used as an SSRF reconnaissance oracle that
+// distinguishes internal-host states from a normal "not found".
 async function fetchTollgateJson(
   url: URL,
 ): Promise<TollgateDeclaration | null> {
   const declarationUrl = new URL("/.well-known/tollgate.json", url);
-  const response = await safeFetch(declarationUrl, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-  });
-  if (!response.ok) return null;
   try {
-    return parseTollgateJson(await response.json(), url.toString());
+    const response = await safeFetch(declarationUrl, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const text = await readCappedText(response);
+    if (text === null) return null;
+    return parseTollgateJson(JSON.parse(text), url.toString());
   } catch {
     return null;
   }
@@ -60,12 +105,18 @@ async function fetchTollgateJson(
 async function fetchTollgateMeta(
   url: URL,
 ): Promise<TollgateDeclaration | null> {
-  const response = await safeFetch(url, {
-    headers: { accept: "text/html, application/xhtml+xml" },
-    signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-  });
-  if (!response.ok) return null;
-  return parseTollgateMeta(await response.text(), url.toString());
+  try {
+    const response = await safeFetch(url, {
+      headers: { accept: "text/html, application/xhtml+xml" },
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const text = await readCappedText(response);
+    if (text === null) return null;
+    return parseTollgateMeta(text, url.toString());
+  } catch {
+    return null;
+  }
 }
 
 async function discoverDeclaration(url: URL): Promise<TollgateDeclaration> {

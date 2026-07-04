@@ -38,9 +38,26 @@ const defaultResolveHost: ResolveHost = async (hostname) => {
   return results.map((result) => result.address);
 };
 
+function isCanonicalDottedQuad(host: string): boolean {
+  const octets = host.split(".");
+  if (octets.length !== 4) return false;
+  return octets.every((octet) => {
+    if (!/^\d{1,3}$/.test(octet)) return false;
+    const n = Number(octet);
+    return n >= 0 && n <= 255;
+  });
+}
+
+// Only a canonical dotted-quad IPv4 or an IPv6 literal is treated as a
+// "literal we already checked" that can skip DNS resolution. Non-canonical
+// numeric hosts (integer form like 2130706433, short form like 127.1) are
+// NOT literals here — they fall through to resolution, where the resolved
+// address is checked against the private/loopback blocklist. This closes the
+// numeric-IP SSRF bypass.
 function isIpLiteral(hostname: string): boolean {
   const host = stripBrackets(hostname);
-  return /^[\d.]+$/.test(host) || host.includes(":");
+  if (host.includes(":")) return true;
+  return isCanonicalDottedQuad(host);
 }
 
 // Blocks fetches to loopback/private/link-local/metadata targets, both by

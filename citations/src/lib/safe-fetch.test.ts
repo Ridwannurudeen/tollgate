@@ -54,6 +54,30 @@ describe("safe fetch guards", () => {
     ).rejects.toThrow(/blocked address/);
   });
 
+  it("blocks integer/short-form loopback hosts (URL normalizes them first)", async () => {
+    // Defense in depth: the WHATWG URL parser normalizes 2130706433 / 127.1 /
+    // 0x7f000001 all to canonical 127.0.0.1, so isUnsafeFetchHost catches them
+    // before resolution. The stricter isIpLiteral (canonical-dotted-quad only)
+    // is the second layer if a non-canonical host ever reaches the check.
+    for (const raw of [
+      "http://2130706433/",
+      "http://127.1/",
+      "http://0x7f000001/",
+    ]) {
+      await expect(
+        assertSafeFetchTarget(new URL(raw), async () => {
+          throw new Error("should have been blocked before resolving");
+        }),
+      ).rejects.toThrow(/not allowed/);
+    }
+    // A canonical public dotted-quad is still allowed to skip resolution.
+    await expect(
+      assertSafeFetchTarget(new URL("http://93.184.216.34/"), async () => {
+        throw new Error("should not resolve a canonical literal");
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it("rejects redirects to blocked targets", async () => {
     const fetchImpl = (async () =>
       new Response(null, {

@@ -1,6 +1,10 @@
 import type { SourceRegistrationInput } from "./types";
 
 const WALLET_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+// Caps how many declared sources are materialized from a single tollgate.json,
+// so a declaration claiming millions of entries can't be fully mapped before
+// the caller truncates. Matches the endpoint's per-call registration cap.
+const MAX_DECLARED_SOURCES = 20;
 
 export type TollgateSourceDeclaration = {
   url: string;
@@ -39,10 +43,16 @@ function wallet(value: unknown): `0x${string}` {
 
 function tags(value: unknown): string[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw new Error("sources[].tags must be an array.");
+  if (!Array.isArray(value))
+    throw new Error("sources[].tags must be an array.");
   return value
     .filter((tag): tag is string => typeof tag === "string")
-    .map((tag) => tag.toLowerCase().replace(/[^a-z0-9-]/g, "").trim())
+    .map((tag) =>
+      tag
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "")
+        .trim(),
+    )
     .filter((tag) => tag.length >= 2)
     .slice(0, 8);
 }
@@ -73,7 +83,9 @@ export function parseTollgateJson(
     record.defaultPriceAtomicUsdc,
     "defaultPriceAtomicUsdc",
   );
-  const declaredSources = Array.isArray(record.sources) ? record.sources : [];
+  const declaredSources = (
+    Array.isArray(record.sources) ? record.sources : []
+  ).slice(0, MAX_DECLARED_SOURCES);
   const sources = declaredSources.map((item, index) => {
     if (!item || typeof item !== "object") {
       throw new Error(`sources[${index}] must be an object.`);
@@ -115,7 +127,7 @@ export function parseTollgateMeta(
   html: string,
   baseUrl: string,
 ): TollgateDeclaration | null {
-  const metaPattern = /<meta\s+[^>]*>/gi;
+  const metaPattern = /<meta\b[^>]*>/gi;
   const attrPattern = /([a-zA-Z:-]+)\s*=\s*["']([^"']*)["']/g;
   for (const match of html.matchAll(metaPattern)) {
     const attrs = new Map<string, string>();
@@ -163,8 +175,7 @@ export function discoveryRegistrations(
     handle: `@${host.replace(/[^a-z0-9]/gi, "").slice(0, 32) || "publisher"}`,
     wallet: declaration.wallet,
     url: source.url,
-    summary:
-      source.summary ?? `Open-web Tollgate source declared by ${host}.`,
+    summary: source.summary ?? `Open-web Tollgate source declared by ${host}.`,
     tags: source.tags ?? ["discovered", "tollgate"],
     priceAtomicUsdc: source.priceAtomicUsdc,
     origin: "discovered",

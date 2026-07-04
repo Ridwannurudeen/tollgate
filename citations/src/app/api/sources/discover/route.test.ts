@@ -179,9 +179,12 @@ describe("POST /api/sources/discover", () => {
     expect(mocks.appendSource).not.toHaveBeenCalled();
   });
 
-  it("rejects blocked fetch targets through safeFetch", async () => {
-    mocks.safeFetch.mockRejectedValueOnce(
-      new Error("fetch target host is not allowed."),
+  it("rejects blocked fetch targets without leaking the internal reason", async () => {
+    // Both the .well-known and the HTML-fallback fetch are blocked. The
+    // endpoint must NOT surface safeFetch's distinct error strings (which would
+    // be an SSRF reconnaissance oracle) — it returns the generic not-found.
+    mocks.safeFetch.mockRejectedValue(
+      new Error("fetch target resolves to a blocked address."),
     );
 
     const result = await POST(
@@ -189,8 +192,11 @@ describe("POST /api/sources/discover", () => {
     );
     const body = await result.json();
 
-    expect(result.status).toBe(400);
-    expect(body.error).toBe("fetch target host is not allowed.");
+    expect(result.status).toBe(404);
+    expect(body.error).toBe(
+      "no tollgate.json or <meta name=tollgate> found at this URL",
+    );
+    expect(body.error).not.toContain("blocked address");
     expect(mocks.appendSource).not.toHaveBeenCalled();
   });
 
