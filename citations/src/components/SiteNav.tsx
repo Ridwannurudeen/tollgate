@@ -12,6 +12,8 @@ type Props = {
 // anchor, not a route), so it never carries an active state of its own.
 const NAV_LINKS = [
   { href: "/#how", label: "How it works", match: null as string | null },
+  { href: "/core", label: "Integrations", match: "/core" },
+  { href: "/sources", label: "Sources", match: "/sources" },
   { href: "/ask", label: "Ask the AI", match: "/ask" },
   { href: "/creators", label: "Creators", match: "/creators" },
   { href: "/proof", label: "Proof", match: "/proof" },

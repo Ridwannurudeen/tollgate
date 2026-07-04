@@ -20,17 +20,20 @@ export function SourceVerifyPanel({ sourceId, token, verified }: Props) {
         body: JSON.stringify({ method }),
       });
       const body = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
+      if (!response.ok)
+        throw new Error(body.error ?? `HTTP ${response.status}`);
       setStatus("Source verified.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Verification failed.");
+      setStatus(
+        error instanceof Error ? error.message : "Verification failed.",
+      );
     }
   }
 
   if (verified) return null;
 
   return (
-    <section className="receipt-context profile-section">
+    <section className="receipt-context profile-section" id="verify">
       <div className="panel-heading">
         <p className="eyebrow">verify ownership</p>
         <h3>Wallet-free proof</h3>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { CopyWallet } from "@/components/CopyWallet";
 import { formatDollars, shortWallet } from "@/lib/format";
 import type { CreatorSource } from "@/lib/types";
 
@@ -313,7 +314,9 @@ export function RegisterPanel() {
               </span>
               <span className="receipt-line">
                 <span>wallet</span>
-                <strong>{shortWallet(registeredSource.wallet)}</strong>
+                <strong>
+                  <CopyWallet address={registeredSource.wallet} />
+                </strong>
               </span>
             </div>
           </div>
@@ -331,7 +334,7 @@ export function RegisterPanel() {
           <div className="hero-cta registration-actions">
             <Link
               className="cta-primary"
-              href={`/sources/${registeredSource.id}`}
+              href={`/sources/${registeredSource.id}#verify`}
             >
               Verify you own this →
             </Link>

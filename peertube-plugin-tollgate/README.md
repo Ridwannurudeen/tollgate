@@ -18,8 +18,15 @@ Payments settle in USDC on Arc, so the minimum viable payment is a fraction of a
 ## Install (self-hosted PeerTube)
 
 The plugin follows PeerTube's `peertube-plugin-` package convention and has
-been validated from a local path in a Docker-backed PeerTube instance. It has
-not been published to npm from this repo.
+been validated from a local path in a Docker-backed PeerTube instance. It is
+also published as `peertube-plugin-tollgate@0.1.0`.
+
+For install from npm:
+
+```bash
+peertube-cli auth add -u 'https://your.peertube' -U 'root' --password '...'
+peertube-cli plugins install --npm-name peertube-plugin-tollgate
+```
 
 For local install against your own instance:
 

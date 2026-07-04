@@ -72,7 +72,8 @@ export function LandingPage({ sources, ledger, creators }: Props) {
                 creators paid <strong>{stats.creatorCount}</strong>
               </span>
               <span className="receipt-line">
-                routed to creators <strong>{formatDollars(stats.totalPaid)}</strong>
+                routed to creators{" "}
+                <strong>{formatDollars(stats.totalPaid)}</strong>
               </span>
               <span className="receipt-line">
                 latest hash <strong>{shortHash(stats.latestHash)}</strong>
@@ -86,15 +87,6 @@ export function LandingPage({ sources, ledger, creators }: Props) {
       </section>
 
       <ReceiptTicker receipts={ledger.receipts} />
-
-      <section
-        className="legacy-move-band"
-        aria-label="Moved route shortcuts"
-      >
-        <span>Looking for the old homepage tools?</span>
-        <Link href="/register">#register moved to /register</Link>
-        <Link href="/ask">#ask moved to /ask</Link>
-      </section>
 
       <section className="how-it-works landing-how" id="how">
         <div className="section-heading">
@@ -249,6 +241,19 @@ export function LandingPage({ sources, ledger, creators }: Props) {
           </p>
           <Link className="receipt-link" href="/core">
             See the core
+          </Link>
+        </article>
+        <article className="integration-card">
+          <div className="panel-heading">
+            <p className="eyebrow">video</p>
+            <h3>PeerTube</h3>
+          </div>
+          <p className="hero-text">
+            A self-hosted video plugin gates downloads and routes USDC to the
+            creator per unlock.
+          </p>
+          <Link className="receipt-link" href="/video">
+            View video licensing
           </Link>
         </article>
       </section>

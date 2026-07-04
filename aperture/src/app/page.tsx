@@ -28,6 +28,7 @@ export default async function Home() {
       <nav className="topbar">
         <div className="brand">Aperture</div>
         <div className="navlinks">
+          <a href="https://tollgate.gudman.xyz">Citations app</a>
           <Link href="/proof">Proof</Link>
           <Link href="/install">Install</Link>
           <Link href="/onboarding">Onboarding</Link>

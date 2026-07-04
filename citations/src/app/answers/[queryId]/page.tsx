@@ -14,7 +14,11 @@ import {
   shortHash,
   shortWallet,
 } from "@/lib/format";
-import { getAnswerEvidence, readLedger } from "@/lib/ledger";
+import {
+  getAnswerEvidence,
+  readLedger,
+  verifyLedgerIntegrity,
+} from "@/lib/ledger";
 import { readSlashBondStatus } from "@/lib/slash-bond";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +49,7 @@ export default async function AnswerPage({ params }: Props) {
     readCovenantEnvelope().catch(() => null),
     readSlashBondStatus().catch(() => null),
   ]);
+  const verification = verifyLedgerIntegrity(ledger);
   const evidence = getAnswerEvidence(ledger, queryId);
   if (!evidence) notFound();
 
@@ -78,447 +83,464 @@ export default async function AnswerPage({ params }: Props) {
 
   return (
     <>
-      <SiteNav />
+      <SiteNav proofOk={verification.ok} />
       <main className="shell receipt-page" id="main">
-      <header className="receipt-header">
-        <div>
-          <p className="eyebrow">answer evidence</p>
-          <h1>{shortHash(query.answerHash)}</h1>
-        </div>
-        <Link className="wallet-button receipt-back" href="/">
-          Back to Tollgate
-        </Link>
-      </header>
-
-      <section className="receipt-proof">
-        <div className="signature-stat proof-stat">
-          <span className="stat-label">paid to cited sources</span>
-          <strong>{formatUsdc(query.totalAtomicUsdc)}</strong>
-          <span className="stat-unit">USDC</span>
-        </div>
-        <div className="proof-copy">
-          <p className="eyebrow">
-            {agentModeLabel} / {query.id}
-          </p>
-          <h2>{query.question}</h2>
-          <p className="hero-text">{query.answer}</p>
-          <p className="status-line">
-            {refundSummary.boughtCount} sources bought /{" "}
-            {refundSummary.citedCount} cited / {refundSummary.refundedCount}{" "}
-            refunded
-          </p>
-        </div>
-      </section>
-
-      <section className="metrics-band profile-metrics">
-        <div className="metric">
-          <span>citations</span>
-          <strong>{query.citations.length}</strong>
-        </div>
-        <div className="metric">
-          <span>receipts</span>
-          <strong>{receipts.length}</strong>
-        </div>
-        <div className="metric">
-          <span>reader paid</span>
-          <strong>{formatUsdc(economics.readerPaidAtomicUsdc)}</strong>
-        </div>
-        <div className="metric">
-          <span>creator payouts</span>
-          <strong>{formatUsdc(economics.creatorPayoutsAtomicUsdc)}</strong>
-        </div>
-        <div className="metric">
-          <span>protocol retained</span>
-          <strong>
-            {query.readerPayment
-              ? formatUsdc(economics.protocolRetainedAtomicUsdc)
-              : "not reader-paid"}
-          </strong>
-        </div>
-        <div className="metric">
-          <span>budget utilization</span>
-          <strong>
-            {query.readerPayment ? formatBudgetUtilization(economics) : "n/a"}
-          </strong>
-        </div>
-        <div className="metric wide">
-          <span>latest receipt</span>
-          <strong>
-            {latestReceipt ? shortHash(latestReceipt.receiptHash) : "none"}
-          </strong>
-        </div>
-      </section>
-
-      <section className="evidence-grid">
-        <EvidenceRow label="query id" value={query.id} />
-        <EvidenceRow label="query hash" value={query.queryHash} />
-        <EvidenceRow label="answer hash" value={query.answerHash} />
-        <EvidenceRow label="created at" value={query.createdAt} />
-        <EvidenceRow label="receipt count" value={receipts.length} />
-        <EvidenceRow
-          label="reader payment hash"
-          value={query.readerPayment?.paymentHash ?? "not reader-paid"}
-        />
-        <EvidenceRow
-          label="reader paid"
-          value={`${formatUsdc(economics.readerPaidAtomicUsdc)} USDC`}
-        />
-        <EvidenceRow
-          label="creator payouts"
-          value={`${formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC`}
-        />
-        <EvidenceRow
-          label="protocol retained"
-          value={
-            query.readerPayment
-              ? `${formatUsdc(economics.protocolRetainedAtomicUsdc)} USDC`
-              : "not reader-paid"
-          }
-        />
-        <EvidenceRow
-          label="budget utilization"
-          value={
-            query.readerPayment ? formatBudgetUtilization(economics) : "n/a"
-          }
-        />
-      </section>
-
-      {query.readerPayment && (
-        <section className="reader-payment-card receipt-payment-card">
+        <header className="receipt-header">
           <div>
-            <span>reader payment</span>
-            <strong>
-              {settlementLabel(query.readerPayment.settlementMode)}
-            </strong>
+            <p className="eyebrow">answer evidence</p>
+            <h1>{shortHash(query.answerHash)}</h1>
           </div>
-          <div>
-            <span>amount</span>
-            <strong>
-              {formatUsdc(query.readerPayment.amountAtomicUsdc)} USDC
-            </strong>
+          <Link className="wallet-button receipt-back" href="/">
+            Back to Tollgate
+          </Link>
+        </header>
+
+        <section className="receipt-proof">
+          <div className="signature-stat proof-stat">
+            <span className="stat-label">paid to cited sources</span>
+            <strong>{formatUsdc(query.totalAtomicUsdc)}</strong>
+            <span className="stat-unit">USDC</span>
           </div>
-          <div>
-            <span>payer</span>
-            <strong>
-              {query.readerPayment.payer
-                ? shortWallet(query.readerPayment.payer)
-                : "pending"}
-            </strong>
-          </div>
-          <div>
-            <span>payment hash</span>
-            <strong>{shortHash(query.readerPayment.paymentHash)}</strong>
+          <div className="proof-copy">
+            <p className="eyebrow">
+              {agentModeLabel} / {query.id}
+            </p>
+            <h2>{query.question}</h2>
+            <p className="hero-text">{query.answer}</p>
+            <p className="status-line">
+              {refundSummary.boughtCount} sources bought /{" "}
+              {refundSummary.citedCount} cited / {refundSummary.refundedCount}{" "}
+              refunded
+            </p>
           </div>
         </section>
-      )}
 
-      {agentBudget && (
-        <section className="receipt-context profile-section">
-          <div className="panel-heading">
-            <p className="eyebrow">agent accountability</p>
-            <h3>Budget envelope and proof anchors</h3>
+        <section className="metrics-band profile-metrics">
+          <div className="metric">
+            <span>citations</span>
+            <strong>{query.citations.length}</strong>
           </div>
-          <div className="evidence-grid">
-            <EvidenceRow
-              label="budget envelope"
-              value={`${formatUsdc(agentBudget.sourceBudgetAtomicUsdc)} USDC`}
-            />
-            <EvidenceRow
-              label="spent on sources"
-              value={`${formatUsdc(agentBudget.spentAtomicUsdc)} USDC`}
-            />
-            <EvidenceRow
-              label="unused"
-              value={`${formatUsdc(agentBudget.remainingAtomicUsdc)} USDC`}
-            />
-            <EvidenceRow
-              label="source cap"
-              value={`${agentBudget.purchasedCount}/${agentBudget.candidateCount} bought`}
-            />
-            <EvidenceRow
-              label="covenant policy"
-              value={
-                covenant?.latestVault
-                  ? `${formatAtomicUsdc(
-                      covenant.latestVault.mandate.budgetUsdc,
-                    )} USDC max`
-                  : "not published locally"
-              }
-            />
-            <EvidenceRow
-              label="allowed domains"
-              value="registered source URLs only"
-            />
-            <EvidenceRow
-              label="TrackRecord anchor"
-              value={
-                query.trackRecord
-                  ? shortHash(query.trackRecord.recordHash)
-                  : "none"
-              }
-            />
-            <EvidenceRow
-              label="SlashBond status"
-              value={
-                slashBond
-                  ? `${formatAtomicUsdc(slashBond.bondBalance)} USDC bonded`
-                  : "not published locally"
-              }
-            />
-            <EvidenceRow label="receipt chain hash" value={latestChainHash} />
+          <div className="metric">
+            <span>receipts</span>
+            <strong>{receipts.length}</strong>
+          </div>
+          <div className="metric">
+            <span>reader paid</span>
+            <strong>{formatUsdc(economics.readerPaidAtomicUsdc)}</strong>
+          </div>
+          <div className="metric">
+            <span>creator payouts</span>
+            <strong>{formatUsdc(economics.creatorPayoutsAtomicUsdc)}</strong>
+          </div>
+          <div className="metric">
+            <span>protocol retained</span>
+            <strong>
+              {query.readerPayment
+                ? formatUsdc(economics.protocolRetainedAtomicUsdc)
+                : "not reader-paid"}
+            </strong>
+          </div>
+          <div className="metric">
+            <span>budget utilization</span>
+            <strong>
+              {query.readerPayment ? formatBudgetUtilization(economics) : "n/a"}
+            </strong>
+          </div>
+          <div className="metric wide">
+            <span>latest receipt</span>
+            <strong>
+              {latestReceipt ? shortHash(latestReceipt.receiptHash) : "none"}
+            </strong>
           </div>
         </section>
-      )}
 
-      {query.trackRecord && (
-        <section className="receipt-context profile-section">
-          <div className="panel-heading">
-            <p className="eyebrow">Forum TrackRecordV2</p>
-            <h3>On-chain attribution anchor</h3>
-          </div>
-          <div className="evidence-grid">
-            <EvidenceRow label="bot id" value={query.trackRecord.botId} />
-            <EvidenceRow label="sequence" value={query.trackRecord.seq} />
-            <EvidenceRow
-              label="record hash"
-              value={query.trackRecord.recordHash}
-            />
-            <EvidenceRow
-              label="evidence hash"
-              value={query.trackRecord.evidenceHash}
-            />
-            <EvidenceRow
-              label="evidence uri"
-              value={query.trackRecord.evidenceUri}
-            />
-            <div className="evidence-row">
-              <span>publish tx</span>
+        <section className="evidence-grid">
+          <EvidenceRow label="query id" value={query.id} />
+          <EvidenceRow label="query hash" value={query.queryHash} />
+          <EvidenceRow label="answer hash" value={query.answerHash} />
+          <EvidenceRow label="created at" value={query.createdAt} />
+          <EvidenceRow label="receipt count" value={receipts.length} />
+          <EvidenceRow
+            label="reader payment hash"
+            value={query.readerPayment?.paymentHash ?? "not reader-paid"}
+          />
+          <EvidenceRow
+            label="reader paid"
+            value={`${formatUsdc(economics.readerPaidAtomicUsdc)} USDC`}
+          />
+          <EvidenceRow
+            label="creator payouts"
+            value={`${formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC`}
+          />
+          <EvidenceRow
+            label="protocol retained"
+            value={
+              query.readerPayment
+                ? `${formatUsdc(economics.protocolRetainedAtomicUsdc)} USDC`
+                : "not reader-paid"
+            }
+          />
+          <EvidenceRow
+            label="budget utilization"
+            value={
+              query.readerPayment ? formatBudgetUtilization(economics) : "n/a"
+            }
+          />
+        </section>
+
+        {query.readerPayment && (
+          <section className="reader-payment-card receipt-payment-card">
+            <div>
+              <span>reader payment</span>
               <strong>
-                <a
-                  className="receipt-link inline-link"
-                  href={arcscanTxUrl(query.trackRecord.transaction)}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  {query.trackRecord.transaction}
-                </a>
+                {settlementLabel(query.readerPayment.settlementMode)}
               </strong>
             </div>
-          </div>
-        </section>
-      )}
-
-      {agentBudget && sourceDecisions.length > 0 && (
-        <section className="receipt-context profile-section">
-          <div className="panel-heading">
-            <p className="eyebrow">source market</p>
-            <h3>Budgeted citation decision</h3>
-          </div>
-          <div className="decision-board">
-            <div className="decision-summary">
-              <div>
-                <span>source budget</span>
-                <strong>
-                  {formatUsdc(agentBudget.sourceBudgetAtomicUsdc)}
-                </strong>
-              </div>
-              <div>
-                <span>agent spent</span>
-                <strong>{formatUsdc(agentBudget.spentAtomicUsdc)}</strong>
-              </div>
-              <div>
-                <span>remaining</span>
-                <strong>{formatUsdc(agentBudget.remainingAtomicUsdc)}</strong>
-              </div>
-              <div>
-                <span>market sweep</span>
-                <strong>
-                  {agentBudget.purchasedCount}/{agentBudget.candidateCount}
-                </strong>
-              </div>
+            <div>
+              <span>amount</span>
+              <strong>
+                {formatUsdc(query.readerPayment.amountAtomicUsdc)} USDC
+              </strong>
             </div>
-            <div className="decision-list">
-              {sourceDecisions.map((decision) => (
-                <article
-                  className={
-                    decision.selected ? "decision-row selected" : "decision-row"
-                  }
-                  key={decision.sourceId}
-                >
-                  <div>
-                    <strong>{decision.title}</strong>
-                    <span>
-                      {decision.creator} / score {decision.score} /{" "}
-                      {formatUsdc(decision.priceAtomicUsdc)} USDC
-                    </span>
-                  </div>
-                  <small>{decision.reason}</small>
-                </article>
-              ))}
+            <div>
+              <span>payer</span>
+              <strong>
+                {query.readerPayment.payer
+                  ? shortWallet(query.readerPayment.payer)
+                  : "pending"}
+              </strong>
             </div>
-          </div>
-        </section>
-      )}
-
-      {agentSteps.length > 0 && (
-        <section className="receipt-context profile-section agent-trace">
-          <div className="panel-heading">
-            <p className="eyebrow">agent reasoning</p>
-            <h3>Appraise to payout timeline</h3>
-          </div>
-          {query.agentRationale && (
-            <p className="hero-text">{query.agentRationale}</p>
-          )}
-          {externalAssists.length > 0 && (
-            <p className="status-line">
-              external assist:{" "}
-              {externalAssists
-                .map(
-                  (assist) =>
-                    `${assist.provider} / ${formatUsdc(
-                      assist.amountAtomicUsdc,
-                    )} USDC / ${shortHash(assist.transaction)}`,
-                )
-                .join(", ")}
-            </p>
-          )}
-          <ol className="trace-list">
-            {agentSteps.map((step) => (
-              <li className="trace-step" key={step.index}>
-                <span className="trace-num">{step.index + 1}</span>
-                <div className="trace-body">
-                  <strong>{step.name}</strong>
-                  <span className="trace-summary">
-                    {step.summary}
-                    {step.spentAtomicUsdc !== undefined
-                      ? ` · spent ${formatUsdc(step.spentAtomicUsdc)} USDC`
-                      : ""}
-                  </span>
-                  <small>{step.detail}</small>
-                </div>
-              </li>
-            ))}
-            <li className="trace-step">
-              <span className="trace-num">{agentSteps.length + 1}</span>
-              <div className="trace-body">
-                <strong>final</strong>
-                <span className="trace-summary">
-                  Final answer is restricted to paid citation records.
-                </span>
-                <small>
-                  {query.citations.map((citation) => citation.title).join(", ")}
-                </small>
-              </div>
-            </li>
-            <li className="trace-step">
-              <span className="trace-num">{agentSteps.length + 2}</span>
-              <div className="trace-body">
-                <strong>payouts</strong>
-                <span className="trace-summary">
-                  Wrote {receipts.length} source payment receipt
-                  {receipts.length === 1 ? "" : "s"} into the ledger.
-                </span>
-                <small>{latestChainHash}</small>
-              </div>
-            </li>
-          </ol>
-        </section>
-      )}
-
-      <section className="lower-grid">
-        <div className="creator-table">
-          <div className="panel-heading">
-            <p className="eyebrow">paid citations</p>
-            <h3>Sources used</h3>
-          </div>
-          {query.citations.map((citation) => {
-            const receipt = receiptBySourceId.get(citation.sourceId);
-            return (
-              <article
-                className="citation-card receipt-citation"
-                key={citation.sourceId}
-              >
-                <div>
-                  <p>{citation.title}</p>
-                  <span>
-                    {citation.creator} / {formatUsdc(citation.amountAtomicUsdc)}{" "}
-                    USDC
-                  </span>
-                  <small>
-                    {citation.verifiedCreator
-                      ? "Verified owner"
-                      : citation.sourceKind === "seed"
-                        ? "Seed/demo source"
-                        : "Unverified external source"}{" "}
-                    / excerpt{" "}
-                    {citation.sourceExcerptHash
-                      ? shortHash(citation.sourceExcerptHash)
-                      : "not recorded"}
-                  </small>
-                  <small>{citation.reason}</small>
-                </div>
-                <div className="source-action">
-                  <Link
-                    className="receipt-link"
-                    href={`/sources/${citation.sourceId}`}
-                  >
-                    Source page
-                  </Link>
-                  {receipt && (
-                    <Link
-                      className="receipt-link"
-                      href={`/receipts/${receipt.receiptHash}`}
-                    >
-                      {shortHash(receipt.receiptHash)}
-                    </Link>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-
-        <div className="source-registry">
-          <div className="panel-heading">
-            <p className="eyebrow">answer receipts</p>
-            <h3>Payment trail</h3>
-          </div>
-          {receipts.map((receipt) => (
-            <article className="receipt-row" key={receipt.receiptHash}>
-              <div>
-                <strong>{receipt.creator}</strong>
-                <span>
-                  payment status: {settlementLabel(receipt.settlementMode)} /{" "}
-                  creator recipient {shortWallet(receipt.wallet)}
-                </span>
-                <span>
-                  ledger {shortHash(receipt.receiptHash)} / prev{" "}
-                  {shortHash(receipt.previousHash)}
-                </span>
-              </div>
-              <div className="numeric-cell">
-                <strong>{formatUsdc(receipt.amountAtomicUsdc)}</strong>
-                {receipt.transaction && (
+            <div>
+              <span>payment hash</span>
+              <strong>
+                {query.readerPayment.transaction ? (
                   <a
-                    className="receipt-link"
-                    href={arcscanTxUrl(receipt.transaction)}
+                    className="receipt-link inline-link"
+                    href={arcscanTxUrl(query.readerPayment.transaction)}
                     rel="noreferrer"
                     target="_blank"
                   >
-                    Arc tx
+                    {shortHash(query.readerPayment.paymentHash)}
                   </a>
+                ) : (
+                  shortHash(query.readerPayment.paymentHash)
                 )}
-                <Link
-                  className="receipt-link"
-                  href={`/receipts/${receipt.receiptHash}`}
-                >
-                  {shortHash(receipt.receiptHash)}
-                </Link>
+              </strong>
+            </div>
+          </section>
+        )}
+
+        {agentBudget && (
+          <section className="receipt-context profile-section">
+            <div className="panel-heading">
+              <p className="eyebrow">agent accountability</p>
+              <h3>Budget envelope and proof anchors</h3>
+            </div>
+            <div className="evidence-grid">
+              <EvidenceRow
+                label="budget envelope"
+                value={`${formatUsdc(agentBudget.sourceBudgetAtomicUsdc)} USDC`}
+              />
+              <EvidenceRow
+                label="spent on sources"
+                value={`${formatUsdc(agentBudget.spentAtomicUsdc)} USDC`}
+              />
+              <EvidenceRow
+                label="unused"
+                value={`${formatUsdc(agentBudget.remainingAtomicUsdc)} USDC`}
+              />
+              <EvidenceRow
+                label="source cap"
+                value={`${agentBudget.purchasedCount}/${agentBudget.candidateCount} bought`}
+              />
+              <EvidenceRow
+                label="covenant policy"
+                value={
+                  covenant?.latestVault
+                    ? `${formatAtomicUsdc(
+                        covenant.latestVault.mandate.budgetUsdc,
+                      )} USDC max`
+                    : "not published locally"
+                }
+              />
+              <EvidenceRow
+                label="allowed domains"
+                value="registered source URLs only"
+              />
+              <EvidenceRow
+                label="TrackRecord anchor"
+                value={
+                  query.trackRecord
+                    ? shortHash(query.trackRecord.recordHash)
+                    : "none"
+                }
+              />
+              <EvidenceRow
+                label="SlashBond status"
+                value={
+                  slashBond
+                    ? `${formatAtomicUsdc(slashBond.bondBalance)} USDC bonded`
+                    : "not published locally"
+                }
+              />
+              <EvidenceRow label="receipt chain hash" value={latestChainHash} />
+            </div>
+          </section>
+        )}
+
+        {query.trackRecord && (
+          <section className="receipt-context profile-section">
+            <div className="panel-heading">
+              <p className="eyebrow">Forum TrackRecordV2</p>
+              <h3>On-chain attribution anchor</h3>
+            </div>
+            <div className="evidence-grid">
+              <EvidenceRow label="bot id" value={query.trackRecord.botId} />
+              <EvidenceRow label="sequence" value={query.trackRecord.seq} />
+              <EvidenceRow
+                label="record hash"
+                value={query.trackRecord.recordHash}
+              />
+              <EvidenceRow
+                label="evidence hash"
+                value={query.trackRecord.evidenceHash}
+              />
+              <EvidenceRow
+                label="evidence uri"
+                value={query.trackRecord.evidenceUri}
+              />
+              <div className="evidence-row">
+                <span>publish tx</span>
+                <strong>
+                  <a
+                    className="receipt-link inline-link"
+                    href={arcscanTxUrl(query.trackRecord.transaction)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {query.trackRecord.transaction}
+                  </a>
+                </strong>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
+            </div>
+          </section>
+        )}
+
+        {agentBudget && sourceDecisions.length > 0 && (
+          <section className="receipt-context profile-section">
+            <div className="panel-heading">
+              <p className="eyebrow">source market</p>
+              <h3>Budgeted citation decision</h3>
+            </div>
+            <div className="decision-board">
+              <div className="decision-summary">
+                <div>
+                  <span>source budget</span>
+                  <strong>
+                    {formatUsdc(agentBudget.sourceBudgetAtomicUsdc)}
+                  </strong>
+                </div>
+                <div>
+                  <span>agent spent</span>
+                  <strong>{formatUsdc(agentBudget.spentAtomicUsdc)}</strong>
+                </div>
+                <div>
+                  <span>remaining</span>
+                  <strong>{formatUsdc(agentBudget.remainingAtomicUsdc)}</strong>
+                </div>
+                <div>
+                  <span>market sweep</span>
+                  <strong>
+                    {agentBudget.purchasedCount}/{agentBudget.candidateCount}
+                  </strong>
+                </div>
+              </div>
+              <div className="decision-list">
+                {sourceDecisions.map((decision) => (
+                  <article
+                    className={
+                      decision.selected
+                        ? "decision-row selected"
+                        : "decision-row"
+                    }
+                    key={decision.sourceId}
+                  >
+                    <div>
+                      <strong>{decision.title}</strong>
+                      <span>
+                        {decision.creator} / score {decision.score} /{" "}
+                        {formatUsdc(decision.priceAtomicUsdc)} USDC
+                      </span>
+                    </div>
+                    <small>{decision.reason}</small>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {agentSteps.length > 0 && (
+          <section className="receipt-context profile-section agent-trace">
+            <div className="panel-heading">
+              <p className="eyebrow">agent reasoning</p>
+              <h3>Appraise to payout timeline</h3>
+            </div>
+            {query.agentRationale && (
+              <p className="hero-text">{query.agentRationale}</p>
+            )}
+            {externalAssists.length > 0 && (
+              <p className="status-line">
+                external assist:{" "}
+                {externalAssists
+                  .map(
+                    (assist) =>
+                      `${assist.provider} / ${formatUsdc(
+                        assist.amountAtomicUsdc,
+                      )} USDC / ${shortHash(assist.transaction)}`,
+                  )
+                  .join(", ")}
+              </p>
+            )}
+            <ol className="trace-list">
+              {agentSteps.map((step) => (
+                <li className="trace-step" key={step.index}>
+                  <span className="trace-num">{step.index + 1}</span>
+                  <div className="trace-body">
+                    <strong>{step.name}</strong>
+                    <span className="trace-summary">
+                      {step.summary}
+                      {step.spentAtomicUsdc !== undefined
+                        ? ` · spent ${formatUsdc(step.spentAtomicUsdc)} USDC`
+                        : ""}
+                    </span>
+                    <small>{step.detail}</small>
+                  </div>
+                </li>
+              ))}
+              <li className="trace-step">
+                <span className="trace-num">{agentSteps.length + 1}</span>
+                <div className="trace-body">
+                  <strong>final</strong>
+                  <span className="trace-summary">
+                    Final answer is restricted to paid citation records.
+                  </span>
+                  <small>
+                    {query.citations
+                      .map((citation) => citation.title)
+                      .join(", ")}
+                  </small>
+                </div>
+              </li>
+              <li className="trace-step">
+                <span className="trace-num">{agentSteps.length + 2}</span>
+                <div className="trace-body">
+                  <strong>payouts</strong>
+                  <span className="trace-summary">
+                    Wrote {receipts.length} source payment receipt
+                    {receipts.length === 1 ? "" : "s"} into the ledger.
+                  </span>
+                  <small>{latestChainHash}</small>
+                </div>
+              </li>
+            </ol>
+          </section>
+        )}
+
+        <section className="lower-grid">
+          <div className="creator-table">
+            <div className="panel-heading">
+              <p className="eyebrow">paid citations</p>
+              <h3>Sources used</h3>
+            </div>
+            {query.citations.map((citation) => {
+              const receipt = receiptBySourceId.get(citation.sourceId);
+              return (
+                <article
+                  className="citation-card receipt-citation"
+                  key={citation.sourceId}
+                >
+                  <div>
+                    <p>{citation.title}</p>
+                    <span>
+                      {citation.creator} /{" "}
+                      {formatUsdc(citation.amountAtomicUsdc)} USDC
+                    </span>
+                    <small>
+                      {citation.verifiedCreator
+                        ? "Verified owner"
+                        : citation.sourceKind === "seed"
+                          ? "Seed/demo source"
+                          : "Unverified external source"}{" "}
+                      / excerpt{" "}
+                      {citation.sourceExcerptHash
+                        ? shortHash(citation.sourceExcerptHash)
+                        : "not recorded"}
+                    </small>
+                    <small>{citation.reason}</small>
+                  </div>
+                  <div className="source-action">
+                    <Link
+                      className="receipt-link"
+                      href={`/sources/${citation.sourceId}`}
+                    >
+                      Source page
+                    </Link>
+                    {receipt && (
+                      <Link
+                        className="receipt-link"
+                        href={`/receipts/${receipt.receiptHash}`}
+                      >
+                        {shortHash(receipt.receiptHash)}
+                      </Link>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="source-registry">
+            <div className="panel-heading">
+              <p className="eyebrow">answer receipts</p>
+              <h3>Payment trail</h3>
+            </div>
+            {receipts.map((receipt) => (
+              <article className="receipt-row" key={receipt.receiptHash}>
+                <div>
+                  <strong>{receipt.creator}</strong>
+                  <span>
+                    payment status: {settlementLabel(receipt.settlementMode)} /{" "}
+                    creator recipient {shortWallet(receipt.wallet)}
+                  </span>
+                  <span>
+                    ledger {shortHash(receipt.receiptHash)} / prev{" "}
+                    {shortHash(receipt.previousHash)}
+                  </span>
+                </div>
+                <div className="numeric-cell">
+                  <strong>{formatUsdc(receipt.amountAtomicUsdc)}</strong>
+                  {receipt.transaction && (
+                    <a
+                      className="receipt-link"
+                      href={arcscanTxUrl(receipt.transaction)}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Arc tx
+                    </a>
+                  )}
+                  <Link
+                    className="receipt-link"
+                    href={`/receipts/${receipt.receiptHash}`}
+                  >
+                    {shortHash(receipt.receiptHash)}
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       </main>
     </>
   );

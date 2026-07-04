@@ -2,7 +2,7 @@
 
 **Creators do not get paid for how their work is actually used.** A writer earns nothing when an AI cites their article; a photographer earns nothing when someone downloads their photo. Per-use payments were always too small to clear, so the world defaulted to subscriptions or nothing. Nanopayments on Arc remove that floor.
 
-Tollgate turns reuse into revenue: one Arc settlement core, two integrations, and proof pages that bind each paid use to a hash-linked receipt.
+Tollgate turns reuse into revenue: one Arc settlement core, three integrations, and proof pages that bind each paid use to a hash-linked receipt.
 
 ## Judge path: 5-minute review
 
@@ -10,21 +10,21 @@ Tollgate turns reuse into revenue: one Arc settlement core, two integrations, an
 2. Run a paid answer on `https://tollgate.gudman.xyz`, then open the generated answer proof.
 3. Inspect `https://tollgate.gudman.xyz/proof` for reader-paid, creator-payout, retained, utilization, receipt-chain, and Arc transaction evidence.
 4. Open `https://tollgate.gudman.xyz/aperture` for the Immich photo-licensing proof surface.
-5. Follow any Arc transaction link to `https://testnet.arcscan.app`.
+5. Open `https://tollgate.gudman.xyz/video` for the PeerTube plugin proof surface, then follow any Arc transaction link to `https://testnet.arcscan.app`.
 
 ## Traction snapshot
 
 Fill these from live endpoints immediately before submission:
 
-| Metric | Live source | Value |
-| --- | --- | --- |
-| External creators | `/api/sources` after seed/internal split | user refresh |
-| Seed/internal sources | `/api/sources` after seed/internal split | user refresh |
-| Paid queries | `/api/settlement/status` | user refresh |
-| Payout receipts | `/proof` and `/api/settlement/status` | user refresh |
-| Unique payer wallets | proof pack export | user refresh |
-| Unique creator wallets | proof pack export | user refresh |
-| Total test USDC routed | proof pack export | user refresh |
+| Metric                 | Live source                              | Value        |
+| ---------------------- | ---------------------------------------- | ------------ |
+| External creators      | `/api/sources` after seed/internal split | user refresh |
+| Seed/internal sources  | `/api/sources` after seed/internal split | user refresh |
+| Paid queries           | `/api/settlement/status`                 | user refresh |
+| Payout receipts        | `/proof` and `/api/settlement/status`    | user refresh |
+| Unique payer wallets   | proof pack export                        | user refresh |
+| Unique creator wallets | proof pack export                        | user refresh |
+| Total test USDC routed | proof pack export                        | user refresh |
 
 ## Top verification commands
 
@@ -58,11 +58,11 @@ node scripts/export-proof-pack.mjs
 
 Tollgate is one settlement core with three integrations on real open-source creator communities — feeds, photo, and video. This repo holds them as independent packages:
 
-| Package | Community | What it does | Live / proof |
-| --- | --- | --- | --- |
-| [`citations/`](./citations) | AI answer engines (feeds/RSS) | An autonomous answer agent buys the sources it cites and pays each creator per citation. | `https://tollgate.gudman.xyz` |
-| [`aperture/`](./aperture) | self-hosted Immich (photo) | A permissionless sidecar gates shared-photo downloads with x402 and pays photographers per licensed download, with no upstream changes. | `https://tollgate.gudman.xyz/aperture` |
-| [`peertube-plugin-tollgate/`](./peertube-plugin-tollgate) | PeerTube (video) | A permissionless PeerTube plugin gates video downloads and pays the creator per download in USDC on Arc. Installs from the npm plugin index — no upstream changes. | on-chain payout proven (Arc pay tx `0x1448f4b9…bcbf19`, status success) |
+| Package                                                   | Community                     | What it does                                                                                                                                                                                                        | Live / proof                                                                                                                   |
+| --------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`citations/`](./citations)                               | AI answer engines (feeds/RSS) | An autonomous answer agent buys the sources it cites and pays each creator per citation.                                                                                                                            | `https://tollgate.gudman.xyz`                                                                                                  |
+| [`aperture/`](./aperture)                                 | self-hosted Immich (photo)    | A permissionless sidecar gates shared-photo downloads with x402 and pays photographers per licensed download, with no upstream changes.                                                                             | `https://tollgate.gudman.xyz/aperture`                                                                                         |
+| [`peertube-plugin-tollgate/`](./peertube-plugin-tollgate) | PeerTube (video)              | A permissionless PeerTube plugin gates video downloads and pays the creator per download in USDC on Arc. Published as `peertube-plugin-tollgate@0.1.0`; local-path install remains supported for self-hosted tests. | [`/video`](https://tollgate.gudman.xyz/video), Arc pay tx `0x1448f4b906e2c5528fa5ae422e120ad1f975088a93c5d87d968802e80ebcbf19` |
 
 **Unified overview + live proof:** `https://tollgate.gudman.xyz/core`
 

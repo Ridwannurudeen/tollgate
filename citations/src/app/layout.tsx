@@ -42,15 +42,18 @@ export default function RootLayout({
                 <p className="footer-head">Product</p>
                 <a href="/">Landing</a>
                 <a href="/register">Register</a>
+                <a href="/sources">Sources</a>
                 <a href="/ask">Ask the AI</a>
                 <a href="/creators">Creators</a>
                 <a href="/core">Settlement core</a>
                 <a href="/aperture">Photo licensing</a>
+                <a href="/video">Video licensing</a>
               </div>
               <div className="footer-col">
                 <p className="footer-head">Proof</p>
                 <a href="/proof">Payout ledger</a>
                 <a href="/ask">Live demo</a>
+                <a href="/demo">Judge demo</a>
               </div>
               <div className="footer-col">
                 <p className="footer-head">Network</p>

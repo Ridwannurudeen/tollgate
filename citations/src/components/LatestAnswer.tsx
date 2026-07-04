@@ -1,6 +1,17 @@
 import Link from "next/link";
-import { formatDollars, settlementLabel, shortHash, shortWallet } from "@/lib/format";
-import type { AgentBudget, AgentStep, QueryRecord, SourceDecision } from "@/lib/types";
+import {
+  arcscanTxUrl,
+  formatDollars,
+  settlementLabel,
+  shortHash,
+  shortWallet,
+} from "@/lib/format";
+import type {
+  AgentBudget,
+  AgentStep,
+  QueryRecord,
+  SourceDecision,
+} from "@/lib/types";
 
 type Props = {
   query: QueryRecord | null;
@@ -64,7 +75,20 @@ export function LatestAnswer({ query, budget, decisions, steps }: Props) {
               </div>
               <div>
                 <span>payment hash</span>
-                <strong>{shortHash(query.readerPayment.paymentHash)}</strong>
+                <strong>
+                  {query.readerPayment.transaction ? (
+                    <a
+                      className="receipt-link inline-link"
+                      href={arcscanTxUrl(query.readerPayment.transaction)}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {shortHash(query.readerPayment.paymentHash)}
+                    </a>
+                  ) : (
+                    shortHash(query.readerPayment.paymentHash)
+                  )}
+                </strong>
               </div>
             </div>
           )}
@@ -104,7 +128,9 @@ export function LatestAnswer({ query, budget, decisions, steps }: Props) {
               <div className="decision-summary">
                 <div>
                   <span>source budget</span>
-                  <strong>{formatDollars(budget.sourceBudgetAtomicUsdc)}</strong>
+                  <strong>
+                    {formatDollars(budget.sourceBudgetAtomicUsdc)}
+                  </strong>
                 </div>
                 <div>
                   <span>agent spent</span>
@@ -148,9 +174,14 @@ export function LatestAnswer({ query, budget, decisions, steps }: Props) {
             {query.citations.map((citation) => (
               <article className="citation-card" key={citation.sourceId}>
                 <div>
-                  <p>{citation.title}</p>
+                  <p>
+                    <Link href={`/sources/${citation.sourceId}`}>
+                      {citation.title}
+                    </Link>
+                  </p>
                   <span>
-                    {citation.creator} / {formatDollars(citation.amountAtomicUsdc)}
+                    {citation.creator} /{" "}
+                    {formatDollars(citation.amountAtomicUsdc)}
                   </span>
                 </div>
                 <small>{citation.reason}</small>
