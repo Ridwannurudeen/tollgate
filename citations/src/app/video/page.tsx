@@ -19,22 +19,40 @@ type PluginPackage = {
   engines?: { node?: string };
 };
 
+const FALLBACK_PLUGIN: PluginPackage = {
+  name: "peertube-plugin-tollgate",
+  version: "0.1.0",
+  description:
+    "Pay the creator in USDC on Arc when their video is downloaded. A permissionless PeerTube payments plugin.",
+  engine: { peertube: ">=6.0.0" },
+  engines: { node: ">=20" },
+};
+
 async function readPluginPackage(): Promise<PluginPackage> {
-  const raw = await readFile(
-    path.join(process.cwd(), "..", "peertube-plugin-tollgate", "package.json"),
-    "utf8",
-  );
-  const parsed = JSON.parse(raw) as Partial<PluginPackage>;
-  if (!parsed.name || !parsed.version || !parsed.description) {
-    throw new Error("PeerTube plugin package.json is missing required fields.");
+  try {
+    const raw = await readFile(
+      path.join(
+        process.cwd(),
+        "..",
+        "peertube-plugin-tollgate",
+        "package.json",
+      ),
+      "utf8",
+    );
+    const parsed = JSON.parse(raw) as Partial<PluginPackage>;
+    if (!parsed.name || !parsed.version || !parsed.description) {
+      return FALLBACK_PLUGIN;
+    }
+    return {
+      name: parsed.name,
+      version: parsed.version,
+      description: parsed.description,
+      engine: parsed.engine,
+      engines: parsed.engines,
+    };
+  } catch {
+    return FALLBACK_PLUGIN;
   }
-  return {
-    name: parsed.name,
-    version: parsed.version,
-    description: parsed.description,
-    engine: parsed.engine,
-    engines: parsed.engines,
-  };
 }
 
 export default async function VideoPage() {
@@ -62,8 +80,10 @@ export default async function VideoPage() {
           <div className="signature-stat proof-stat">
             <span className="stamp">Video</span>
             <span className="stat-label">plugin package</span>
-            <strong>0.1.0</strong>
-            <span className="stat-unit">{"PeerTube >= 6.0.0"}</span>
+            <strong>{pluginPackage.version}</strong>
+            <span className="stat-unit">
+              PeerTube {pluginPackage.engine?.peertube ?? ">=6.0.0"}
+            </span>
           </div>
           <div className="proof-copy">
             <p className="eyebrow">integration 03 / PeerTube</p>
@@ -113,7 +133,7 @@ export default async function VideoPage() {
             </strong>
           </div>
           <div className="evidence-row">
-            <span>payout tx</span>
+            <span>Arc FeeRouter routing tx</span>
             <strong>
               <a
                 href={arcscanTxUrl(PEERTUBE_PAYOUT_TX)}
@@ -125,7 +145,7 @@ export default async function VideoPage() {
             </strong>
           </div>
           <div className="evidence-row">
-            <span>status</span>
+            <span>FeeRouter tx status</span>
             <strong>success</strong>
           </div>
           <div className="evidence-row">
@@ -143,6 +163,14 @@ export default async function VideoPage() {
           <div className="evidence-row">
             <span>proof endpoint</span>
             <strong>/plugins/tollgate/router/proof</strong>
+          </div>
+          <div className="evidence-row">
+            <span>plugin validation</span>
+            <strong>
+              Download gating, config, and /router/proof are locally validated
+              in demo/VALIDATION.md; plugin-triggered on-chain payout is pending
+              an operator key.
+            </strong>
           </div>
         </section>
 
@@ -180,8 +208,8 @@ export default async function VideoPage() {
               </span>
               <h3>Verify receipts</h3>
               <p>
-                The plugin proof router exposes hash-chained receipts and links
-                successful payouts to Arcscan.
+                The plugin proof router exposes hash-chained receipts, with
+                Arcscan links once operator settlement is enabled.
               </p>
             </article>
           </div>

@@ -96,6 +96,8 @@ export default async function CorePage() {
               <a
                 className="receipt-link"
                 href={`${ARC_EXPLORER}/address/${FEE_ROUTER}`}
+                target="_blank"
+                rel="noreferrer"
               >
                 {FEE_ROUTER}
               </a>{" "}
