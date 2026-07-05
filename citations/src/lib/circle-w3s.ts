@@ -29,7 +29,9 @@ async function entityPublicKey(): Promise<string> {
     headers: { Authorization: `Bearer ${requireEnv("CIRCLE_API_KEY")}` },
   });
   if (!response.ok) {
-    throw new Error(`entity publicKey ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `entity publicKey ${response.status}: ${await response.text()}`,
+    );
   }
   const payload = (await response.json()) as {
     data?: { publicKey?: string };
@@ -67,7 +69,8 @@ async function request<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await response.text();
-  if (!response.ok) throw new Error(`${method} ${path} ${response.status}: ${text}`);
+  if (!response.ok)
+    throw new Error(`${method} ${path} ${response.status}: ${text}`);
   return JSON.parse(text) as T;
 }
 
@@ -133,11 +136,76 @@ async function transactionHash(transactionId: string): Promise<Hex> {
     const hash = transaction?.txHash ?? transaction?.transactionHash;
     if (hash) return hash;
     if (transaction?.state === "FAILED" || transaction?.state === "CANCELLED") {
-      throw new Error(`Circle W3S transaction ${transactionId} ${transaction.state}.`);
+      throw new Error(
+        `Circle W3S transaction ${transactionId} ${transaction.state}.`,
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
-  throw new Error(`Circle W3S transaction ${transactionId} did not produce a tx hash.`);
+  throw new Error(
+    `Circle W3S transaction ${transactionId} did not produce a tx hash.`,
+  );
+}
+
+// EIP-712 message shape as x402's ClientEvmSigner hands it to signTypedData.
+export type Eip712Message = {
+  domain: Record<string, unknown>;
+  types: Record<string, unknown>;
+  primaryType: string;
+  message: Record<string, unknown>;
+};
+
+// Serialize an EIP-712 message for Circle's signer. x402 hands us the message
+// without an EIP712Domain type entry, so rebuild it from whatever domain fields
+// are present (declaration order fixes the domain separator), and emit uint256
+// fields as decimal strings since JSON has no BigInt.
+function encodeEip712(typed: Eip712Message): string {
+  const domainTypes: Array<[string, string]> = [
+    ["name", "string"],
+    ["version", "string"],
+    ["chainId", "uint256"],
+    ["verifyingContract", "address"],
+    ["salt", "bytes32"],
+  ];
+  const eip712Domain = domainTypes
+    .filter(([field]) => typed.domain[field] !== undefined)
+    .map(([name, type]) => ({ name, type }));
+  return JSON.stringify(
+    {
+      types: { EIP712Domain: eip712Domain, ...typed.types },
+      domain: typed.domain,
+      primaryType: typed.primaryType,
+      message: typed.message,
+    },
+    (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+  );
+}
+
+// Sign EIP-712 typed data with a W3S developer-controlled wallet — no local key.
+export async function w3sSignTypedData(
+  walletId: string,
+  typed: Eip712Message,
+  memo?: string,
+): Promise<Hex> {
+  const response = await request<{ data: { signature: Hex } }>(
+    "POST",
+    "/developer/sign/typedData",
+    {
+      walletId,
+      data: encodeEip712(typed),
+      entitySecretCiphertext: await sealEntitySecret(),
+      ...(memo ? { memo } : {}),
+    },
+  );
+  return response.data.signature;
+}
+
+export function payerWalletId(): string {
+  return requireEnv("CIRCLE_PAYER_WALLET_ID");
+}
+
+export function payerAddress(): Address {
+  return requireEnv("CIRCLE_PAYER_ADDRESS") as Address;
 }
 
 export async function w3sExecuteContract(args: {

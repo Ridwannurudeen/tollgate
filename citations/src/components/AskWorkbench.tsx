@@ -206,6 +206,41 @@ export function AskWorkbench({ initialLedger }: Props) {
     }
   }
 
+  async function runCustodialDemo() {
+    setIsSubmitting(true);
+    setStatus(
+      "Settling a reader payment from Tollgate's Circle W3S custodial wallet...",
+    );
+    try {
+      const response = await fetch("/api/paid-query/demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      const body = (await response.json()) as
+        | SettlementResult
+        | { error?: string };
+      if (!response.ok) {
+        throw new Error(
+          "error" in body ? body.error : `HTTP ${response.status}`,
+        );
+      }
+      const result = body as SettlementResult;
+      setActiveResult(result);
+      updateLedger(result.ledger);
+      await Promise.all([refreshLedger(), refreshSettlementStatus()]);
+      setStatus(
+        "Reader payment settled on us via Circle W3S - a real x402 payment on Arc, no wallet needed.",
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Custodial demo failed.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function connectWallet() {
     const { connectArcWallet } = await import("@/lib/x402-client");
     const client = await connectArcWallet();
@@ -260,14 +295,22 @@ export function AskWorkbench({ initialLedger }: Props) {
         <button
           type="button"
           className="secondary-button"
+          onClick={runCustodialDemo}
+          disabled={isSubmitting}
+        >
+          Pay {paidQueryPriceText} on us - no wallet (Circle W3S)
+        </button>
+        <button
+          type="button"
+          className="ghost-button ask-tertiary"
           onClick={runPaidQuery}
           disabled={isSubmitting}
         >
-          Pay {paidQueryPriceText} via x402 (MetaMask + Arc)
+          Or pay {paidQueryPriceText} from your own wallet (MetaMask + Arc)
         </button>
         <p className="status-line" aria-live="polite">
           {status ||
-            `Run a local proof free, or pay ${paidQueryPriceText} via x402 to exercise the protocol path.`}
+            `Run the agent free, settle a real ${paidQueryPriceText} x402 payment on us (Circle W3S custodial wallet), or pay from your own wallet.`}
         </p>
         <p className="field-hint">
           Pay from any Arc-testnet wallet - connect MetaMask when prompted. Need

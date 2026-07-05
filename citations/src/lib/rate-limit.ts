@@ -13,11 +13,19 @@ const RSS_IMPORT_WINDOW_MS = 60 * 60 * 1000;
 const RSS_IMPORT_LIMIT = 10;
 const DISCOVERY_WINDOW_MS = 60 * 60 * 1000;
 const DISCOVERY_LIMIT = 10;
+// Custodial demo pays real (testnet) USDC from a shared wallet per click, so it
+// is capped both per-IP and globally. Limits are check-then-record: a failed
+// settlement must not burn a judge's quota.
+const DEMO_PAID_QUERY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const DEMO_PAID_QUERY_PER_IP_LIMIT = 2;
+const DEMO_PAID_QUERY_GLOBAL_LIMIT = 30;
 const buckets = new Map<string, RateLimitBucket>();
 const registrationBuckets = new Map<string, RateLimitBucket>();
 const claimBuckets = new Map<string, RateLimitBucket>();
 const rssImportBuckets = new Map<string, RateLimitBucket>();
 const discoveryBuckets = new Map<string, RateLimitBucket>();
+const demoPaidQueryBuckets = new Map<string, RateLimitBucket>();
+let demoPaidQueryGlobal: RateLimitBucket = { windowStart: 0, count: 0 };
 
 export function assertQueryRateLimit(key: string, now = Date.now()): void {
   const bucketKey = key || "anonymous";
@@ -115,4 +123,62 @@ export function assertDiscoveryRateLimit(key: string, now = Date.now()): void {
     );
   }
   current.count += 1;
+}
+
+function activeCount(
+  bucket: RateLimitBucket | undefined,
+  now: number,
+  windowMs: number,
+): number {
+  if (!bucket || now - bucket.windowStart >= windowMs) return 0;
+  return bucket.count;
+}
+
+// Throws if a new custodial demo query would exceed the per-IP or global cap.
+// Does NOT record the attempt — call recordDemoPaidQuery only after a settlement
+// succeeds, so a failed payment never consumes a judge's quota.
+export function assertDemoPaidQueryWithinLimits(
+  key: string,
+  now = Date.now(),
+): void {
+  const bucketKey = key || "anonymous";
+  for (const [existingKey, bucket] of demoPaidQueryBuckets) {
+    if (now - bucket.windowStart >= DEMO_PAID_QUERY_WINDOW_MS) {
+      demoPaidQueryBuckets.delete(existingKey);
+    }
+  }
+  if (
+    activeCount(
+      demoPaidQueryBuckets.get(bucketKey),
+      now,
+      DEMO_PAID_QUERY_WINDOW_MS,
+    ) >= DEMO_PAID_QUERY_PER_IP_LIMIT
+  ) {
+    throw new Error(
+      "Demo limit reached (2/day). Connect your own wallet to run more paid queries.",
+    );
+  }
+  if (
+    activeCount(demoPaidQueryGlobal, now, DEMO_PAID_QUERY_WINDOW_MS) >=
+    DEMO_PAID_QUERY_GLOBAL_LIMIT
+  ) {
+    throw new Error(
+      "The shared demo wallet's daily budget is used up. Try the free run, or connect your own wallet.",
+    );
+  }
+}
+
+export function recordDemoPaidQuery(key: string, now = Date.now()): void {
+  const bucketKey = key || "anonymous";
+  const ip = demoPaidQueryBuckets.get(bucketKey);
+  if (!ip || now - ip.windowStart >= DEMO_PAID_QUERY_WINDOW_MS) {
+    demoPaidQueryBuckets.set(bucketKey, { windowStart: now, count: 1 });
+  } else {
+    ip.count += 1;
+  }
+  if (now - demoPaidQueryGlobal.windowStart >= DEMO_PAID_QUERY_WINDOW_MS) {
+    demoPaidQueryGlobal = { windowStart: now, count: 1 };
+  } else {
+    demoPaidQueryGlobal.count += 1;
+  }
 }
