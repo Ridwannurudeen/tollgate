@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { readLedger } from "./ledger-store.mjs";
 
 const ZERO_HASH = `0x${"0".repeat(64)}`;
@@ -175,7 +175,7 @@ function queryPaymentHashCandidates(query) {
   ];
 }
 
-function verifyLedger(ledger) {
+export function verifyLedger(ledger) {
   const issues = [];
   const receiptHashes = new Set(
     ledger.receipts.map((receipt) => receipt.receiptHash),
@@ -245,7 +245,9 @@ function verifyLedger(ledger) {
   };
 }
 
-const ledger = await readLedger(appDir);
-const result = verifyLedger(ledger);
-console.log(JSON.stringify(result, null, 2));
-if (!result.ok) process.exit(1);
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const ledger = await readLedger(appDir);
+  const result = verifyLedger(ledger);
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.ok) process.exit(1);
+}
