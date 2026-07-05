@@ -430,9 +430,11 @@ export default async function AnswerPage({ params }: Props) {
                     Final answer is restricted to paid citation records.
                   </span>
                   <small>
-                    {query.citations
-                      .map((citation) => citation.title)
-                      .join(", ")}
+                    {query.citations.length > 0
+                      ? query.citations
+                          .map((citation) => citation.title)
+                          .join(", ")
+                      : "No source citations were bought."}
                   </small>
                 </div>
               </li>
@@ -457,51 +459,61 @@ export default async function AnswerPage({ params }: Props) {
               <p className="eyebrow">paid citations</p>
               <h3>Sources used</h3>
             </div>
-            {query.citations.map((citation) => {
-              const receipt = receiptBySourceId.get(citation.sourceId);
-              return (
-                <article
-                  className="citation-card receipt-citation"
-                  key={citation.sourceId}
-                >
-                  <div>
-                    <p>{citation.title}</p>
-                    <span>
-                      {citation.creator} /{" "}
-                      {formatUsdc(citation.amountAtomicUsdc)} USDC
-                    </span>
-                    <small>
-                      {citation.verifiedCreator
-                        ? "Verified owner"
-                        : citation.sourceKind === "seed"
-                          ? "Seed/demo source"
-                          : "Unverified external source"}{" "}
-                      / excerpt{" "}
-                      {citation.sourceExcerptHash
-                        ? shortHash(citation.sourceExcerptHash)
-                        : "not recorded"}
-                    </small>
-                    <small>{citation.reason}</small>
-                  </div>
-                  <div className="source-action">
-                    <Link
-                      className="receipt-link"
-                      href={`/sources/${citation.sourceId}`}
-                    >
-                      Source page
-                    </Link>
-                    {receipt && (
+            {query.citations.length > 0 ? (
+              query.citations.map((citation) => {
+                const receipt = receiptBySourceId.get(citation.sourceId);
+                return (
+                  <article
+                    className="citation-card receipt-citation"
+                    key={citation.sourceId}
+                  >
+                    <div>
+                      <p>{citation.title}</p>
+                      <span>
+                        {citation.creator} /{" "}
+                        {formatUsdc(citation.amountAtomicUsdc)} USDC
+                      </span>
+                      <small>
+                        {citation.verifiedCreator
+                          ? "Verified owner"
+                          : citation.sourceKind === "seed"
+                            ? "Seed/demo source"
+                            : "Unverified external source"}{" "}
+                        / excerpt{" "}
+                        {citation.sourceExcerptHash
+                          ? shortHash(citation.sourceExcerptHash)
+                          : "not recorded"}
+                      </small>
+                      <small>{citation.reason}</small>
+                    </div>
+                    <div className="source-action">
                       <Link
                         className="receipt-link"
-                        href={`/receipts/${receipt.receiptHash}`}
+                        href={`/sources/${citation.sourceId}`}
                       >
-                        {shortHash(receipt.receiptHash)}
+                        Source page
                       </Link>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+                      {receipt && (
+                        <Link
+                          className="receipt-link"
+                          href={`/receipts/${receipt.receiptHash}`}
+                        >
+                          {shortHash(receipt.receiptHash)}
+                        </Link>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            ) : (
+              <div className="empty-state compact">
+                <strong>No citations bought.</strong>
+                <span>
+                  No registered source covered the question, so no creator was
+                  paid.
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="source-registry">
@@ -509,40 +521,47 @@ export default async function AnswerPage({ params }: Props) {
               <p className="eyebrow">answer receipts</p>
               <h3>Payment trail</h3>
             </div>
-            {receipts.map((receipt) => (
-              <article className="receipt-row" key={receipt.receiptHash}>
-                <div>
-                  <strong>{receipt.creator}</strong>
-                  <span>
-                    payment status: {settlementLabel(receipt.settlementMode)} /{" "}
-                    creator recipient {shortWallet(receipt.wallet)}
-                  </span>
-                  <span>
-                    ledger {shortHash(receipt.receiptHash)} / prev{" "}
-                    {shortHash(receipt.previousHash)}
-                  </span>
-                </div>
-                <div className="numeric-cell">
-                  <strong>{formatUsdc(receipt.amountAtomicUsdc)}</strong>
-                  {receipt.transaction && (
-                    <a
+            {receipts.length > 0 ? (
+              receipts.map((receipt) => (
+                <article className="receipt-row" key={receipt.receiptHash}>
+                  <div>
+                    <strong>{receipt.creator}</strong>
+                    <span>
+                      payment status: {settlementLabel(receipt.settlementMode)}{" "}
+                      / creator recipient {shortWallet(receipt.wallet)}
+                    </span>
+                    <span>
+                      ledger {shortHash(receipt.receiptHash)} / prev{" "}
+                      {shortHash(receipt.previousHash)}
+                    </span>
+                  </div>
+                  <div className="numeric-cell">
+                    <strong>{formatUsdc(receipt.amountAtomicUsdc)}</strong>
+                    {receipt.transaction && (
+                      <a
+                        className="receipt-link"
+                        href={arcscanTxUrl(receipt.transaction)}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Arc tx
+                      </a>
+                    )}
+                    <Link
                       className="receipt-link"
-                      href={arcscanTxUrl(receipt.transaction)}
-                      rel="noreferrer"
-                      target="_blank"
+                      href={`/receipts/${receipt.receiptHash}`}
                     >
-                      Arc tx
-                    </a>
-                  )}
-                  <Link
-                    className="receipt-link"
-                    href={`/receipts/${receipt.receiptHash}`}
-                  >
-                    {shortHash(receipt.receiptHash)}
-                  </Link>
-                </div>
-              </article>
-            ))}
+                      {shortHash(receipt.receiptHash)}
+                    </Link>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="empty-state compact">
+                <strong>No payment receipts.</strong>
+                <span>No creator payout was routed for this answer.</span>
+              </div>
+            )}
           </div>
         </section>
       </main>

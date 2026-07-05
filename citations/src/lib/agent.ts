@@ -1,6 +1,7 @@
 import {
   createQueryRecord,
   DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
+  NO_SOURCE_ANSWER,
   planCitationMarket,
 } from "./engine";
 import {
@@ -500,7 +501,25 @@ async function runAgentLoop(
     groundingYields,
   );
   if (selected.length === 0) {
-    throw new Error("LLM appraisal selected no affordable known source.");
+    steps.push({
+      index: 1,
+      name: "allocate",
+      summary:
+        "Bought 0 sources because the appraisal found no affordable relevant source.",
+      detail:
+        "No creator was paid; the agent did not draft from irrelevant registered sources.",
+      spentAtomicUsdc: 0,
+    });
+    return {
+      answer: NO_SOURCE_ANSWER,
+      selected: [],
+      unusedSourceIds: new Set(),
+      steps,
+      rationale:
+        "No registered source was relevant enough to cite, so the agent bought nothing and did not fabricate an answer.",
+      appraisalReason,
+      externalAssists,
+    };
   }
   steps.push({
     index: 1,
@@ -805,16 +824,17 @@ function deterministicFallback(
   reason: string,
   groundingYields?: GroundingYieldMap,
 ): QueryRecord {
+  const record = createQueryRecord(
+    question,
+    createdAt,
+    sources,
+    readerPayment,
+    groundingYields,
+  );
   return {
-    ...createQueryRecord(
-      question,
-      createdAt,
-      sources,
-      readerPayment,
-      groundingYields,
-    ),
+    ...record,
     agentMode: "deterministic",
-    agentRationale: reason,
+    agentRationale: record.citations.length === 0 ? record.agentRationale : reason,
   };
 }
 

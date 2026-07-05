@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createAgentQueryRecord } from "./agent";
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
+import { NO_SOURCE_ANSWER } from "./engine";
 import {
   EscalationPaidError,
   type ExternalProvider,
@@ -92,6 +93,39 @@ describe("createAgentQueryRecord", () => {
     expect(query.traceHash).toBeTruthy();
   });
 
+  it("keeps the deterministic fallback honest when no source is relevant", async () => {
+    const sources: CreatorSource[] = [
+      {
+        id: "forum-receipts-test",
+        title: "Forum Receipts",
+        creator: "Forum Labs",
+        handle: "@forum",
+        wallet: "0x1111111111111111111111111111111111111111",
+        url: "https://example.com/forum",
+        summary: "Agent payment receipts and citation budgets.",
+        tags: ["agents", "payments"],
+        priceAtomicUsdc: 1_500,
+        sourceKind: "internal-test",
+        creatorKind: "internal-test",
+        verifiedCreator: true,
+      },
+    ];
+
+    const query = await createAgentQueryRecord(
+      "What is the best recipe for chocolate chip cookies?",
+      "2026-07-05T00:00:00.000Z",
+      sources,
+      undefined,
+      { llmConfig: null },
+    );
+
+    expect(query.agentMode).toBe("deterministic");
+    expect(query.answer).toBe(NO_SOURCE_ANSWER);
+    expect(query.citations).toEqual([]);
+    expect(query.totalAtomicUsdc).toBe(0);
+    expect(query.agentRationale).toContain("found no registered source");
+  });
+
   it("runs the appraise/allocate/draft/critique loop when all claims are grounded", async () => {
     const completeChat = async (
       messages: { role: "system" | "user"; content: string }[],
@@ -157,6 +191,69 @@ describe("createAgentQueryRecord", () => {
       "critique",
     ]);
     expect(query.traceHash).toBeTruthy();
+  });
+
+  it("returns an honest no-source record when the LLM buys nothing", async () => {
+    const stages: string[] = [];
+    const completeChat = async (
+      messages: { role: "system" | "user"; content: string }[],
+    ) => {
+      const stage = stageOf(messages);
+      stages.push(stage);
+      if (stage === "appraise") {
+        return JSON.stringify({
+          appraisals: [
+            {
+              sourceId: "forum-mandates",
+              verdict: "skip",
+              relevance: 0,
+              reason: "Does not cover baking recipes.",
+            },
+            {
+              sourceId: "arc-finality-usdc",
+              verdict: "skip",
+              relevance: 0,
+              reason: "Does not cover baking recipes.",
+            },
+          ],
+        });
+      }
+      throw new Error(`unexpected stage ${stage}`);
+    };
+
+    const query = await createAgentQueryRecord(
+      "What is the best recipe for chocolate chip cookies?",
+      "2026-07-05T00:00:00.000Z",
+      DEFAULT_CREATOR_SOURCES,
+      undefined,
+      { llmConfig: LLM_CONFIG, completeChat },
+    );
+
+    expect(stages).toEqual(["appraise"]);
+    expect(query.agentMode).toBe("llm");
+    expect(query.answer).toBe(NO_SOURCE_ANSWER);
+    expect(query.citations).toEqual([]);
+    expect(query.receiptHashes).toEqual([]);
+    expect(query.totalAtomicUsdc).toBe(0);
+    expect(query.agentBudget).toMatchObject({
+      spentAtomicUsdc: 0,
+      remainingAtomicUsdc: 6_500,
+      purchasedCount: 0,
+    });
+    expect(query.sourceDecisions?.every((decision) => !decision.selected)).toBe(
+      true,
+    );
+    expect(query.agentSteps?.map((step) => step.name)).toEqual([
+      "appraise",
+      "allocate",
+    ]);
+    expect(query.agentRationale).toContain("bought nothing");
+    expect(query.refundSummary).toEqual({
+      boughtCount: 0,
+      citedCount: 0,
+      refundedCount: 0,
+      refundedAtomicUsdc: 0,
+    });
   });
 
   it("keeps only grounded claims when an unsupported claim cannot be bought", async () => {

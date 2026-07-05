@@ -16,6 +16,8 @@ import type {
 } from "./types";
 
 export const DEFAULT_SOURCE_BUDGET_ATOMIC_USDC = 6_500;
+export const NO_SOURCE_ANSWER =
+  "No registered source covers this question, so the agent did not buy a citation or fabricate an answer. Try a question about the registered sources (AI payments, x402, Arc, agent commerce, creator licensing).";
 
 const STOP_WORDS = new Set([
   "a",
@@ -162,18 +164,6 @@ export function planCitationMarket(
     if (item.source.probation) probationSelected = true;
   }
 
-  if (selectedSources.length === 0) {
-    const fallback = ranked.find(
-      (item) => item.source.priceAtomicUsdc <= sourceBudgetAtomicUsdc,
-    );
-    if (fallback) {
-      selectedIds.add(fallback.source.id);
-      selectedSources.push(fallback.source);
-      remainingAtomicUsdc =
-        sourceBudgetAtomicUsdc - fallback.source.priceAtomicUsdc;
-    }
-  }
-
   const decisions = ranked.map((item) => {
     const selected = selectedIds.has(item.source.id);
     return {
@@ -223,6 +213,8 @@ function buildAnswer(
   selectedSources: CreatorSource[],
   sourceContent: Map<string, SourceContent> = new Map(),
 ): string {
+  if (selectedSources.length === 0) return NO_SOURCE_ANSWER;
+
   const sourceSentences = selectedSources
     .map((source) => {
       const content = sourceContent.get(source.id);
@@ -243,6 +235,34 @@ function deterministicSteps(
   totalAtomicUsdc: number,
 ): AgentStep[] {
   const plural = (count: number) => (count === 1 ? "" : "s");
+  if (selectedSources.length === 0) {
+    return [
+      {
+        index: 0,
+        name: "appraise",
+        summary: `Ranked ${budget.candidateCount} candidate source${plural(
+          budget.candidateCount,
+        )} by keyword relevance.`,
+        detail:
+          "Deterministic scoring found no useful overlap with the registered sources.",
+      },
+      {
+        index: 1,
+        name: "allocate",
+        summary: "Bought 0 sources because no candidate was relevant enough.",
+        detail: "No creator was paid; the source budget remained unused.",
+        spentAtomicUsdc: totalAtomicUsdc,
+      },
+      {
+        index: 2,
+        name: "draft",
+        summary: "Returned an honest no-source answer.",
+        detail:
+          "The agent did not fabricate a citation from irrelevant registered sources.",
+      },
+    ];
+  }
+
   return [
     {
       index: 0,
@@ -357,7 +377,9 @@ export function createQueryRecord(
     citations,
     agentMode: "deterministic",
     agentRationale:
-      "Deterministic keyword scoring selected sources by relevance and source budget.",
+      selectedSources.length === 0
+        ? "Deterministic keyword scoring found no registered source relevant enough to cite, so the agent bought nothing."
+        : "Deterministic keyword scoring selected sources by relevance and source budget.",
     sourceDecisions: citationMarket.decisions,
     agentBudget: citationMarket.budget,
     agentSteps,

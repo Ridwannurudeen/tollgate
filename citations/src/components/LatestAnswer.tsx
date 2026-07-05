@@ -178,22 +178,29 @@ export function LatestAnswer({ query, budget, decisions, steps }: Props) {
             </div>
           )}
           <div className="citation-list">
-            {query.citations.map((citation) => (
-              <article className="citation-card" key={citation.sourceId}>
-                <div>
-                  <p>
-                    <Link href={`/sources/${citation.sourceId}`}>
-                      {citation.title}
-                    </Link>
-                  </p>
-                  <span>
-                    {citation.creator} /{" "}
-                    {formatDollars(citation.amountAtomicUsdc)}
-                  </span>
-                </div>
-                <small>{citation.reason}</small>
-              </article>
-            ))}
+            {query.citations.length > 0 ? (
+              query.citations.map((citation) => (
+                <article className="citation-card" key={citation.sourceId}>
+                  <div>
+                    <p>
+                      <Link href={`/sources/${citation.sourceId}`}>
+                        {citation.title}
+                      </Link>
+                    </p>
+                    <span>
+                      {citation.creator} /{" "}
+                      {formatDollars(citation.amountAtomicUsdc)}
+                    </span>
+                  </div>
+                  <small>{citation.reason}</small>
+                </article>
+              ))
+            ) : (
+              <div className="empty-state compact">
+                <strong>No citations bought.</strong>
+                <span>The agent declined because no registered source fit.</span>
+              </div>
+            )}
           </div>
         </>
       ) : (
