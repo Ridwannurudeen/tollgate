@@ -27,6 +27,12 @@ const SPLIT_REGISTRY_PATH = path.join(
   "fee-router-splits.json",
 );
 const FEE_ROUTER_CLAIMABLE_CACHE_TTL_MS = 60_000;
+// Approving the exact payout amount resets the allowance to ~0 after every pay,
+// so concurrent payouts (demand engine + live queries) race a tiny allowance and
+// revert with "transfer amount exceeds allowance". Instead top up to a large
+// bounded standing allowance so many payouts clear without re-approving; actual
+// spend stays capped by the payer wallet's USDC balance regardless of allowance.
+const STANDING_FEE_ROUTER_ALLOWANCE = 10_000_000_000n; // 10,000 USDC (atomic, 6dp)
 let splitRegistryLock: Promise<void> = Promise.resolve();
 type FeeRouterClaimableCacheEntry =
   | { value: bigint; fetchedAt: number }
@@ -576,7 +582,7 @@ export async function routeCitationPayments(
       address: ARC_USDC,
       abi: usdcRouterAbi,
       functionName: "approve",
-      args: [FEE_ROUTER_ADDRESS, totalAtomicUsdc],
+      args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
       account,
       chain: arcTestnet,
     });
@@ -661,7 +667,7 @@ export async function routeEscrowReleasePayment(
       address: ARC_USDC,
       abi: usdcRouterAbi,
       functionName: "approve",
-      args: [FEE_ROUTER_ADDRESS, amount],
+      args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
       account,
       chain: arcTestnet,
     });
