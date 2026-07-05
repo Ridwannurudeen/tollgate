@@ -19,7 +19,7 @@ Creators are not paid for how their work is actually used. A writer earns nothin
 
 ## Traction
 
-**Three independent external creators onboarded through the public self-serve flow, each cryptographically verified (signed ownership proof) and each cited by the live agent and paid real USDC on-chain via the FeeRouter:** CitePay Markets (0.10 USDC), qdee / Shadow Float (0.0075), and Rising Technology / Driplet (0.0015). CitePay and qdee completed onboarding **autonomously with their own agents** (claimed balance + registered a new verified source, unaided). Live ledger: 65 queries, 176 payout receipts, 0.3071 USDC routed, integrity `ok` with 0 issues.
+**Three independent external creators onboarded through the public self-serve flow, each cryptographically verified (signed ownership proof) and each cited by the live agent and paid real USDC on-chain via the FeeRouter:** CitePay Markets (~0.115 USDC), qdee / Shadow Float (~0.027), and Rising Technology / Driplet (~0.012). CitePay and qdee completed onboarding **autonomously with their own agents** (claimed balance + registered a new verified source, unaided). Live ledger: 83 queries, 230 payout receipts, ~0.374 USDC routed, integrity `ok` with 0 issues.
 
 Cross-project, agent-to-agent, on-chain interop: Tollgate sent CitePay 5 real x402 paid queries, and acted as the first external sponsor on qdee's Shadow Float V2 (full sponsor→spend→repay→close loop settled on Arc).
 
@@ -46,7 +46,7 @@ The citation agent appraises candidate sources, allocates a fixed budget, drafts
 
 ## Pre-submit Checklist
 
-- [x] Refresh traction numbers from live endpoints (see `docs/TRACTION.md`, verified 2026-07-02).
+- [x] Refresh traction numbers from live endpoints (see `docs/TRACTION.md`, verified 2026-07-05).
 - [ ] Run credentialed settled proof paths on the VPS.
 - [ ] Record the demo video.
 - [ ] Confirm no real secrets are committed.

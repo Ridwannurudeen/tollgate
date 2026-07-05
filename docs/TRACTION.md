@@ -8,9 +8,9 @@ Three independent external creators onboarded through the public self-serve flow
 
 | Creator | Wallet | Verified source | Paid on-chain | Receipts |
 | --- | --- | --- | --- | --- |
-| CitePay Markets | `0x5389…F105` | `citepay-agent-commerce-network-…` | 0.10 USDC | 69 |
-| qdee (Shadow Float) | `0xBDb1…1Fb8` | `shadow-float-v2-live-external-agent-board` | 0.0075 USDC | 5 |
-| Rising Technology (Driplet) | `0xa7EC…7308` | `driplet-pay-per-second-live-stream-…-on-arc` | 0.0015 USDC | 1 |
+| CitePay Markets | `0x5389…F105` | `citepay-agent-commerce-network-…` | ~0.115 USDC | 86 |
+| qdee (Shadow Float) | `0xBDb1…1Fb8` | `shadow-float-v2-live-external-agent-board` | ~0.027 USDC | 20 |
+| Rising Technology (Driplet) | `0xa7EC…7308` | `driplet-pay-per-second-live-stream-…-on-arc` | ~0.012 USDC | 10 |
 
 Representative on-chain payout tx (FeeRouter → creator split), verify on `https://testnet.arcscan.app`:
 - CitePay: `0xc5074b…16509f`
@@ -19,15 +19,15 @@ Representative on-chain payout tx (FeeRouter → creator split), verify on `http
 
 Each creator can withdraw with `FeeRouter.claim()`; CitePay and qdee have already claimed real balances on-chain.
 
-## Ledger totals (live, verified 2026-07-04)
+## Ledger totals (live, verified 2026-07-05)
 
 | Metric | Value |
 | --- | --- |
-| Answered queries | 72 |
-| Payout receipts | 197 |
-| Priced sources in registry | 20 (14 external, 6 seed fixtures) |
-| Verified external creators | 3 of 20 sources (the rest are probationary/unverified) |
-| Total USDC routed to creators | ~0.33 |
+| Answered queries | 83 |
+| Payout receipts | 230 |
+| Priced sources in registry | 21 (15 external, 6 seed fixtures) |
+| Verified external creators | 3 of 21 sources (the rest are probationary/unverified) |
+| Total USDC routed to creators | ~0.37 |
 | Ledger integrity (`verify:ledger`) | `ok: true`, 0 issues |
 
 ## External paying readers (2026-07-04, on-chain, all three settled)
@@ -77,8 +77,8 @@ These are the instances of **externally generated, settled reader demand** in th
   closed circle of three partners; it is not yet proven at scale, and not yet from any party that has no
   other relationship to us.** Anyone auditing the payment graph on Arcscan will see this, so we say it
   here first.
-- **Registry composition:** 20 priced sources exist, but only 3 (15%) are ownership-verified; the
-  other 17 include 6 seed/demo fixtures shipped with the code and 11 externally-registered but
+- **Registry composition:** 21 priced sources exist, but only 3 (14%) are ownership-verified; the
+  other 18 include 6 seed/demo fixtures shipped with the code and 12 externally-registered but
   unverified sources (some awaiting the creator's meta-tag/DNS proof, some reconstructed from ledger
   history after a registry-file incident on 2026-07-02 — see `docs/REGISTRY-DRIFT.md`).
 - **Not counted as traction:** the 6 seed sources in `catalog.ts` and the `LeptonWeb Lab` self wallet.
