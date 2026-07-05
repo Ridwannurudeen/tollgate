@@ -711,3 +711,38 @@ export async function routeEscrowReleasePayment(
     releasedReceiptHashes,
   };
 }
+
+// Returns a reader's on-chain payment when a paid query is unanswerable (no
+// registered source to cite). The refund is sent from the protocol's funded
+// FeeRouter wallet — the agent-payee wallet that received the payment has no
+// server-side key. Returns the tx hash, or null if refunds are not configured
+// or the wallet can't cover it, so the caller keeps the honest answer either
+// way and never crashes the query on a refund failure.
+export async function refundReaderPayment(
+  recipient: `0x${string}`,
+  amountAtomicUsdc: number,
+  options: FeeRouterRouteOptions = {},
+): Promise<Hex | null> {
+  if (!feeRouterEnabled(options)) return null;
+  if (!Number.isInteger(amountAtomicUsdc) || amountAtomicUsdc <= 0) return null;
+  const publicClient = options.publicClient ?? createFeeRouterPublicClient();
+  const { account, walletClient } = createFeeRouterSigner(options);
+  const amount = BigInt(amountAtomicUsdc);
+  const balance = (await publicClient.readContract({
+    address: ARC_USDC,
+    abi: usdcRouterAbi,
+    functionName: "balanceOf",
+    args: [account.address],
+  })) as bigint;
+  if (balance < amount) return null;
+  const refundTx = await walletClient.writeContract({
+    address: ARC_USDC,
+    abi: usdcRouterAbi,
+    functionName: "transfer",
+    args: [recipient, amount],
+    account,
+    chain: arcTestnet,
+  });
+  await publicClient.waitForTransactionReceipt({ hash: refundTx });
+  return refundTx;
+}

@@ -229,6 +229,22 @@ export default async function AnswerPage({ params }: Props) {
                 )}
               </strong>
             </div>
+            {query.readerPayment.refund && (
+              <div>
+                <span>refunded — no source to cite</span>
+                <strong>
+                  <a
+                    className="receipt-link inline-link"
+                    href={arcscanTxUrl(query.readerPayment.refund.transaction)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {formatUsdc(query.readerPayment.refund.amountAtomicUsdc)}{" "}
+                    USDC returned
+                  </a>
+                </strong>
+              </div>
+            )}
           </section>
         )}
 

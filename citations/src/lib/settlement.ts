@@ -1,11 +1,20 @@
 import { readSources } from "./catalog";
 import { createAgentQueryRecord } from "./agent";
-import { routeCitationPayments } from "./fee-router";
+import { refundReaderPayment, routeCitationPayments } from "./fee-router";
 import { groundingYieldsBySource } from "./grounding-yield";
 import { sha256Hex } from "./hash";
-import { appendSettlement, attachTrackRecordEvidence, readLedger } from "./ledger";
+import {
+  appendSettlement,
+  attachTrackRecordEvidence,
+  readLedger,
+} from "./ledger";
 import { publishTrackRecordForAnswer } from "./track-record";
-import type { CreatorSource, Ledger, QueryPaymentEvidence, SettlementResult } from "./types";
+import type {
+  CreatorSource,
+  Ledger,
+  QueryPaymentEvidence,
+  SettlementResult,
+} from "./types";
 
 const MAX_QUESTION_LENGTH = 280;
 const DEFAULT_PROBATION_DISTINCT_QUERY_THRESHOLD = 3;
@@ -93,6 +102,24 @@ export async function settlePaidQuestion(
     readerPayment,
     { groundingYields: groundingYieldsBySource(ledger) },
   );
+  if (
+    query.citations.length === 0 &&
+    query.readerPayment?.payer &&
+    /^0x[0-9a-fA-F]{40}$/.test(query.readerPayment.payer) &&
+    query.readerPayment.amountAtomicUsdc > 0
+  ) {
+    const refundTx = await refundReaderPayment(
+      query.readerPayment.payer as `0x${string}`,
+      query.readerPayment.amountAtomicUsdc,
+    ).catch(() => null);
+    if (refundTx) {
+      query.readerPayment.refund = {
+        amountAtomicUsdc: query.readerPayment.amountAtomicUsdc,
+        transaction: refundTx,
+        reason: "no-answer",
+      };
+    }
+  }
   const receiptEvidence = await routeCitationPayments(query);
   return settleAndAnchorTrackRecord(query, receiptEvidence);
 }
@@ -147,8 +174,9 @@ export function sourcesForAgent(
     .map((source) => {
       if (source.sourceKind !== "external") return source;
       const paidQueryCount = sourcePaidQueryCount(ledger, source.id);
-      const probation =
-        !(source.verifiedCreator && paidQueryCount >= matureAfter);
+      const probation = !(
+        source.verifiedCreator && paidQueryCount >= matureAfter
+      );
       return { ...source, probation };
     })
     .filter((source) => {
@@ -169,7 +197,10 @@ async function settleAndAnchorTrackRecord(
   );
   if (!trackRecord) return settlement;
 
-  const ledger = await attachTrackRecordEvidence(settlement.query.id, trackRecord);
+  const ledger = await attachTrackRecordEvidence(
+    settlement.query.id,
+    trackRecord,
+  );
   return {
     ...settlement,
     query: { ...settlement.query, trackRecord },

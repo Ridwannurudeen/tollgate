@@ -7,6 +7,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createQueryRecord } from "./engine";
 import {
   assertValidFeeRouterSplit,
+  refundReaderPayment,
   routeCitationPayments,
   type FeeRouterWalletClient,
 } from "./fee-router";
@@ -334,5 +335,64 @@ describe("assertValidFeeRouterSplit", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("refundReaderPayment", () => {
+  const READER = "0xdc01ca917f0328f567d718ea25179815fae2db91" as Address;
+
+  it("returns null when refunds are not enabled", async () => {
+    expect(await refundReaderPayment(READER, 10_000)).toBeNull();
+  });
+
+  it("returns null when the wallet cannot cover the refund", async () => {
+    const publicClient = {
+      readContract: async ({ functionName }: { functionName: string }) => {
+        if (functionName === "balanceOf") return 5_000n;
+        throw new Error(`unexpected read ${functionName}`);
+      },
+      waitForTransactionReceipt: async () => ({ status: "success" }),
+    } as unknown as PublicClient;
+    const walletClient = {
+      writeContract: async () => {
+        throw new Error("must not send when underfunded");
+      },
+    } as FeeRouterWalletClient;
+    expect(
+      await refundReaderPayment(READER, 10_000, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+      }),
+    ).toBeNull();
+  });
+
+  it("transfers USDC back to the reader and returns the tx hash", async () => {
+    const writes: ContractCall[] = [];
+    const publicClient = {
+      readContract: async ({ functionName }: { functionName: string }) => {
+        if (functionName === "balanceOf") return 1_000_000n;
+        throw new Error(`unexpected read ${functionName}`);
+      },
+      waitForTransactionReceipt: async () => ({ status: "success" }),
+    } as unknown as PublicClient;
+    const walletClient = {
+      writeContract: async (request: ContractCall) => {
+        writes.push(request);
+        return `0x${"d".repeat(64)}` as Hex;
+      },
+    } as FeeRouterWalletClient;
+    const tx = await refundReaderPayment(READER, 10_000, {
+      enabled: true,
+      privateKey: TEST_KEY,
+      publicClient,
+      walletClient,
+    });
+    expect(tx).toBe(`0x${"d".repeat(64)}`);
+    expect(writes).toHaveLength(1);
+    expect(writes[0].functionName).toBe("transfer");
+    expect(writes[0].args?.[0]).toBe(READER);
+    expect(writes[0].args?.[1]).toBe(10_000n);
   });
 });

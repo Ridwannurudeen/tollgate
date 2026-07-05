@@ -194,6 +194,13 @@ export type QueryPaymentEvidence = {
   transaction?: string;
   paymentResource: string;
   paymentHash: string;
+  // Set post-hoc when a paid query was unanswerable and the reader's payment was
+  // returned on-chain. Not part of paymentHash (the ledger verifier ignores it).
+  refund?: {
+    amountAtomicUsdc: number;
+    transaction: string;
+    reason: string;
+  };
 };
 
 export type TrackRecordEvidence = {
