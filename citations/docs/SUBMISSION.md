@@ -15,7 +15,7 @@ Creators are not paid for how their work is actually used. A writer earns nothin
 - Settlement core: x402 per-request payments, Circle Gateway batching, USDC on Arc, and a shared on-chain FeeRouter that routes creator payouts.
 - Citations: an autonomous agent decides which sources to buy for a question, pays each cited creator, and grounds the answer in purchased sources.
 - Aperture: an Immich sidecar watches shared-photo downloads and records per-download license receipts without changing Immich upstream.
-- PeerTube plugin (`peertube-plugin-tollgate`): a permissionless plugin that gates video downloads and routes USDC to the creator through the same FeeRouter; installs from the PeerTube plugin index with no upstream changes. On-chain payout proven on Arc.
+- PeerTube plugin (`peertube-plugin-tollgate`): a permissionless plugin that gates video downloads and routes USDC to the creator through the same FeeRouter; installs from the PeerTube plugin index with no upstream changes. Download gating and the `/proof` receipt chain are validated (see `peertube-plugin-tollgate/demo/VALIDATION.md`); settlement runs through the same Arc FeeRouter as the other integrations, with a plugin-triggered creator payout proven on Arc (FeeRouter.pay tx 0x1ed2e7...a49d), routing USDC to the creator's claimable FeeRouter split.
 
 ## Traction
 

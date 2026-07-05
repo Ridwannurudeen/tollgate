@@ -27,8 +27,8 @@
 **Say:** "That is the differentiator: creators are already getting paid, and the next step is turning those same external teams into paying readers."
 
 ### 1:50-2:20 - Three integrations, one settlement core
-**Show:** `tollgate.gudman.xyz/aperture` proof surface, then `peertube-plugin-tollgate/README.md` and the PeerTube payout proof tx `0x1448f4...bf19`.
-**Say:** "The same settlement core attaches to three real creator communities. Citations pays writers when an AI answer cites them. Aperture pays photographers when shared Immich photos are downloaded. The PeerTube plugin pays video creators per download, with the payout proven on Arc."
+**Show:** `tollgate.gudman.xyz/aperture` proof surface, then `tollgate.gudman.xyz/video` and the plugin creator-payout tx `0x1ed2e7...a49d`.
+**Say:** "The same settlement core attaches to three real creator communities. Citations pays writers when an AI answer cites them. Aperture pays photographers when shared Immich photos are downloaded. The PeerTube plugin gates video downloads and routes USDC through the same Arc FeeRouter — validated against a running PeerTube instance, with a plugin-triggered creator payout proven on Arc — routing USDC to the creator's claimable FeeRouter split."
 **Show:** `/core` or proof cards tying x402, Gateway, USDC, and FeeRouter together.
 **Say:** "One rail, three surfaces: feeds, photos, and video."
 

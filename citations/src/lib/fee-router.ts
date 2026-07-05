@@ -26,7 +26,12 @@ const SPLIT_REGISTRY_PATH = path.join(
   "data",
   "fee-router-splits.json",
 );
+const FEE_ROUTER_CLAIMABLE_CACHE_TTL_MS = 60_000;
 let splitRegistryLock: Promise<void> = Promise.resolve();
+type FeeRouterClaimableCacheEntry =
+  | { value: bigint; fetchedAt: number }
+  | { error: unknown; fetchedAt: number };
+const feeRouterClaimableCache = new Map<string, FeeRouterClaimableCacheEntry>();
 
 export const usdcRouterAbi = [
   {
@@ -195,6 +200,28 @@ export async function readFeeRouterClaimable(
     functionName: "totalClaimableOf",
     args: [recipient],
   });
+}
+
+export async function readCachedFeeRouterClaimable(
+  recipient: Address,
+  publicClient?: PublicClient,
+): Promise<bigint> {
+  if (publicClient) return readFeeRouterClaimable(recipient, publicClient);
+  const key = recipient.toLowerCase();
+  const cached = feeRouterClaimableCache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.fetchedAt < FEE_ROUTER_CLAIMABLE_CACHE_TTL_MS) {
+    if ("value" in cached) return cached.value;
+    throw cached.error;
+  }
+  try {
+    const value = await readFeeRouterClaimable(recipient);
+    feeRouterClaimableCache.set(key, { value, fetchedAt: now });
+    return value;
+  } catch (error) {
+    feeRouterClaimableCache.set(key, { error, fetchedAt: now });
+    throw error;
+  }
 }
 
 export async function readFeeRouterSplit(
@@ -457,7 +484,7 @@ async function ensureCreatorSplit(
 }
 
 function escrowUnverifiedEnabled(): boolean {
-  return process.env.TOLLGATE_ESCROW_UNVERIFIED === "1";
+  return process.env.TOLLGATE_ESCROW_UNVERIFIED !== "0";
 }
 
 function shouldEscrowCitation(citation: Citation): boolean {

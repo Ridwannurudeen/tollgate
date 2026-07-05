@@ -6,6 +6,7 @@ import {
   shortHash,
   shortWallet,
 } from "@/lib/format";
+import { answerModeLabel } from "@/lib/query-display";
 import type {
   AgentBudget,
   AgentStep,
@@ -24,7 +25,9 @@ export function LatestAnswer({ query, budget, decisions, steps }: Props) {
   return (
     <div className="answer-panel">
       <div className="panel-heading">
-        <p className="eyebrow">latest answer</p>
+        <p className="eyebrow">
+          {query ? answerModeLabel(query) : "latest answer"}
+        </p>
         <h3>Attribution receipt</h3>
       </div>
       {query ? (
@@ -47,8 +50,12 @@ export function LatestAnswer({ query, budget, decisions, steps }: Props) {
               <strong>{query.citations.length}</strong>
             </div>
             <div>
-              <span>total paid</span>
+              <span>citation spend</span>
               <strong>{formatDollars(query.totalAtomicUsdc)}</strong>
+            </div>
+            <div>
+              <span>created at</span>
+              <strong>{query.createdAt}</strong>
             </div>
           </div>
           {query.readerPayment && (

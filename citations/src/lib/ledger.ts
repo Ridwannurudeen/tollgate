@@ -15,7 +15,9 @@ import type {
   QueryRecord,
   ReceiptEvidence,
   SettlementResult,
+  SourceKind,
   TrackRecordEvidence,
+  CreatorKind,
   SourceEarnings,
   SourceEvidence,
 } from "./types";
@@ -156,7 +158,9 @@ async function readSqliteLedger(dbPath: string): Promise<Ledger> {
     const queries = db
       .prepare("SELECT payload_json FROM queries ORDER BY rowid DESC")
       .all()
-      .map((row) => parseLedgerRow<QueryRecord>(row as { payload_json: string }));
+      .map((row) =>
+        parseLedgerRow<QueryRecord>(row as { payload_json: string }),
+      );
     const receipts = db
       .prepare("SELECT payload_json FROM receipts ORDER BY rowid ASC")
       .all()
@@ -542,10 +546,13 @@ export async function appendSettlement(
     } else {
       await writeLedger(nextLedger, filePath);
     }
-    await notifyCreatorReceipts(queryWithReceipts, receipts).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : "unknown error";
-      console.warn(`Creator notification failed: ${message}`);
-    });
+    await notifyCreatorReceipts(queryWithReceipts, receipts).catch(
+      (error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : "unknown error";
+        console.warn(`Creator notification failed: ${message}`);
+      },
+    );
     return { query: queryWithReceipts, receipts, ledger: nextLedger };
   });
 }
@@ -600,13 +607,26 @@ export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {
       (candidate) => candidate.sourceId === receipt.sourceId,
     );
     const current = byWallet.get(receipt.wallet) ?? {
-        creator: receipt.creator,
-        handle: citation?.handle ?? "@unknown",
-        wallet: receipt.wallet,
-        sourceCount: 0,
-        citationCount: 0,
-        earnedAtomicUsdc: 0,
+      creator: receipt.creator,
+      handle: citation?.handle ?? "@unknown",
+      wallet: receipt.wallet,
+      sourceCount: 0,
+      citationCount: 0,
+      earnedAtomicUsdc: 0,
+      sourceKind: citation?.sourceKind,
+      creatorKind: citation?.creatorKind,
+      verifiedCreator: citation?.verifiedCreator,
     };
+    current.sourceKind = preferredSourceKind(
+      current.sourceKind,
+      citation?.sourceKind,
+    );
+    current.creatorKind = preferredCreatorKind(
+      current.creatorKind,
+      citation?.creatorKind,
+    );
+    current.verifiedCreator =
+      current.verifiedCreator === true || citation?.verifiedCreator === true;
     current.citationCount += 1;
     current.earnedAtomicUsdc += receipt.amountAtomicUsdc;
     byWallet.set(receipt.wallet, current);
@@ -622,6 +642,24 @@ export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {
       sourceCount: sourceIdsByWallet.get(creator.wallet)?.size ?? 0,
     }))
     .sort((a, b) => b.earnedAtomicUsdc - a.earnedAtomicUsdc);
+}
+
+function preferredSourceKind(
+  current: SourceKind | undefined,
+  next: SourceKind | undefined,
+): SourceKind | undefined {
+  if (next === "external" || current === undefined) return next ?? current;
+  if (current === "external") return current;
+  return current;
+}
+
+function preferredCreatorKind(
+  current: CreatorKind | undefined,
+  next: CreatorKind | undefined,
+): CreatorKind | undefined {
+  if (next === "external" || current === undefined) return next ?? current;
+  if (current === "external") return current;
+  return current;
 }
 
 function latestFirst<T extends { createdAt: string }>(items: T[]): T[] {

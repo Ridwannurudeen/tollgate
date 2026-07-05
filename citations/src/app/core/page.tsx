@@ -153,7 +153,7 @@ export default async function CorePage() {
               <strong>{paidQueries.length}</strong>
             </div>
             <div className="evidence-row">
-              <span>payout receipts</span>
+              <span>payment receipts</span>
               <strong>{ledger.receipts.length}</strong>
             </div>
             <div className="evidence-row">
@@ -165,7 +165,7 @@ export default async function CorePage() {
               <strong>{uniqueCreatorWallets.size}</strong>
             </div>
             <div className="evidence-row">
-              <span>total test USDC</span>
+              <span>payments recorded</span>
               <strong>{formatDollars(citationRouted)} USDC</strong>
             </div>
           </div>
@@ -191,11 +191,11 @@ export default async function CorePage() {
                 <strong>{ledger.receipts.length}</strong>
               </div>
               <div className="metric">
-                <span>creators paid</span>
+                <span>creators with receipts</span>
                 <strong>{creators.length}</strong>
               </div>
               <div className="metric wide">
-                <span>routed</span>
+                <span>payments recorded</span>
                 <strong>{formatDollars(citationRouted)} USDC</strong>
               </div>
             </div>

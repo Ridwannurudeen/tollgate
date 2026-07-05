@@ -16,8 +16,8 @@ import {
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
 import {
+  readCachedSlashBondStatus,
   readDemoSlashBondEvidence,
-  readSlashBondStatus,
 } from "@/lib/slash-bond";
 import type { AnswerEvidence, Ledger, PaymentReceipt } from "@/lib/types";
 
@@ -89,7 +89,7 @@ export default async function DemoPage() {
   const [ledger, covenant, slashBond, demoSlash] = await Promise.all([
     readLedger(),
     readCovenantEnvelope().catch(() => null),
-    readSlashBondStatus().catch(() => null),
+    readCachedSlashBondStatus().catch(() => null),
     readDemoSlashBondEvidence().catch(() => null),
   ]);
   const verification = verifyLedgerIntegrity(ledger);
@@ -219,11 +219,11 @@ export default async function DemoPage() {
 
         <section className="receipt-proof">
           <div className="signature-stat proof-stat">
-            <span className="stat-label">payouts recorded</span>
+            <span className="stat-label">payments recorded</span>
             <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
             <span className="stat-unit">USDC on Arc</span>
             <span className="stamp" aria-hidden="true">
-              paid · on-chain
+              recorded / on-chain
             </span>
           </div>
           <div className="proof-copy">
@@ -253,7 +253,7 @@ export default async function DemoPage() {
             <strong>{settledReceiptCount}</strong>
           </div>
           <div className="metric">
-            <span>Forum routed</span>
+            <span>FeeRouter accrued</span>
             <strong>{forumRoutedReceiptCount}</strong>
           </div>
           <div className="metric">
@@ -269,7 +269,7 @@ export default async function DemoPage() {
             <strong>{verification.issues.length}</strong>
           </div>
           <div className="metric">
-            <span>slashed</span>
+            <span>demo slashed</span>
             <strong>
               {demoSlash
                 ? formatAtomicUsdc(demoSlash.statusAfterSlash.totalSlashed)

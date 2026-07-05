@@ -26,7 +26,7 @@ export type EscrowReleaseOptions = FeeRouterRouteOptions & {
 
 export function shouldEscrowSource(source: CreatorSource): boolean {
   return (
-    process.env.TOLLGATE_ESCROW_UNVERIFIED === "1" &&
+    process.env.TOLLGATE_ESCROW_UNVERIFIED !== "0" &&
     source.sourceKind === "external" &&
     source.verifiedCreator !== true
   );

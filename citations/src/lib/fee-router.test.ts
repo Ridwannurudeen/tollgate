@@ -146,9 +146,9 @@ describe("assertValidFeeRouterSplit", () => {
     ).rejects.toThrow("LEPTONWEB_FEE_ROUTER_PRIVATE_KEY");
   });
 
-  it("escrows unverified external citations before loading a FeeRouter key", async () => {
+  it("escrows unverified external citations by default before loading a FeeRouter key", async () => {
     const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
-    process.env.TOLLGATE_ESCROW_UNVERIFIED = "1";
+    delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
     const query = oneCitationQuery();
     query.citations = query.citations.map((citation) => ({
       ...citation,
@@ -164,6 +164,29 @@ describe("assertValidFeeRouterSplit", () => {
         paymentResource: "tollgate-escrow:unverified-source",
         payoutPolicy: "escrow-unverified",
       });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
+      } else {
+        process.env.TOLLGATE_ESCROW_UNVERIFIED = previous;
+      }
+    }
+  });
+
+  it("allows direct FeeRouter routing when unverified escrow is explicitly disabled", async () => {
+    const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
+    process.env.TOLLGATE_ESCROW_UNVERIFIED = "0";
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      sourceKind: "external",
+      verifiedCreator: false,
+    }));
+
+    try {
+      await expect(
+        routeCitationPayments(query, { enabled: true }),
+      ).rejects.toThrow("LEPTONWEB_FEE_ROUTER_PRIVATE_KEY");
     } finally {
       if (previous === undefined) {
         delete process.env.TOLLGATE_ESCROW_UNVERIFIED;

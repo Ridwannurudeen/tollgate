@@ -124,6 +124,12 @@ export type DemoSlashBondEvidence = {
   };
 };
 
+const SLASH_BOND_CACHE_TTL_MS = 60_000;
+type SlashBondStatusCacheEntry =
+  | { value: SlashBondStatus; fetchedAt: number }
+  | { error: unknown; fetchedAt: number };
+const slashBondStatusCache = new Map<string, SlashBondStatusCacheEntry>();
+
 function hasStringBalances(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
@@ -259,4 +265,26 @@ export async function readSlashBondStatus(
     unbondAmount,
     unbondRequestedAt,
   };
+}
+
+export async function readCachedSlashBondStatus(
+  address: Address = SLASH_BOND_ADDRESS,
+  publicClient?: PublicClient,
+): Promise<SlashBondStatus> {
+  if (publicClient) return readSlashBondStatus(address, publicClient);
+  const key = address.toLowerCase();
+  const cached = slashBondStatusCache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.fetchedAt < SLASH_BOND_CACHE_TTL_MS) {
+    if ("value" in cached) return cached.value;
+    throw cached.error;
+  }
+  try {
+    const value = await readSlashBondStatus(address);
+    slashBondStatusCache.set(key, { value, fetchedAt: now });
+    return value;
+  } catch (error) {
+    slashBondStatusCache.set(key, { error, fetchedAt: now });
+    throw error;
+  }
 }

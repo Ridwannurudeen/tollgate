@@ -4,7 +4,7 @@ import { CreatorWithdrawPanel } from "@/components/CreatorWithdrawPanel";
 import { SiteNav } from "@/components/SiteNav";
 import { SourceCard } from "@/components/SourceCard";
 import { readSources } from "@/lib/catalog";
-import { readFeeRouterClaimable } from "@/lib/fee-router";
+import { readCachedFeeRouterClaimable } from "@/lib/fee-router";
 import {
   arcscanTxUrl,
   formatDollars,
@@ -117,7 +117,7 @@ export default async function CreatorPage({ params }: Props) {
   }
 
   const latestReceipt = creator.receipts[0];
-  const claimable = await readFeeRouterClaimable(creator.wallet).catch(
+  const claimable = await readCachedFeeRouterClaimable(creator.wallet).catch(
     () => null,
   );
   const custody =

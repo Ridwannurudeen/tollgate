@@ -3,6 +3,7 @@ import { AskWorkbench } from "@/components/AskWorkbench";
 import { SiteNav } from "@/components/SiteNav";
 import { formatDollars, shortHash } from "@/lib/format";
 import { readLedger, verifyLedgerIntegrity } from "@/lib/ledger";
+import { latestShowcaseQuery } from "@/lib/query-display";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ function totalPaid(ledger: Awaited<ReturnType<typeof readLedger>>): number {
 export default async function AskPage() {
   const ledger = await readLedger();
   const verification = verifyLedgerIntegrity(ledger);
-  const latestQuery = ledger.queries[0] ?? null;
+  const latestQuery = latestShowcaseQuery(ledger.queries);
 
   return (
     <>
@@ -42,11 +43,11 @@ export default async function AskPage() {
                 <strong>{ledger.receipts.length}</strong>
               </div>
               <div className="metric">
-                <span>paid out</span>
+                <span>payments recorded</span>
                 <strong>{formatDollars(totalPaid(ledger))}</strong>
               </div>
               <div className="metric wide">
-                <span>latest</span>
+                <span>showcased answer</span>
                 <strong>
                   {latestQuery ? shortHash(latestQuery.answerHash) : "none"}
                 </strong>

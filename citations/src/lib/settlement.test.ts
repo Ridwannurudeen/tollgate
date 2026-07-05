@@ -64,6 +64,22 @@ function testReceipt(
   };
 }
 
+async function withRegistrationFetchDisabled<T>(
+  test: () => Promise<T>,
+): Promise<T> {
+  const previous = process.env.TOLLGATE_REGISTRATION_FETCH;
+  process.env.TOLLGATE_REGISTRATION_FETCH = "0";
+  try {
+    return await test();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.TOLLGATE_REGISTRATION_FETCH;
+    } else {
+      process.env.TOLLGATE_REGISTRATION_FETCH = previous;
+    }
+  }
+}
+
 describe("LeptonWeb settlement engine", () => {
   it("selects creator sources that match the question", () => {
     const sources = selectSources(
@@ -205,9 +221,8 @@ describe("LeptonWeb settlement engine", () => {
         (decision) => decision.sourceId === highYieldSource.id,
       )?.valuePerAtomicUsdc,
     ).toBeGreaterThan(
-      plan.decisions.find(
-        (decision) => decision.sourceId === lowYieldSource.id,
-      )?.valuePerAtomicUsdc ?? 0,
+      plan.decisions.find((decision) => decision.sourceId === lowYieldSource.id)
+        ?.valuePerAtomicUsdc ?? 0,
     );
   });
 
@@ -764,20 +779,22 @@ describe("LeptonWeb settlement engine", () => {
     });
 
     try {
-      const result = await appendSource(
-        {
-          title: "Signed Research Feed",
-          creator: "Verified Lab",
-          handle: "@verified",
-          wallet: account.address,
-          url: sourceUrl,
-          summary: "Verified owner content for agent citation tests.",
-          tags: ["verified", "agents"],
-          priceAtomicUsdc: 2500,
-          ownershipSignature: signature,
-          ownershipTimestamp: timestamp,
-        },
-        filePath,
+      const result = await withRegistrationFetchDisabled(() =>
+        appendSource(
+          {
+            title: "Signed Research Feed",
+            creator: "Verified Lab",
+            handle: "@verified",
+            wallet: account.address,
+            url: sourceUrl,
+            summary: "Verified owner content for agent citation tests.",
+            tags: ["verified", "agents"],
+            priceAtomicUsdc: 2500,
+            ownershipSignature: signature,
+            ownershipTimestamp: timestamp,
+          },
+          filePath,
+        ),
       );
 
       expect(result.source.verifiedCreator).toBe(true);
@@ -803,17 +820,19 @@ describe("LeptonWeb settlement engine", () => {
 
     try {
       await expect(
-        appendSource(
-          {
-            title: "Custodial Research Feed",
-            creator: "Custody Lab",
-            handle: "@custody",
-            url: "https://example.com/custody",
-            summary: "Custodial onboarding should fail clearly without W3S.",
-            tags: ["custody"],
-            priceAtomicUsdc: 2500,
-          },
-          filePath,
+        withRegistrationFetchDisabled(() =>
+          appendSource(
+            {
+              title: "Custodial Research Feed",
+              creator: "Custody Lab",
+              handle: "@custody",
+              url: "https://example.com/custody",
+              summary: "Custodial onboarding should fail clearly without W3S.",
+              tags: ["custody"],
+              priceAtomicUsdc: 2500,
+            },
+            filePath,
+          ),
         ),
       ).rejects.toThrow("custodial onboarding not enabled");
     } finally {
@@ -839,23 +858,25 @@ describe("LeptonWeb settlement engine", () => {
     process.env.CIRCLE_WALLET_SET_ID = "wallet-set";
 
     try {
-      const result = await appendSource(
-        {
-          title: "Custodial Research Feed",
-          creator: "Custody Lab",
-          handle: "@custody",
-          url: "https://example.com/custody",
-          summary: "Custodial onboarding stores a minted payout wallet.",
-          tags: ["custody"],
-          priceAtomicUsdc: 2500,
-        },
-        filePath,
-        async () => ({
-          id: "wallet-id",
-          address: "0x9999999999999999999999999999999999999999",
-          blockchain: "ARC-TESTNET",
-          state: "LIVE",
-        }),
+      const result = await withRegistrationFetchDisabled(() =>
+        appendSource(
+          {
+            title: "Custodial Research Feed",
+            creator: "Custody Lab",
+            handle: "@custody",
+            url: "https://example.com/custody",
+            summary: "Custodial onboarding stores a minted payout wallet.",
+            tags: ["custody"],
+            priceAtomicUsdc: 2500,
+          },
+          filePath,
+          async () => ({
+            id: "wallet-id",
+            address: "0x9999999999999999999999999999999999999999",
+            blockchain: "ARC-TESTNET",
+            state: "LIVE",
+          }),
+        ),
       );
 
       expect(result.source.wallet).toBe(

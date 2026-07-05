@@ -72,7 +72,7 @@ export function LandingPage({ sources, ledger, creators }: Props) {
                 creators paid <strong>{stats.creatorCount}</strong>
               </span>
               <span className="receipt-line">
-                routed to creators{" "}
+                payments recorded{" "}
                 <strong>{formatDollars(stats.totalPaid)}</strong>
               </span>
               <span className="receipt-line">
@@ -80,11 +80,19 @@ export function LandingPage({ sources, ledger, creators }: Props) {
               </span>
             </div>
             <span className="stamp" aria-hidden="true">
-              paid - on-chain
+              recorded - on-chain
             </span>
           </div>
         </div>
       </section>
+
+      <Link className="traction-audit-strip" href="/proof">
+        <strong>
+          3 independent teams registered, verified ownership, and were paid real
+          USDC on Arc - 2 onboarded autonomously by their own agents.
+        </strong>
+        <span>Review traction quality</span>
+      </Link>
 
       <ReceiptTicker receipts={ledger.receipts} />
 
@@ -249,13 +257,51 @@ export function LandingPage({ sources, ledger, creators }: Props) {
             <h3>PeerTube</h3>
           </div>
           <p className="hero-text">
-            A self-hosted video plugin gates downloads and routes USDC to the
-            creator per unlock.
+            A self-hosted video plugin gates downloads and exposes proof
+            endpoints for Arc USDC routing.
           </p>
           <Link className="receipt-link" href="/video">
             View video licensing
           </Link>
         </article>
+      </section>
+
+      <section
+        className="competitive-strip"
+        aria-label="Why Tollgate is different"
+      >
+        <div className="section-heading">
+          <p className="eyebrow">competitive position</p>
+          <h2>
+            Per-citation payments, live agent spend, and public proof together
+          </h2>
+        </div>
+        <div className="competitive-grid">
+          <article>
+            <span>01</span>
+            <h3>Per-citation granularity</h3>
+            <p>
+              Tollgate pays the specific source an answer cites, not a broad
+              subscription pool or crawler access fee.
+            </p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Live autonomous agent</h3>
+            <p>
+              The answer agent appraises sources, spends a bounded budget, and
+              writes receipts during the inference flow.
+            </p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Public on-chain proof</h3>
+            <p>
+              Receipts, FeeRouter balances, and claimable USDC are visible to a
+              judge instead of reconciled later off-chain.
+            </p>
+          </article>
+        </div>
       </section>
 
       <section className="landing-proof-band">
@@ -274,7 +320,7 @@ export function LandingPage({ sources, ledger, creators }: Props) {
       </section>
 
       <section className="landing-board">
-        <EarningsBoard creators={creators} limit={5} />
+        <EarningsBoard creators={creators} limit={5} sources={sources} />
       </section>
 
       <section className="landing-final-cta">

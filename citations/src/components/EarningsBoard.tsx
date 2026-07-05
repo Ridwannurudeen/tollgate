@@ -1,21 +1,105 @@
 import Link from "next/link";
 import { formatDollars, shortWallet } from "@/lib/format";
-import type { CreatorEarnings } from "@/lib/types";
+import type { CreatorEarnings, CreatorSource } from "@/lib/types";
 
 type Props = {
   creators: CreatorEarnings[];
+  sources?: CreatorSource[];
   limit?: number;
   eyebrow?: string;
   heading?: string;
 };
 
+type CreatorDisplay = CreatorEarnings & {
+  displaySourceKind?: CreatorSource["sourceKind"];
+  displayCreatorKind?: CreatorSource["creatorKind"];
+  displayVerifiedCreator?: boolean;
+};
+
+function withSourceProfile(
+  creator: CreatorEarnings,
+  sources: CreatorSource[],
+): CreatorDisplay {
+  const ownedSources = sources.filter(
+    (source) => source.wallet.toLowerCase() === creator.wallet.toLowerCase(),
+  );
+  const external = ownedSources.find(
+    (source) => source.sourceKind === "external",
+  );
+  const primary = external ?? ownedSources[0];
+  return {
+    ...creator,
+    displaySourceKind: creator.sourceKind ?? primary?.sourceKind,
+    displayCreatorKind: creator.creatorKind ?? primary?.creatorKind,
+    displayVerifiedCreator:
+      creator.verifiedCreator === true ||
+      ownedSources.some((source) => source.verifiedCreator),
+  };
+}
+
+function creatorRank(creator: CreatorDisplay): number {
+  if (
+    creator.displaySourceKind === "external" ||
+    creator.displayCreatorKind === "external"
+  ) {
+    return 0;
+  }
+  if (
+    creator.displaySourceKind === "seed" ||
+    creator.displayCreatorKind === "seed"
+  ) {
+    return 1;
+  }
+  if (
+    creator.displaySourceKind === "internal-test" ||
+    creator.displayCreatorKind === "internal-test"
+  ) {
+    return 2;
+  }
+  return 3;
+}
+
+function creatorBadge(creator: CreatorDisplay): string | null {
+  if (
+    creator.displaySourceKind === "seed" ||
+    creator.displayCreatorKind === "seed"
+  ) {
+    return "Seed/demo";
+  }
+  if (
+    creator.displaySourceKind === "internal-test" ||
+    creator.displayCreatorKind === "internal-test"
+  ) {
+    return "Internal test";
+  }
+  if (creator.displayVerifiedCreator) return "Verified external";
+  if (
+    creator.displaySourceKind === "external" ||
+    creator.displayCreatorKind === "external"
+  ) {
+    return "External";
+  }
+  return null;
+}
+
 export function EarningsBoard({
   creators,
+  sources = [],
   limit,
   eyebrow = "creator earnings",
   heading = "Who got paid",
 }: Props) {
-  const displayedCreators = limit ? creators.slice(0, limit) : creators;
+  const sortedCreators = creators
+    .map((creator) => withSourceProfile(creator, sources))
+    .slice()
+    .sort(
+      (a, b) =>
+        creatorRank(a) - creatorRank(b) ||
+        b.earnedAtomicUsdc - a.earnedAtomicUsdc,
+    );
+  const displayedCreators = limit
+    ? sortedCreators.slice(0, limit)
+    : sortedCreators;
 
   return (
     <div className="creator-table">
@@ -24,35 +108,39 @@ export function EarningsBoard({
         <h3>{heading}</h3>
       </div>
       {displayedCreators.length > 0 ? (
-        displayedCreators.map((creator) => (
-          <div className="creator-row" key={creator.wallet}>
-            <span className="creator-chip" aria-hidden="true">
-              {creator.creator
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((word) => word[0])
-                .join("")
-                .toUpperCase()}
-            </span>
-            <div className="creator-meta">
-              <strong>{creator.creator}</strong>
-              <span>
-                {creator.handle} / {shortWallet(creator.wallet)}
+        displayedCreators.map((creator) => {
+          const badge = creatorBadge(creator);
+          return (
+            <div className="creator-row" key={creator.wallet}>
+              {badge && <span className="source-badge muted">{badge}</span>}
+              <span className="creator-chip" aria-hidden="true">
+                {creator.creator
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((word) => word[0])
+                  .join("")
+                  .toUpperCase()}
               </span>
+              <div className="creator-meta">
+                <strong>{creator.creator}</strong>
+                <span>
+                  {creator.handle} / {shortWallet(creator.wallet)}
+                </span>
+              </div>
+              <div className="numeric-cell">
+                <strong className="num">
+                  {formatDollars(creator.earnedAtomicUsdc)}
+                </strong>
+                <Link
+                  className="receipt-link"
+                  href={`/creators/${creator.wallet}`}
+                >
+                  {creator.citationCount} citations
+                </Link>
+              </div>
             </div>
-            <div className="numeric-cell">
-              <strong className="num">
-                {formatDollars(creator.earnedAtomicUsdc)}
-              </strong>
-              <Link
-                className="receipt-link"
-                href={`/creators/${creator.wallet}`}
-              >
-                {creator.citationCount} citations
-              </Link>
-            </div>
-          </div>
-        ))
+          );
+        })
       ) : (
         <div className="empty-state compact">
           <strong>No creators paid yet.</strong>

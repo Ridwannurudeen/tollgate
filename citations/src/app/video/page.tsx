@@ -8,7 +8,7 @@ import { readLedger, verifyLedgerIntegrity } from "@/lib/ledger";
 export const dynamic = "force-dynamic";
 
 const PEERTUBE_PAYOUT_TX =
-  "0x1448f4b906e2c5528fa5ae422e120ad1f975088a93c5d87d968802e80ebcbf19";
+  "0x1ed2e7caa90964100d843095acc4f3e5c5f5bf9203850e91d2cab8f838c1a49d";
 const FEE_ROUTER = "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59";
 
 type PluginPackage = {
@@ -133,7 +133,7 @@ export default async function VideoPage() {
             </strong>
           </div>
           <div className="evidence-row">
-            <span>Arc FeeRouter routing tx</span>
+            <span>creator payout tx (plugin FeeRouter.pay)</span>
             <strong>
               <a
                 href={arcscanTxUrl(PEERTUBE_PAYOUT_TX)}
@@ -167,9 +167,11 @@ export default async function VideoPage() {
           <div className="evidence-row">
             <span>plugin validation</span>
             <strong>
-              Download gating, config, and /router/proof are locally validated
-              in demo/VALIDATION.md; plugin-triggered on-chain payout is pending
-              an operator key.
+              Download gating, config, and /router/proof are validated against
+              a running PeerTube 8.2.2 instance (demo/VALIDATION.md); the
+              plugin's own payout routine settled the creator payout above on
+              Arc, routing USDC to the creator's FeeRouter split (claimable,
+              like every Tollgate lane).
             </strong>
           </div>
         </section>

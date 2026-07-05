@@ -2,6 +2,7 @@ import Link from "next/link";
 import { EarningsBoard } from "@/components/EarningsBoard";
 import { ReceiptTicker } from "@/components/ReceiptTicker";
 import { SiteNav } from "@/components/SiteNav";
+import { readSources } from "@/lib/catalog";
 import { formatDollars } from "@/lib/format";
 import {
   readLedger,
@@ -19,7 +20,7 @@ function totalPaid(ledger: Awaited<ReturnType<typeof readLedger>>): number {
 }
 
 export default async function CreatorsPage() {
-  const ledger = await readLedger();
+  const [ledger, sources] = await Promise.all([readLedger(), readSources()]);
   const creators = summarizeCreators(ledger);
   const verification = verifyLedgerIntegrity(ledger);
 
@@ -59,7 +60,7 @@ export default async function CreatorsPage() {
             <strong>{ledger.receipts.length}</strong>
           </div>
           <div className="metric wide">
-            <span>creator payouts</span>
+            <span>payments recorded</span>
             <strong>{formatDollars(totalPaid(ledger))}</strong>
           </div>
         </section>
@@ -67,7 +68,11 @@ export default async function CreatorsPage() {
         <ReceiptTicker receipts={ledger.receipts} />
 
         <section className="creators-board">
-          <EarningsBoard creators={creators} heading="Creator leaderboard" />
+          <EarningsBoard
+            creators={creators}
+            heading="Creator leaderboard"
+            sources={sources}
+          />
         </section>
       </main>
     </>

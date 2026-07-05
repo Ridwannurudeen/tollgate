@@ -6,7 +6,7 @@ This project evolved from a citation-payment wedge into a shared creator nanopay
 
 - Citations app: x402 paid answers, source purchase receipts, creator proof pages, and Forum accountability surfaces.
 - Aperture app: Immich sidecar that maps shared-photo downloads to photographer payouts.
-- PeerTube plugin: permissionless plugin that pays video creators per download in USDC on Arc, installable from the npm plugin index; on-chain payout proven end to end (FeeRouter pay tx status success on Arc testnet).
+- PeerTube plugin: permissionless plugin that gates video downloads and exposes config/proof endpoints for per-download USDC routing on Arc, installable from the npm plugin index; download gating and the `/proof` receipt chain are validated (see `peertube-plugin-tollgate/demo/VALIDATION.md`), settlement runs through the same Arc FeeRouter as the other integrations, and a plugin-triggered creator payout is proven on Arc (FeeRouter.pay tx), routing USDC to the creator's claimable FeeRouter split.
 - Unified Tollgate positioning: three integrations on real open-source communities (feeds, photo, video), one settlement core.
 - Public proof surfaces for receipts, answer evidence, source pages, creator pages, Aperture license receipts, and the PeerTube plugin `/proof` receipt chain.
 

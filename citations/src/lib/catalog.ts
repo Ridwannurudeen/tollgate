@@ -549,7 +549,7 @@ function assertNoDuplicateSource(
 async function registrationContentEvidence(
   source: CreatorSource,
 ): Promise<Pick<CreatorSource, "contentHash" | "contentFetchedAt">> {
-  if (process.env.TOLLGATE_REGISTRATION_FETCH !== "1") return {};
+  if (process.env.TOLLGATE_REGISTRATION_FETCH === "0") return {};
   const url = new URL(source.url);
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -558,20 +558,14 @@ async function registrationContentEvidence(
   );
   try {
     const response = await safeFetch(url, { signal: controller.signal });
-    if (!response.ok) {
-      throw new SourceRegistryError(
-        `url content check failed: HTTP ${response.status}.`,
-      );
-    }
+    if (!response.ok) return {};
     const contentType = response.headers.get("content-type") ?? "";
     if (
       !/(text\/html|application\/xhtml\+xml|application\/rss\+xml|application\/atom\+xml|text\/xml|application\/xml)/i.test(
         contentType,
       )
     ) {
-      throw new SourceRegistryError(
-        "url content check requires HTML or XML content.",
-      );
+      return {};
     }
     const text = await response.text();
     return {
@@ -581,6 +575,8 @@ async function registrationContentEvidence(
       }),
       contentFetchedAt: new Date().toISOString(),
     };
+  } catch {
+    return {};
   } finally {
     clearTimeout(timeout);
   }

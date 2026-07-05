@@ -27,7 +27,7 @@ export function shortWallet(wallet: string): string {
 }
 
 export function settlementLabel(mode: string): string {
-  if (mode === "forum-routed") return "forum routed";
+  if (mode === "forum-routed") return "accrued -> claimable on-chain";
   if (mode === "x402-settled") return "x402 settled";
   if (mode === "x402-verified") return "x402 verified";
   if (mode === "escrowed") return "escrowed";

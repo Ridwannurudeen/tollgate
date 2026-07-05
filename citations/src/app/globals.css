@@ -590,11 +590,77 @@ h3 {
   margin: 72px 0 28px;
 }
 
+.traction-audit-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 4px 0 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(30, 106, 71, 0.24);
+  border-radius: var(--radius-lg);
+  background: rgba(30, 106, 71, 0.08);
+  color: var(--ink-1);
+  text-decoration: none;
+}
+
+.traction-audit-strip strong {
+  max-width: 820px;
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.traction-audit-strip span {
+  flex: none;
+  color: var(--green);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .landing-integrations {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   margin: 34px 0;
+}
+
+.competitive-strip {
+  display: grid;
+  gap: 24px;
+  margin: 64px 0 24px;
+}
+
+.competitive-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.competitive-grid article {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-1);
+}
+
+.competitive-grid span {
+  color: var(--gold);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.competitive-grid p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .landing-proof-band {
@@ -2130,6 +2196,7 @@ textarea:focus {
   .landing-hero,
   .landing-traction,
   .landing-integrations,
+  .competitive-grid,
   .route-hero,
   .register-route-grid,
   .workbench,
@@ -2168,6 +2235,11 @@ textarea:focus {
   }
 
   .landing-proof-band {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .traction-audit-strip {
     align-items: flex-start;
     flex-direction: column;
   }

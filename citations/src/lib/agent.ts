@@ -678,6 +678,7 @@ function buildLlmQueryRecord(
   createdAt: string,
   sources: CreatorSource[],
   loop: AgentLoopResult,
+  model: string,
   readerPayment: QueryPaymentEvidence | undefined,
   groundingYields?: GroundingYieldMap,
 ): QueryRecord {
@@ -742,7 +743,7 @@ function buildLlmQueryRecord(
         : sum,
     0,
   );
-  const traceHash = sha256Hex(loop.steps);
+  const traceHash = sha256Hex({ model, steps: loop.steps });
   const queryHash = sha256Hex({
     question,
     citations,
@@ -775,6 +776,7 @@ function buildLlmQueryRecord(
     totalAtomicUsdc: spentAtomicUsdc,
     citations,
     agentMode: "llm",
+    agentModel: model,
     agentRationale: loop.rationale,
     sourceDecisions: decisions,
     agentBudget: budget,
@@ -852,6 +854,7 @@ export async function createAgentQueryRecord(
       createdAt,
       sources,
       loop,
+      llmConfig.model,
       readerPayment,
       options.groundingYields,
     );

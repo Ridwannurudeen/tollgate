@@ -2,6 +2,7 @@ import Link from "next/link";
 import { EarningsBoard } from "@/components/EarningsBoard";
 import { RegisterPanel } from "@/components/RegisterPanel";
 import { SiteNav } from "@/components/SiteNav";
+import { readSources } from "@/lib/catalog";
 import { formatDollars } from "@/lib/format";
 import {
   readLedger,
@@ -19,7 +20,7 @@ function totalPaid(ledger: Awaited<ReturnType<typeof readLedger>>): number {
 }
 
 export default async function RegisterPage() {
-  const ledger = await readLedger();
+  const [ledger, sources] = await Promise.all([readLedger(), readSources()]);
   const creators = summarizeCreators(ledger);
   const verification = verifyLedgerIntegrity(ledger);
 
@@ -48,7 +49,7 @@ export default async function RegisterPage() {
                 <strong>{ledger.receipts.length}</strong>
               </div>
               <div className="metric wide">
-                <span>paid so far</span>
+                <span>payments recorded</span>
                 <strong>{formatDollars(totalPaid(ledger))}</strong>
               </div>
             </div>
@@ -78,8 +79,8 @@ export default async function RegisterPage() {
                 <h3>Self-custody first</h3>
               </div>
               <p className="hero-text">
-                Paste an EVM wallet for direct creator payouts. The server also
-                supports Circle W3S custody when the operator enables the
+                Paste an EVM wallet for the creator claim address. The server
+                also supports Circle W3S custody when the operator enables the
                 required environment.
               </p>
             </div>
@@ -88,6 +89,7 @@ export default async function RegisterPage() {
               limit={4}
               eyebrow="earnings preview"
               heading="Current payouts"
+              sources={sources}
             />
           </aside>
         </section>

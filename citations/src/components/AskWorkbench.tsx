@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { WalletClient } from "viem";
 import { formatDollars } from "@/lib/format";
+import { latestShowcaseQuery } from "@/lib/query-display";
 import type {
   CreatorEarnings,
   Ledger,
@@ -102,7 +103,8 @@ export function AskWorkbench({ initialLedger }: Props) {
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const displayedQuery = activeResult?.query ?? ledger.queries[0] ?? null;
+  const displayedQuery =
+    activeResult?.query ?? latestShowcaseQuery(ledger.queries);
   const displayedBudget = displayedQuery?.agentBudget ?? null;
   const displayedDecisions = displayedQuery?.sourceDecisions ?? [];
   const displayedSteps = displayedQuery?.agentSteps ?? [];
@@ -248,22 +250,24 @@ export function AskWorkbench({ initialLedger }: Props) {
         <button
           type="button"
           className="primary-button"
-          onClick={runPaidQuery}
+          onClick={runQuery}
           disabled={isSubmitting}
         >
-          {isSubmitting ? "settling..." : "Run paid answer"}
+          {isSubmitting
+            ? "running..."
+            : "Run the agent free - no wallet needed"}
         </button>
         <button
           type="button"
           className="secondary-button"
-          onClick={runQuery}
+          onClick={runPaidQuery}
           disabled={isSubmitting}
         >
-          Run local proof
+          Pay {paidQueryPriceText} via x402 (MetaMask + Arc)
         </button>
         <p className="status-line" aria-live="polite">
           {status ||
-            `A paid answer costs ${paidQueryPriceText} and pays every creator it cites.`}
+            `Run a local proof free, or pay ${paidQueryPriceText} via x402 to exercise the protocol path.`}
         </p>
         <p className="field-hint">
           Pay from any Arc-testnet wallet - connect MetaMask when prompted. Need

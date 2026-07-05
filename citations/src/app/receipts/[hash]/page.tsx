@@ -75,7 +75,7 @@ export default async function ReceiptPage({ params }: Props) {
 
         <section className="receipt-proof">
           <div className="signature-stat proof-stat">
-            <span className="stat-label">paid to creator</span>
+            <span className="stat-label">creator amount</span>
             <strong>{formatUsdc(receipt.amountAtomicUsdc)}</strong>
             <span className="stat-unit">USDC</span>
           </div>
@@ -83,7 +83,8 @@ export default async function ReceiptPage({ params }: Props) {
             <p className="eyebrow">{settlementLabel(receipt.settlementMode)}</p>
             <h2>{receipt.creator}</h2>
             <p className="hero-text">
-              This receipt binds a source payment to the answer that used it.
+              This receipt binds a source payment to the answer that used it;
+              FeeRouter-routed receipts accrue into creator-claimable balances.
               The previous hash links it into the append-only attribution
               ledger.
             </p>
@@ -250,7 +251,7 @@ export default async function ReceiptPage({ params }: Props) {
                   <strong>{shortHash(query.readerPayment.paymentHash)}</strong>
                 </div>
                 <div>
-                  <span>creator payouts</span>
+                  <span>creator payouts (reader-paid)</span>
                   <strong>
                     {economics
                       ? `${formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC`
@@ -258,7 +259,7 @@ export default async function ReceiptPage({ params }: Props) {
                   </strong>
                 </div>
                 <div>
-                  <span>protocol retained</span>
+                  <span>protocol retained (reader-paid)</span>
                   <strong>
                     {economics
                       ? `${formatUsdc(economics.protocolRetainedAtomicUsdc)} USDC`

@@ -19,7 +19,8 @@ import {
   readLedger,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
-import { readSlashBondStatus } from "@/lib/slash-bond";
+import { agentTraceLabel, displayAgentRationale } from "@/lib/query-display";
+import { readCachedSlashBondStatus } from "@/lib/slash-bond";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,7 @@ export default async function AnswerPage({ params }: Props) {
   const [ledger, covenant, slashBond] = await Promise.all([
     readLedger(),
     readCovenantEnvelope().catch(() => null),
-    readSlashBondStatus().catch(() => null),
+    readCachedSlashBondStatus().catch(() => null),
   ]);
   const verification = verifyLedgerIntegrity(ledger);
   const evidence = getAnswerEvidence(ledger, queryId);
@@ -80,6 +81,7 @@ export default async function AnswerPage({ params }: Props) {
     query.agentMode === "llm"
       ? "agentic reasoning loop"
       : "deterministic policy";
+  const displayedRationale = displayAgentRationale(query.agentRationale);
 
   return (
     <>
@@ -97,7 +99,7 @@ export default async function AnswerPage({ params }: Props) {
 
         <section className="receipt-proof">
           <div className="signature-stat proof-stat">
-            <span className="stat-label">paid to cited sources</span>
+            <span className="stat-label">citation payments recorded</span>
             <strong>{formatUsdc(query.totalAtomicUsdc)}</strong>
             <span className="stat-unit">USDC</span>
           </div>
@@ -129,11 +131,11 @@ export default async function AnswerPage({ params }: Props) {
             <strong>{formatUsdc(economics.readerPaidAtomicUsdc)}</strong>
           </div>
           <div className="metric">
-            <span>creator payouts</span>
+            <span>creator payouts (reader-paid)</span>
             <strong>{formatUsdc(economics.creatorPayoutsAtomicUsdc)}</strong>
           </div>
           <div className="metric">
-            <span>protocol retained</span>
+            <span>protocol retained (reader-paid)</span>
             <strong>
               {query.readerPayment
                 ? formatUsdc(economics.protocolRetainedAtomicUsdc)
@@ -169,11 +171,11 @@ export default async function AnswerPage({ params }: Props) {
             value={`${formatUsdc(economics.readerPaidAtomicUsdc)} USDC`}
           />
           <EvidenceRow
-            label="creator payouts"
+            label="creator payouts (reader-paid)"
             value={`${formatUsdc(economics.creatorPayoutsAtomicUsdc)} USDC`}
           />
           <EvidenceRow
-            label="protocol retained"
+            label="protocol retained (reader-paid)"
             value={
               query.readerPayment
                 ? `${formatUsdc(economics.protocolRetainedAtomicUsdc)} USDC`
@@ -383,11 +385,13 @@ export default async function AnswerPage({ params }: Props) {
         {agentSteps.length > 0 && (
           <section className="receipt-context profile-section agent-trace">
             <div className="panel-heading">
-              <p className="eyebrow">agent reasoning</p>
+              <p className="eyebrow">
+                agent reasoning / {agentTraceLabel(query)}
+              </p>
               <h3>Appraise to payout timeline</h3>
             </div>
-            {query.agentRationale && (
-              <p className="hero-text">{query.agentRationale}</p>
+            {displayedRationale && (
+              <p className="hero-text">{displayedRationale}</p>
             )}
             {externalAssists.length > 0 && (
               <p className="status-line">
@@ -435,7 +439,7 @@ export default async function AnswerPage({ params }: Props) {
               <li className="trace-step">
                 <span className="trace-num">{agentSteps.length + 2}</span>
                 <div className="trace-body">
-                  <strong>payouts</strong>
+                  <strong>receipts</strong>
                   <span className="trace-summary">
                     Wrote {receipts.length} source payment receipt
                     {receipts.length === 1 ? "" : "s"} into the ledger.

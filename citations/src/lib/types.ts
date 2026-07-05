@@ -214,6 +214,7 @@ export type QueryRecord = {
   totalAtomicUsdc: number;
   citations: Citation[];
   agentMode?: "deterministic" | "llm";
+  agentModel?: string;
   agentRationale?: string;
   sourceDecisions?: SourceDecision[];
   agentBudget?: AgentBudget;
@@ -244,6 +245,9 @@ export type CreatorEarnings = {
   sourceCount: number;
   citationCount: number;
   earnedAtomicUsdc: number;
+  sourceKind?: SourceKind;
+  creatorKind?: CreatorKind;
+  verifiedCreator?: boolean;
 };
 
 export type SourceEarnings = {

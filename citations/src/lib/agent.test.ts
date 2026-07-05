@@ -146,6 +146,7 @@ describe("createAgentQueryRecord", () => {
     );
 
     expect(query.agentMode).toBe("llm");
+    expect(query.agentModel).toBe(LLM_CONFIG.model);
     expect(query.citations).toHaveLength(1);
     expect(query.citations[0].sourceId).toBe("forum-mandates");
     expect(query.agentBudget?.spentAtomicUsdc).toBe(1_500);

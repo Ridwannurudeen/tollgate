@@ -1,6 +1,6 @@
 # Tollgate Citations
 
-Tollgate Citations is the answer-agent integration of the Tollgate settlement core. The agent buys the sources it cites, pays each creator per citation, and writes attribution receipts on Arc testnet.
+Tollgate Citations is the answer-agent integration of the Tollgate settlement core. The agent buys the sources it cites, records per-citation creator payments, and writes attribution receipts on Arc testnet.
 
 Live app: `https://tollgate.gudman.xyz`
 
@@ -11,7 +11,7 @@ Unified overview: `https://tollgate.gudman.xyz/core`
 - x402 for reader/source payments.
 - Circle Gateway support for batched autonomous-agent settlement.
 - USDC on Arc testnet.
-- Forum FeeRouter routes creator payouts and records `forum-routed` receipt evidence.
+- Forum FeeRouter accrues creator-claimable balances and records `forum-routed` receipt evidence.
 - The reader endpoint (`/api/paid-query`) is multi-accept: browser wallets pay the `exact` scheme, autonomous agents can pay through Gateway batching, and the server settles against whichever requirement the payer signed.
 
 ## Verify it is real
@@ -34,7 +34,7 @@ answer/source/receipt/creator evidence pages. Store captures under
 - `GET /api/sources`: list priced sources.
 - `POST /api/sources`: self-register a priced source.
 - `POST /api/query`: run a local-proof answer and receipt path.
-- `POST /api/paid-query`: require reader x402 payment, then pay cited creators.
+- `POST /api/paid-query`: require reader x402 payment, then record cited-source payment receipts.
 - `GET /api/ledger`: public ledger JSON.
 - `GET /api/receipts/<hash>`: single receipt evidence.
 - `GET /api/settlement/status`: runtime settlement status.
