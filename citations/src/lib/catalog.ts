@@ -119,6 +119,10 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
 const SOURCE_REGISTRY_PATH = path.join(process.cwd(), "data", "sources.json");
 const WALLET_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const REGISTRATION_FETCH_TIMEOUT_MS = 5_000;
+const SOURCE_CONTENT_MAX_BYTES = 200_000;
+const SOURCE_CONTENT_EXCERPT_MAX_CHARS = 2_000;
+const SOURCE_CONTENT_TYPE_PATTERN =
+  /(text\/html|application\/xhtml\+xml|application\/rss\+xml|application\/atom\+xml|text\/xml|application\/xml)/i;
 // High enough for one full RSS import (20 posts) plus a few singles;
 // override with TOLLGATE_REGISTRATION_CAP_PER_WALLET_PER_DAY.
 const DEFAULT_REGISTRATION_CAP_PER_WALLET_PER_DAY = 25;
@@ -546,9 +550,97 @@ function assertNoDuplicateSource(
   }
 }
 
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function readCappedResponseText(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return (await response.text()).slice(0, maxBytes);
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  let truncated = false;
+  try {
+    while (totalBytes < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const remainingBytes = maxBytes - totalBytes;
+      if (value.byteLength > remainingBytes) {
+        chunks.push(value.slice(0, remainingBytes));
+        totalBytes += remainingBytes;
+        truncated = true;
+        break;
+      }
+      chunks.push(value);
+      totalBytes += value.byteLength;
+      if (totalBytes >= maxBytes) {
+        truncated = true;
+        break;
+      }
+    }
+  } finally {
+    if (truncated) {
+      await reader.cancel().catch(() => undefined);
+    } else {
+      reader.releaseLock();
+    }
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+export async function fetchSourceContentExcerpt(
+  sourceUrl: URL | string,
+  init: RequestInit = {},
+): Promise<
+  Pick<CreatorSource, "contentHash" | "contentFetchedAt" | "contentExcerpt">
+> {
+  const url = sourceUrl instanceof URL ? sourceUrl : new URL(sourceUrl);
+  const response = await safeFetch(url, init);
+  if (!response.ok) return {};
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!SOURCE_CONTENT_TYPE_PATTERN.test(contentType)) return {};
+  const text = await readCappedResponseText(response, SOURCE_CONTENT_MAX_BYTES);
+  const contentExcerpt = htmlToText(text).slice(
+    0,
+    SOURCE_CONTENT_EXCERPT_MAX_CHARS,
+  );
+  return {
+    contentHash: sha256Hex({
+      url: url.toString(),
+      body: text.slice(0, SOURCE_CONTENT_MAX_BYTES),
+    }),
+    contentFetchedAt: new Date().toISOString(),
+    ...(contentExcerpt.trim() ? { contentExcerpt } : {}),
+  };
+}
+
 async function registrationContentEvidence(
   source: CreatorSource,
-): Promise<Pick<CreatorSource, "contentHash" | "contentFetchedAt">> {
+): Promise<
+  Pick<CreatorSource, "contentHash" | "contentFetchedAt" | "contentExcerpt">
+> {
   if (process.env.TOLLGATE_REGISTRATION_FETCH === "0") return {};
   const url = new URL(source.url);
   const controller = new AbortController();
@@ -557,29 +649,84 @@ async function registrationContentEvidence(
     REGISTRATION_FETCH_TIMEOUT_MS,
   );
   try {
-    const response = await safeFetch(url, { signal: controller.signal });
-    if (!response.ok) return {};
-    const contentType = response.headers.get("content-type") ?? "";
-    if (
-      !/(text\/html|application\/xhtml\+xml|application\/rss\+xml|application\/atom\+xml|text\/xml|application\/xml)/i.test(
-        contentType,
-      )
-    ) {
-      return {};
-    }
-    const text = await response.text();
-    return {
-      contentHash: sha256Hex({
-        url: url.toString(),
-        body: text.slice(0, 200_000),
-      }),
-      contentFetchedAt: new Date().toISOString(),
-    };
+    return await fetchSourceContentExcerpt(url, { signal: controller.signal });
   } catch {
     return {};
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export type RefetchSourceContentResult = {
+  updated: number;
+  skipped: number;
+  failed: number;
+  failures: { id: string; url: string; error: string }[];
+};
+
+function shouldRefreshSourceContent(
+  source: CreatorSource,
+  refreshAll: boolean,
+): boolean {
+  if (source.sourceKind === "seed") return false;
+  if (!refreshAll && source.contentExcerpt?.trim()) return false;
+  try {
+    const url = new URL(source.url);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export async function refetchCustomSourceContent({
+  filePath = SOURCE_REGISTRY_PATH,
+  refreshAll = false,
+}: {
+  filePath?: string;
+  refreshAll?: boolean;
+} = {}): Promise<RefetchSourceContentResult> {
+  return withRegistryLock(async () => {
+    const customSources = await readCustomSources(filePath);
+    const nextCustomSources = customSources.slice();
+    const result: RefetchSourceContentResult = {
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      failures: [],
+    };
+
+    for (const [index, source] of customSources.entries()) {
+      if (!shouldRefreshSourceContent(source, refreshAll)) {
+        result.skipped += 1;
+        continue;
+      }
+      try {
+        const contentEvidence = await fetchSourceContentExcerpt(source.url);
+        if (!contentEvidence.contentExcerpt?.trim()) {
+          result.skipped += 1;
+          continue;
+        }
+        nextCustomSources[index] = {
+          ...source,
+          ...contentEvidence,
+        };
+        result.updated += 1;
+      } catch (error) {
+        result.failed += 1;
+        result.failures.push({
+          id: source.id,
+          url: source.url,
+          error:
+            error instanceof Error ? error.message : "content fetch failed",
+        });
+      }
+    }
+
+    if (result.updated > 0) {
+      await writeCustomSources(nextCustomSources, filePath);
+    }
+    return result;
+  });
 }
 
 export function publicSource(source: CreatorSource): CreatorSource {

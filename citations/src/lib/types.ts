@@ -53,6 +53,7 @@ export type CreatorSource = {
   registeredAt?: string;
   contentHash?: string;
   contentFetchedAt?: string;
+  contentExcerpt?: string;
   notifyEmail?: string;
   contributors?: SourceContributor[];
   origin?: "registered" | "discovered" | "rss-import";

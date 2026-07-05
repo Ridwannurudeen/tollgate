@@ -38,7 +38,7 @@ export function buildSourceContent(
   const paidExcerpt = [
     `${sourceKindLabel(source)} from ${source.creator}.`,
     `Title: ${source.title}.`,
-    `Excerpt: ${source.summary}`,
+    `Excerpt: ${source.contentExcerpt?.trim() ? source.contentExcerpt.trim() : source.summary}`,
     `Tags: ${source.tags.join(", ")}.`,
     `Canonical URL: ${canonicalUrl}.`,
   ].join(" ");

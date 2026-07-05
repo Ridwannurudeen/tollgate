@@ -12,6 +12,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "refetch:content": "node scripts/refetch-source-content.mjs",
     "verify:ledger": "node scripts/verify-ledger.mjs",
     "migrate:ledger": "node scripts/migrate-ledger.mjs",
     "discover:sources": "node ../scripts/discover-sources.mjs --write",
@@ -62,6 +63,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.7.0",
+    "vite-node": "^3.2.4",
     "vitest": "^3.2.4"
   },
   "overrides": {
