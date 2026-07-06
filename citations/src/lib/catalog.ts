@@ -124,7 +124,7 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
     summary:
       "x402 turns HTTP 402 into a real payment step: a resource returns payment requirements, the client signs an EIP-3009 USDC authorization, and the server settles it. The 'exact' scheme settles that authorization directly on Arc as a single USDC transfer, so the reader's debit is a verifiable on-chain transaction. The Circle Gateway-batched scheme instead pools many signed authorizations for gasless sub-cent settlement, referenced by a Gateway payment id rather than one Arc tx.",
     tags: ["x402", "eip-3009", "settlement", "arc", "usdc"],
-    priceAtomicUsdc: 2300,
+    priceAtomicUsdc: 1300,
   }),
   seedSource({
     id: "feerouter-splits-receipts",
@@ -148,7 +148,7 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
     summary:
       "An autonomous answer agent appraises candidate sources for relevance, allocates a fixed micro-budget to the best grounding-per-USDC, and buys only what it needs. It drafts an answer grounded strictly in the purchased content, self-critiques to drop any claim a purchased source does not support, and can buy one more source during reflection. Every step is recorded and hashed into the answer, so the reasoning and the payments are auditable together.",
     tags: ["agents", "rag", "budget", "citations", "grounding"],
-    priceAtomicUsdc: 2000,
+    priceAtomicUsdc: 1300,
   }),
   seedSource({
     id: "unverified-source-escrow",
@@ -172,7 +172,7 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
     summary:
       "Circle's developer-controlled (W3S) wallets let a reader pay without holding keys or a browser wallet: the server provisions a custodial wallet and signs the x402 EIP-3009 authorization through Circle's API. This makes a one-click paid query possible for someone who has never touched crypto, while the payment still settles as real USDC on Arc and pays the cited creators through the same FeeRouter.",
     tags: ["circle", "w3s", "custodial", "x402", "usdc"],
-    priceAtomicUsdc: 2100,
+    priceAtomicUsdc: 1400,
   }),
 ];
 
