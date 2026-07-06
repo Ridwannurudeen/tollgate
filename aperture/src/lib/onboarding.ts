@@ -2,6 +2,7 @@ import { getAddress, isAddress, verifyMessage, type Address } from "viem";
 import { w3sMintWallet } from "./circle-w3s";
 import { sha256Hex } from "./hash";
 import {
+  findWalletForOwner,
   readWalletRegistry,
   upsertWalletRegistryEntry,
   withRegistryWriteLock,
@@ -25,6 +26,8 @@ export type RegisterCreatorInput = {
   ownershipTimestamp?: string;
   /** Registry file path override (tests); defaults to data/registry.json. */
   filePath?: string;
+  /** Hash of the one-time account key; plaintext is never persisted. */
+  accountKeyHash?: `0x${string}`;
 };
 
 export function buildOwnerOwnershipMessage({
@@ -153,10 +156,19 @@ export async function registerCreator(
 
   return withRegistryWriteLock(async () => {
     const registry = await readWalletRegistry(input.filePath);
+    const existing = findWalletForOwner(registry, ownerId);
+    const finalEntry: WalletRegistryEntry = {
+      ...entry,
+      ...(input.accountKeyHash
+        ? { accountKeyHash: input.accountKeyHash }
+        : existing?.accountKeyHash
+          ? { accountKeyHash: existing.accountKeyHash }
+          : {}),
+    };
     await writeWalletRegistry(
-      upsertWalletRegistryEntry(registry, entry),
+      upsertWalletRegistryEntry(registry, finalEntry),
       input.filePath,
     );
-    return entry;
+    return finalEntry;
   });
 }

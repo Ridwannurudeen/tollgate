@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { registerCreator } from "../../../lib/onboarding";
+import type { WalletRegistryEntry } from "../../../lib/types";
 
 export const runtime = "nodejs";
+
+function publicRegistered(entry: WalletRegistryEntry) {
+  return {
+    ownerId: entry.ownerId,
+    displayName: entry.displayName,
+    wallet: entry.wallet,
+    approvalStatus: entry.approvalStatus,
+    custody: entry.custody,
+  };
+}
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -30,7 +41,7 @@ export async function POST(request: Request) {
       ownershipSignature,
       ownershipTimestamp,
     });
-    return NextResponse.json({ registered: entry });
+    return NextResponse.json({ registered: publicRegistered(entry) });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "registration failed" },

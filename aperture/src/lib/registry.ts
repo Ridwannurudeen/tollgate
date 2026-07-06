@@ -7,6 +7,10 @@ const REGISTRY_PATH = path.join(process.cwd(), "data", "registry.json");
 const EMPTY_REGISTRY: WalletRegistry = { photographers: [] };
 let registryWriteLock: Promise<void> = Promise.resolve();
 
+function isHexHash(value: unknown): value is `0x${string}` {
+  return typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
 export function withRegistryWriteLock<T>(write: () => Promise<T>): Promise<T> {
   const run = registryWriteLock.then(write, write);
   registryWriteLock = run.then(
@@ -28,7 +32,8 @@ function isRegistryEntry(value: unknown): value is WalletRegistryEntry {
     (record.approvalStatus === undefined ||
       record.approvalStatus === "pending" ||
       record.approvalStatus === "operator-approved" ||
-      record.approvalStatus === "wallet-signed")
+      record.approvalStatus === "wallet-signed") &&
+    (record.accountKeyHash === undefined || isHexHash(record.accountKeyHash))
   );
 }
 

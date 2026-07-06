@@ -4,8 +4,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   markLinkPreviewGenerated,
+  listPublicLinks,
   publicLink,
   readLinks,
+  readLinksByOwner,
   registerLink,
 } from "./link-registry";
 
@@ -88,6 +90,47 @@ describe("link registry", () => {
 
       expect(updated.hasPreview).toBe(true);
       expect(registry.links[0].hasPreview).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("filters links by owner and lists newest public projections", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
+    const filePath = path.join(dir, "links.json");
+    try {
+      await registerLink(
+        {
+          id: "old",
+          title: "Old Photo",
+          ownerId: "owner-1",
+          sourceUrl: "https://example.com/old.jpg",
+          sourceContentHash: `0x${"2".repeat(64)}`,
+          createdAt: "2026-07-05T00:00:00.000Z",
+        },
+        filePath,
+      );
+      await registerLink(
+        {
+          id: "new",
+          title: "New Photo",
+          ownerId: "owner-2",
+          sourceUrl: "https://example.com/new.jpg",
+          sourceContentHash: `0x${"3".repeat(64)}`,
+          createdAt: "2026-07-06T00:00:00.000Z",
+        },
+        filePath,
+      );
+
+      const ownerLinks = await readLinksByOwner("owner-1", filePath);
+      const publicLinks = (await listPublicLinks(filePath)) as Array<
+        Record<string, unknown>
+      >;
+
+      expect(ownerLinks.map((link) => link.id)).toEqual(["old"]);
+      expect(publicLinks.map((link) => link.id)).toEqual(["new", "old"]);
+      expect(publicLinks[0].sourceUrl).toBeUndefined();
+      expect(publicLinks[0].sourceContentHash).toBeUndefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

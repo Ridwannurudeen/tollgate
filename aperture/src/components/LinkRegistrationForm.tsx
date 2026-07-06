@@ -4,6 +4,7 @@ import { useState } from "react";
 
 type LinkRegistrationResult = {
   shareUrl: string;
+  accountKey?: string;
   link: {
     id: string;
     title: string;
@@ -11,6 +12,7 @@ type LinkRegistrationResult = {
     hasPreview?: boolean;
   };
   registered: {
+    ownerId: string;
     displayName: string;
     wallet: string;
     approvalStatus: string;
@@ -60,6 +62,12 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
     if (!result) return;
     await navigator.clipboard.writeText(result.shareUrl);
     setStatus("Share link copied.");
+  }
+
+  async function copyAccountKey() {
+    if (!result?.accountKey) return;
+    await navigator.clipboard.writeText(result.accountKey);
+    setStatus("Account key copied.");
   }
 
   return (
@@ -138,6 +146,24 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
               : "your wallet"}{" "}
             {result.registered.wallet}.
           </p>
+          {result.accountKey && (
+            <div className="accountKeyBox">
+              <p className="eyebrow">Save your account key</p>
+              <p>
+                This key is shown once. Use it to log back in from another
+                device and manage every photo you register.
+              </p>
+              <input readOnly value={result.accountKey} />
+              <div className="actions compactActions">
+                <button type="button" onClick={copyAccountKey}>
+                  Copy account key
+                </button>
+                <a className="button" href={`${basePath}/dashboard`}>
+                  Open dashboard
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </form>

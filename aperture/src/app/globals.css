@@ -811,6 +811,23 @@ small {
   margin-bottom: 0;
 }
 
+.accountKeyBox {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px dashed rgba(134, 99, 36, 0.46);
+  border-radius: var(--radius);
+  background: rgba(194, 151, 63, 0.1);
+}
+
+.accountKeyBox p:not(.eyebrow) {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .previewFrame {
   display: grid;
   gap: 8px;
@@ -920,6 +937,133 @@ small {
   color: var(--alert);
 }
 
+.accountSurface {
+  max-width: 680px;
+}
+
+.accountGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--line);
+}
+
+.accountGrid > div {
+  min-width: 0;
+  padding: 14px;
+  background: var(--paper);
+}
+
+.accountGrid strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink-1);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.workGrid,
+.browseGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.browseGrid {
+  padding: 0;
+}
+
+.workCard {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+  color: var(--ink-1);
+  text-decoration: none;
+  box-shadow: var(--shadow-1);
+}
+
+.workCard img,
+.previewPlaceholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--ink-block);
+  color: var(--ink-block-ink);
+  object-fit: cover;
+}
+
+.previewPlaceholder {
+  color: rgba(239, 233, 214, 0.72);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workCard h2,
+.workCard h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.14;
+}
+
+.workCard p {
+  margin: 6px 0 0;
+  color: var(--ink-3);
+}
+
+.workMeta,
+.shareRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workMeta span {
+  color: var(--green);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shareRow {
+  align-items: stretch;
+}
+
+.shareRow input {
+  min-width: 0;
+  flex: 1;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 12px;
+}
+
+.catalogEmpty {
+  grid-column: 1 / -1;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+}
+
 @keyframes pulse {
   from {
     transform: scale(0.7);
@@ -955,7 +1099,8 @@ small {
   .flow,
   .operatorBand,
   .operatorGrid,
-  .twoColumn {
+  .twoColumn,
+  .accountGrid {
     grid-template-columns: 1fr;
   }
 
@@ -1003,7 +1148,8 @@ small {
   }
 
   .actions,
-  .downloadAction {
+  .downloadAction,
+  .shareRow {
     align-items: stretch;
     flex-direction: column;
   }

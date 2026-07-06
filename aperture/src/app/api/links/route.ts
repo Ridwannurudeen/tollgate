@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LinkRegistryError } from "../../../lib/link-registry";
+import { LinkRegistryError, listPublicLinks } from "../../../lib/link-registry";
 import { handleLinkRegistration } from "../../../lib/link-registration";
 import { assertLinkRegistrationRateLimit } from "../../../lib/link-rate-limit";
 import { publicOrigin } from "../../../lib/x402-server";
+import {
+  SESSION_COOKIE_NAME,
+  getSessionOwner,
+  sessionCookieOptions,
+  signSession,
+} from "../../../lib/account";
 
 export const runtime = "nodejs";
 
@@ -29,14 +35,27 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const sessionOwner = await getSessionOwner();
     const result = await handleLinkRegistration(
       (await request.json().catch(() => null)) ?? {},
       {
         origin: publicOrigin(request.headers, "http://127.0.0.1:3092"),
         basePath: process.env.APERTURE_BASE_PATH ?? "/aperture",
+        ...(sessionOwner ? { sessionOwnerId: sessionOwner.ownerId } : {}),
       },
     );
-    return NextResponse.json(result, { status: 201 });
+    const response = NextResponse.json(result, { status: 201 });
+    if (!sessionOwner && result.accountKey) {
+      const cookieValue = signSession(result.registered.ownerId);
+      if (cookieValue) {
+        response.cookies.set(
+          SESSION_COOKIE_NAME,
+          cookieValue,
+          sessionCookieOptions(),
+        );
+      }
+    }
+    return response;
   } catch (error) {
     const status = error instanceof LinkRegistryError ? error.status : 400;
     return NextResponse.json(
@@ -49,4 +68,8 @@ export async function POST(request: NextRequest) {
       { status },
     );
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ links: await listPublicLinks() });
 }

@@ -8,8 +8,11 @@ const LINK_REGISTRATION_LIMIT = 10;
 const DEMO_UNLOCK_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DEMO_UNLOCK_IP_LIMIT = 2;
 const DEMO_UNLOCK_GLOBAL_LIMIT = 30;
+const SESSION_LOGIN_WINDOW_MS = 60 * 1000;
+const SESSION_LOGIN_LIMIT = 10;
 const linkRegistrationBuckets = new Map<string, RateLimitBucket>();
 const demoUnlockIpBuckets = new Map<string, RateLimitBucket>();
+const sessionLoginBuckets = new Map<string, RateLimitBucket>();
 let demoUnlockGlobalBucket: RateLimitBucket | null = null;
 
 function pruneBuckets(
@@ -110,4 +113,21 @@ export function recordDemoUnlock(key: string, now = Date.now()): void {
     return;
   }
   demoUnlockGlobalBucket.count += 1;
+}
+
+export function assertSessionLoginRateLimit(
+  key: string,
+  now = Date.now(),
+): void {
+  const bucketKey = key || "anonymous";
+  pruneBuckets(sessionLoginBuckets, now, SESSION_LOGIN_WINDOW_MS);
+  const current = sessionLoginBuckets.get(bucketKey);
+  if (!current || now - current.windowStart >= SESSION_LOGIN_WINDOW_MS) {
+    sessionLoginBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= SESSION_LOGIN_LIMIT) {
+    throw new Error("Too many login attempts. Wait a minute and retry.");
+  }
+  current.count += 1;
 }

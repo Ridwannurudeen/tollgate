@@ -29,9 +29,12 @@ export default async function Home() {
         <div className="brand">Aperture</div>
         <div className="navlinks">
           <a href="https://tollgate.gudman.xyz">Citations app</a>
+          <Link href="/browse">Browse</Link>
+          <Link href="/dashboard">Dashboard</Link>
           <Link href="/proof">Proof</Link>
           <Link href="/install">Install</Link>
           <Link href="/onboarding">Onboarding</Link>
+          <Link href="/login">Log in</Link>
           <a href={ARC_EXPLORER_URL}>Arcscan</a>
         </div>
       </nav>
@@ -49,6 +52,9 @@ export default async function Home() {
           <div className="actions">
             <Link className="button primary" href="/link">
               Gate a photo link
+            </Link>
+            <Link className="button" href="/browse">
+              Browse works
             </Link>
             <Link className="button" href="/proof">
               Inspect proof

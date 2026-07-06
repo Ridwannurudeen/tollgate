@@ -12,6 +12,17 @@ const photographer: WalletRegistryEntry = {
   custody: "self",
 };
 
+const loggedInPhotographer: WalletRegistryEntry = {
+  ownerId: "existing-owner",
+  displayName: "Existing Lens",
+  wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+  createdAt: "2026-07-06T00:00:00.000Z",
+  approvalStatus: "operator-approved",
+  custody: "circle-w3s",
+  walletId: "wallet-existing",
+  accountKeyHash: `0x${"a".repeat(64)}`,
+};
+
 const hash = (char: string) => `0x${char.repeat(64)}` as `0x${string}`;
 
 function registeredLink(input: RegisterLinkInput, id: string): LinkRecord {
@@ -85,6 +96,7 @@ describe("handleLinkRegistration", () => {
         }),
         registerCreator,
         registerLink,
+        generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
@@ -100,7 +112,10 @@ describe("handleLinkRegistration", () => {
       ownerId: "link-owner",
       displayName: "Jane Lens",
       wallet: photographer.wallet,
+      accountKeyHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
     });
+    expect(result.accountKey).toBe("aptr_known-key");
+    expect(result.registered.ownerId).toBe("link-owner");
     expect(preview.fetchImageBytes).toHaveBeenCalledWith(
       "https://photos.example.com/photo.jpg",
     );
@@ -184,6 +199,7 @@ describe("handleLinkRegistration", () => {
           }),
           registerCreator: async () => photographer,
           registerLink,
+          generateAccountKey: () => "aptr_known-key",
           fetchImageBytes,
           buildWatermarkedPreview,
           writeLinkPreview,
@@ -192,6 +208,7 @@ describe("handleLinkRegistration", () => {
       );
 
       expect(result.link.hasPreview).toBeUndefined();
+      expect(result.accountKey).toBe("aptr_known-key");
       expect(writeLinkPreview).not.toHaveBeenCalled();
       expect(markLinkPreviewGenerated).not.toHaveBeenCalled();
       expect(warn).toHaveBeenCalledWith(
@@ -203,6 +220,59 @@ describe("handleLinkRegistration", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it("adds work to the logged-in owner without minting a new wallet or key", async () => {
+    const registerCreator = vi.fn();
+    const registerLink = vi.fn(async (input: RegisterLinkInput) =>
+      registeredLink(input, "link-existing"),
+    );
+    const readWalletForOwner = vi.fn(async () => loggedInPhotographer);
+    const preview = previewDeps("link-existing");
+
+    const result = await handleLinkRegistration(
+      {
+        sourceUrl: "https://photos.example.com/second.jpg",
+        title: "Second Photo",
+        displayName: "Ignored Name",
+        wallet: "0x0000000000000000000000000000000000000001",
+      },
+      {
+        origin: "https://tollgate.gudman.xyz",
+        basePath: "/aperture",
+        sessionOwnerId: "existing-owner",
+        findLinkBySourceUrl: async () => null,
+        probeImageSource: async () => ({
+          contentType: "image/jpeg",
+          sourceContentHash: hash("7"),
+        }),
+        registerCreator,
+        registerLink,
+        readWalletForOwner,
+        generateAccountKey: () => "aptr_should-not-return",
+        fetchImageBytes: preview.fetchImageBytes,
+        buildWatermarkedPreview: preview.buildWatermarkedPreview,
+        writeLinkPreview: preview.writeLinkPreview,
+        markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
+      },
+    );
+
+    expect(readWalletForOwner).toHaveBeenCalledWith("existing-owner");
+    expect(registerCreator).not.toHaveBeenCalled();
+    expect(registerLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerId: "existing-owner",
+        sourceUrl: "https://photos.example.com/second.jpg",
+      }),
+    );
+    expect(result.accountKey).toBeUndefined();
+    expect(result.registered).toEqual({
+      ownerId: "existing-owner",
+      displayName: "Existing Lens",
+      wallet: loggedInPhotographer.wallet,
+      approvalStatus: "operator-approved",
+      custody: "circle-w3s",
+    });
   });
 });
 
@@ -231,6 +301,7 @@ describe("handleLinkRegistration URL normalization", () => {
         probeImageSource,
         registerCreator: async () => photographer,
         registerLink,
+        generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
@@ -274,6 +345,7 @@ describe("handleLinkRegistration URL normalization", () => {
         probeImageSource,
         registerCreator: async () => photographer,
         registerLink,
+        generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
@@ -311,6 +383,7 @@ describe("handleLinkRegistration URL normalization", () => {
         registerCreator: async () => photographer,
         registerLink: async (input: RegisterLinkInput) =>
           registeredLink(input, "link-plain"),
+        generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,

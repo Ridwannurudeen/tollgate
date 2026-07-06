@@ -13,9 +13,12 @@ export default function LinkRegistrationPage() {
           Aperture
         </Link>
         <div className="navlinks">
+          <Link href="/browse">Browse</Link>
+          <Link href="/dashboard">Dashboard</Link>
           <Link href="/proof">Proof</Link>
           <Link href="/install">Install</Link>
           <Link href="/onboarding">Onboarding</Link>
+          <Link href="/login">Log in</Link>
         </div>
       </nav>
 

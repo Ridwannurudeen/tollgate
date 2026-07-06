@@ -48,6 +48,8 @@ export type WalletRegistryEntry = {
   custody?: "self" | "circle-w3s";
   /** Circle W3S wallet id, present only for custodial (circle-w3s) entries. */
   walletId?: string;
+  /** Hash of the one-time Aperture account key; plaintext is shown only once. */
+  accountKeyHash?: `0x${string}`;
   /** Present only when the creator proved wallet control with a signature. */
   ownershipProof?: OwnershipProof;
 };

@@ -160,6 +160,24 @@ export async function findLinkBySourceUrl(
   );
 }
 
+export async function readLinksByOwner(
+  ownerId: string,
+  filePath: string = LINKS_PATH,
+): Promise<LinkRecord[]> {
+  const registry = await readLinks(filePath);
+  return registry.links.filter((link) => link.ownerId === ownerId);
+}
+
+export async function listPublicLinks(
+  filePath: string = LINKS_PATH,
+): Promise<PublicLinkRecord[]> {
+  const registry = await readLinks(filePath);
+  return registry.links
+    .slice()
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .map(publicLink);
+}
+
 export async function registerLink(
   input: RegisterLinkInput,
   filePath: string = LINKS_PATH,

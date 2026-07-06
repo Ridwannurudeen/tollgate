@@ -43,8 +43,11 @@ export default async function ProofPage() {
         </Link>
         <div className="navlinks">
           <Link href="/">Home</Link>
+          <Link href="/browse">Browse</Link>
+          <Link href="/dashboard">Dashboard</Link>
           <Link href="/install">Install</Link>
           <Link href="/onboarding">Onboarding</Link>
+          <Link href="/login">Log in</Link>
           <a href={ARC_EXPLORER_URL}>Arcscan</a>
         </div>
       </nav>

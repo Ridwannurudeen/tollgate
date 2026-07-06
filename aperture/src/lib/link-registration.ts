@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { WalletRegistryEntry } from "./types";
+import { accountKeyHash, generateAccountKey } from "./account";
 import {
   LinkRegistryError,
   findLinkBySourceUrl,
@@ -11,6 +12,7 @@ import {
 import { fetchImageBytes, probeImageSource } from "./link-content";
 import { buildWatermarkedPreview, writeLinkPreview } from "./link-preview";
 import { registerCreator } from "./onboarding";
+import { readWalletForOwner } from "./registry";
 
 const MAX_URL_LENGTH = 2048;
 const MAX_TITLE_LENGTH = 120;
@@ -27,9 +29,10 @@ export type LinkRegistrationResult = {
   link: PublicLinkRecord;
   registered: Pick<
     WalletRegistryEntry,
-    "displayName" | "wallet" | "approvalStatus" | "custody"
+    "ownerId" | "displayName" | "wallet" | "approvalStatus" | "custody"
   >;
   shareUrl: string;
+  accountKey?: string;
 };
 
 export type LinkRegistrationDeps = {
@@ -43,7 +46,10 @@ export type LinkRegistrationDeps = {
   fetchImageBytes?: typeof fetchImageBytes;
   buildWatermarkedPreview?: typeof buildWatermarkedPreview;
   writeLinkPreview?: typeof writeLinkPreview;
+  readWalletForOwner?: typeof readWalletForOwner;
+  generateAccountKey?: typeof generateAccountKey;
   ownerId?: () => string;
+  sessionOwnerId?: string;
 };
 
 function stringField(value: unknown, label: string, maxLength: number): string {
@@ -125,24 +131,41 @@ export async function handleLinkRegistration(
 ): Promise<LinkRegistrationResult> {
   const url = sourceUrl(input.sourceUrl);
   const title = stringField(input.title, "title", MAX_TITLE_LENGTH);
-  const displayName = stringField(
-    input.displayName,
-    "photographer name",
-    MAX_NAME_LENGTH,
-  );
-  const wallet = optionalWallet(input.wallet);
+  const sessionOwnerId = deps.sessionOwnerId?.trim();
   const findExisting = deps.findLinkBySourceUrl ?? findLinkBySourceUrl;
   if (await findExisting(url)) {
     throw new LinkRegistryError("photo URL already registered.", 409);
   }
 
   const evidence = await (deps.probeImageSource ?? probeImageSource)(url);
-  const ownerId = deps.ownerId?.() ?? `link-${randomUUID()}`;
-  const photographer = await (deps.registerCreator ?? registerCreator)({
-    ownerId,
-    displayName,
-    wallet,
-  });
+  let accountKey: string | undefined;
+  let ownerId: string;
+  let photographer: WalletRegistryEntry;
+  if (sessionOwnerId) {
+    const existing = await (deps.readWalletForOwner ?? readWalletForOwner)(
+      sessionOwnerId,
+    );
+    if (!existing) {
+      throw new LinkRegistryError("creator session is no longer valid.", 401);
+    }
+    ownerId = existing.ownerId;
+    photographer = existing;
+  } else {
+    const displayName = stringField(
+      input.displayName,
+      "photographer name",
+      MAX_NAME_LENGTH,
+    );
+    const wallet = optionalWallet(input.wallet);
+    accountKey = (deps.generateAccountKey ?? generateAccountKey)();
+    ownerId = deps.ownerId?.() ?? `link-${randomUUID()}`;
+    photographer = await (deps.registerCreator ?? registerCreator)({
+      ownerId,
+      displayName,
+      wallet,
+      accountKeyHash: accountKeyHash(accountKey),
+    });
+  }
   const link = await (deps.registerLink ?? registerLink)({
     title,
     ownerId,
@@ -170,11 +193,13 @@ export async function handleLinkRegistration(
   return {
     link: publicLink(resultLink),
     registered: {
+      ownerId: photographer.ownerId,
       displayName: photographer.displayName,
       wallet: photographer.wallet,
       approvalStatus: photographer.approvalStatus,
       custody: photographer.custody,
     },
     shareUrl: `${deps.origin}${deps.basePath}/link/${link.id}`,
+    ...(accountKey ? { accountKey } : {}),
   };
 }

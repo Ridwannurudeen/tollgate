@@ -22,13 +22,14 @@ describe("wallet registry", () => {
           wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
           createdAt: "2026-06-24T00:00:00.000Z",
           approvalStatus: "operator-approved",
+          accountKeyHash: `0x${"a".repeat(64)}`,
         },
       );
       await writeWalletRegistry(registry, filePath);
       const read = await readWalletRegistry(filePath);
-      expect(findWalletForOwner(read, "owner-1")?.displayName).toBe(
-        "Photographer",
-      );
+      const entry = findWalletForOwner(read, "owner-1");
+      expect(entry?.displayName).toBe("Photographer");
+      expect(entry?.accountKeyHash).toBe(`0x${"a".repeat(64)}`);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
