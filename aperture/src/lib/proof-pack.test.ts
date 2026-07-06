@@ -47,6 +47,7 @@ describe("buildProofPack", () => {
           accountKeyHash: `0x${"a".repeat(64)}`,
           loginTokenHash: `0x${"c".repeat(64)}`,
           loginTokenExpiresAt: "2026-07-06T00:20:00.000Z",
+          linkedWallets: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
           ownershipProof: {
             method: "wallet-signature",
             signer: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
@@ -68,6 +69,8 @@ describe("buildProofPack", () => {
     expect(payload).not.toContain("accountKeyHash");
     expect(payload).not.toContain("loginTokenHash");
     expect(payload).not.toContain("loginTokenExpiresAt");
+    expect(payload).not.toContain("linkedWallets");
+    expect(payload).not.toContain("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     expect(payload).not.toContain("ownershipProof");
     expect(payload).not.toContain("signatureHash");
   });

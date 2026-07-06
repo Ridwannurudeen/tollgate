@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ReactElement } from "react";
+import React, { type ReactElement } from "react";
 import DashboardPage from "./page";
 
 const mocks = vi.hoisted(() => ({
   getSessionOwner: vi.fn(),
   readLinksByOwner: vi.fn(),
   readLicenseLedger: vi.fn(),
+  fetchCitationsSummary: vi.fn(),
   redirect: vi.fn(),
 }));
 
@@ -25,6 +26,16 @@ vi.mock("../../components/SiteNav", () => ({
 
 vi.mock("../../components/SiteFooter", () => ({
   SiteFooter: () => "footer",
+}));
+
+vi.mock("../../components/LinkedWalletsForm", () => ({
+  LinkedWalletsForm: ({ linkedWallets }: { linkedWallets: string[] }) => (
+    <div>linked:{linkedWallets.join(",")}</div>
+  ),
+}));
+
+vi.mock("../../lib/citations-summary", () => ({
+  fetchCitationsSummary: mocks.fetchCitationsSummary,
 }));
 
 vi.mock("../../lib/ledger", () => ({
@@ -46,9 +57,19 @@ describe("dashboard page", () => {
     mocks.getSessionOwner.mockReset();
     mocks.readLinksByOwner.mockReset();
     mocks.readLicenseLedger.mockReset();
+    mocks.fetchCitationsSummary.mockReset();
     mocks.redirect.mockReset();
     mocks.redirect.mockImplementation((path: string) => {
       throw new Error(`redirect:${path}`);
+    });
+    mocks.fetchCitationsSummary.mockResolvedValue({
+      wallet: "0x12f25b721cc21c38495e33a4c8524dd0b647ba03",
+      earnings: {
+        sourceCount: 0,
+        citationCount: 0,
+        earnedAtomicUsdc: 0,
+      },
+      sources: [],
     });
   });
 
@@ -70,6 +91,7 @@ describe("dashboard page", () => {
       email: "jane@example.com",
       loginTokenHash: `0x${"c".repeat(64)}`,
       loginTokenExpiresAt: "2026-07-06T00:20:00.000Z",
+      linkedWallets: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
     });
     mocks.readLinksByOwner.mockResolvedValue([
       {
@@ -94,19 +116,98 @@ describe("dashboard page", () => {
         },
       ],
     });
+    mocks.fetchCitationsSummary.mockImplementation(async (wallet: string) => {
+      if (wallet === "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
+        return {
+          wallet,
+          earnings: {
+            sourceCount: 1,
+            citationCount: 2,
+            earnedAtomicUsdc: 3000,
+          },
+          sources: [
+            {
+              id: "citation-source",
+              title: "Citation Source",
+              creator: "Jane Writer",
+              handle: "@jane",
+              wallet,
+              url: "https://source.example",
+              summary: "Source summary",
+              tags: ["ai"],
+              priceAtomicUsdc: 1200,
+              sourceKind: "external",
+              creatorKind: "external",
+              verifiedCreator: true,
+              citationCount: 2,
+              earnedAtomicUsdc: 3000,
+              notifyEmail: "writer@example.com",
+            },
+          ],
+        };
+      }
+      return {
+        wallet,
+        earnings: {
+          sourceCount: 0,
+          citationCount: 0,
+          earnedAtomicUsdc: 0,
+        },
+        sources: [],
+      };
+    });
 
     const page = await DashboardPage();
     const payload = renderToStaticMarkup(page as ReactElement);
 
+    expect(payload).toContain("Your Tollgate creator dashboard");
     expect(payload).toContain("Private Source Photo");
+    expect(payload).toContain("Citation Source");
+    expect(payload).toContain(
+      "Video payouts settle through the PeerTube plugin",
+    );
+    expect(payload).toContain("https://tollgate.gudman.xyz/video");
+    expect(payload).toContain(
+      "linked:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
     expect(payload).toContain("j***@example.com");
     expect(payload).toContain("0.0025");
+    expect(payload).toContain("0.0030");
+    expect(payload).toContain("0.0055");
+    expect(mocks.fetchCitationsSummary).toHaveBeenCalledWith(
+      "0x12f25b721cc21c38495e33a4c8524dd0b647ba03",
+    );
+    expect(mocks.fetchCitationsSummary).toHaveBeenCalledWith(
+      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
     expect(payload).not.toContain("secret.example.com");
     expect(payload).not.toContain("sourceContentHash");
     expect(payload).not.toContain("accountKeyHash");
     expect(payload).not.toContain("jane@example.com");
     expect(payload).not.toContain("loginTokenHash");
     expect(payload).not.toContain("loginTokenExpiresAt");
+    expect(payload).not.toContain("writer@example.com");
+    expect(payload).not.toContain("notifyEmail");
     expect(payload).not.toContain("0.0090");
+  });
+
+  it("still renders when citations summaries are unavailable", async () => {
+    mocks.getSessionOwner.mockResolvedValue({
+      ownerId: "owner-1",
+      displayName: "Jane Lens",
+      wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      approvalStatus: "operator-approved",
+    });
+    mocks.readLinksByOwner.mockResolvedValue([]);
+    mocks.readLicenseLedger.mockResolvedValue({ receipts: [] });
+    mocks.fetchCitationsSummary.mockResolvedValue(null);
+
+    const page = await DashboardPage();
+    const payload = renderToStaticMarkup(page as ReactElement);
+
+    expect(payload).toContain(
+      "Couldn&#x27;t load citations earnings right now",
+    );
+    expect(payload).toContain("Open video proof");
   });
 });

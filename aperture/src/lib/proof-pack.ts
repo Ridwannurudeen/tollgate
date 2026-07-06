@@ -31,6 +31,7 @@ export async function buildProofPack() {
         email,
         loginTokenHash,
         loginTokenExpiresAt,
+        linkedWallets,
         ownershipProof,
         ...entry
       }) => entry,

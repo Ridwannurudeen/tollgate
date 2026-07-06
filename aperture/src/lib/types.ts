@@ -56,6 +56,8 @@ export type WalletRegistryEntry = {
   loginTokenHash?: `0x${string}`;
   /** ISO expiry for the email login token. */
   loginTokenExpiresAt?: string;
+  /** Extra public creator wallets this account tracks across Tollgate. */
+  linkedWallets?: string[];
   /** Present only when the creator proved wallet control with a signature. */
   ownershipProof?: OwnershipProof;
 };

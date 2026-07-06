@@ -4,7 +4,7 @@ import path from "node:path";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 import { buildOwnerOwnershipMessage, registerCreator } from "./onboarding";
-import { readWalletRegistry } from "./registry";
+import { readWalletRegistry, writeWalletRegistry } from "./registry";
 
 async function withTempRegistry(
   run: (filePath: string) => Promise<void>,
@@ -124,5 +124,40 @@ describe("registerCreator", () => {
     } finally {
       if (saved !== undefined) process.env.CIRCLE_WALLET_SET_ID = saved;
     }
+  });
+
+  it("preserves linked wallets when an existing owner re-registers", async () => {
+    await withTempRegistry(async (filePath) => {
+      await writeWalletRegistry(
+        {
+          photographers: [
+            {
+              ownerId: "owner-1",
+              displayName: "Jane Lens",
+              wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+              createdAt: "2026-07-06T00:00:00.000Z",
+              approvalStatus: "operator-approved",
+              linkedWallets: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+            },
+          ],
+        },
+        filePath,
+      );
+
+      const entry = await registerCreator({
+        ownerId: "owner-1",
+        displayName: "Jane Lens Updated",
+        wallet: "0x12f25b721cc21c38495e33a4c8524dd0b647ba03",
+        filePath,
+      });
+
+      expect(entry.linkedWallets).toEqual([
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      ]);
+      const registry = await readWalletRegistry(filePath);
+      expect(registry.photographers[0].linkedWallets).toEqual([
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      ]);
+    });
   });
 });

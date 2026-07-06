@@ -171,6 +171,9 @@ export async function registerCreator(
         : existing?.email
           ? { email: existing.email }
           : {}),
+      ...(existing?.linkedWallets
+        ? { linkedWallets: existing.linkedWallets }
+        : {}),
     };
     await writeWalletRegistry(
       upsertWalletRegistryEntry(registry, finalEntry),

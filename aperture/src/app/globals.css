@@ -397,6 +397,10 @@ small {
   line-height: 1.65;
 }
 
+.dashboardLede {
+  max-width: 780px;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -554,6 +558,10 @@ small {
   margin: 34px 0;
 }
 
+.embeddedStrip {
+  margin: 16px;
+}
+
 .metricGrid div,
 .statStrip > div {
   min-width: 0;
@@ -698,6 +706,14 @@ small {
 
 .row:last-child {
   border-bottom: 0;
+}
+
+.citationSourceList {
+  border-top: 1px solid var(--line);
+}
+
+.citationSourceRow {
+  grid-template-columns: minmax(0, 1fr) 150px 150px;
 }
 
 .row strong {
@@ -932,6 +948,76 @@ small {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.linkedWalletPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(280px, 1.12fr);
+  gap: 18px;
+  padding: 16px;
+  border-top: 1px solid var(--line);
+  background: rgba(30, 106, 71, 0.04);
+}
+
+.linkedWalletPanel p:not(.eyebrow) {
+  margin: 8px 0 0;
+  color: var(--ink-3);
+}
+
+.linkedWallets {
+  display: grid;
+  gap: 12px;
+}
+
+.compactWalletForm {
+  margin-top: 0;
+}
+
+.walletPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.walletPills span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-family: var(--font-num);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.walletPills button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--green);
+  font-family: var(--font-num);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.videoProofCard {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.videoProofCard p {
+  max-width: 660px;
+  margin-bottom: 0;
 }
 
 .previewFrame {
@@ -1206,8 +1292,15 @@ small {
   .operatorBand,
   .operatorGrid,
   .twoColumn,
-  .accountGrid {
+  .accountGrid,
+  .linkedWalletPanel,
+  .videoProofCard {
     grid-template-columns: 1fr;
+  }
+
+  .videoProofCard {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .topbar {
@@ -1247,7 +1340,8 @@ small {
   }
 
   .row,
-  .receiptRow {
+  .receiptRow,
+  .citationSourceRow {
     grid-template-columns: 1fr;
   }
 

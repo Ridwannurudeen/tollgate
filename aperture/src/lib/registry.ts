@@ -6,9 +6,20 @@ import type { WalletRegistry, WalletRegistryEntry } from "./types";
 const REGISTRY_PATH = path.join(process.cwd(), "data", "registry.json");
 const EMPTY_REGISTRY: WalletRegistry = { photographers: [] };
 let registryWriteLock: Promise<void> = Promise.resolve();
+const WALLET_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 
 function isHexHash(value: unknown): value is `0x${string}` {
   return typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+function isLinkedWallets(value: unknown): value is string[] {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every(
+        (wallet) => typeof wallet === "string" && WALLET_PATTERN.test(wallet),
+      ))
+  );
 }
 
 export function withRegistryWriteLock<T>(write: () => Promise<T>): Promise<T> {
@@ -37,14 +48,19 @@ function isRegistryEntry(value: unknown): value is WalletRegistryEntry {
     (record.email === undefined || typeof record.email === "string") &&
     (record.loginTokenHash === undefined || isHexHash(record.loginTokenHash)) &&
     (record.loginTokenExpiresAt === undefined ||
-      typeof record.loginTokenExpiresAt === "string")
+      typeof record.loginTokenExpiresAt === "string") &&
+    isLinkedWallets(record.linkedWallets)
   );
 }
 
 function normalizeEntry(entry: WalletRegistryEntry): WalletRegistryEntry {
+  const linkedWallets = Array.from(
+    new Set((entry.linkedWallets ?? []).map((wallet) => wallet.toLowerCase())),
+  );
   return {
     ...entry,
     wallet: getAddress(entry.wallet),
+    ...(linkedWallets.length > 0 ? { linkedWallets } : {}),
     approvalStatus: entry.approvalStatus ?? "operator-approved",
   };
 }

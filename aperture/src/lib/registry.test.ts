@@ -26,6 +26,10 @@ describe("wallet registry", () => {
           email: "photo@example.com",
           loginTokenHash: `0x${"b".repeat(64)}`,
           loginTokenExpiresAt: "2026-07-06T00:20:00.000Z",
+          linkedWallets: [
+            "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          ],
         },
       );
       await writeWalletRegistry(registry, filePath);
@@ -36,6 +40,9 @@ describe("wallet registry", () => {
       expect(entry?.email).toBe("photo@example.com");
       expect(entry?.loginTokenHash).toBe(`0x${"b".repeat(64)}`);
       expect(entry?.loginTokenExpiresAt).toBe("2026-07-06T00:20:00.000Z");
+      expect(entry?.linkedWallets).toEqual([
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      ]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
