@@ -811,6 +811,37 @@ small {
   margin-bottom: 0;
 }
 
+.previewFrame {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.previewFrame img {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--ink-block);
+}
+
+.previewFrame figcaption {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.compactPreview {
+  margin-bottom: 4px;
+}
+
+.compactPreview img {
+  max-height: 260px;
+}
+
 .compactActions {
   margin-top: 0;
 }

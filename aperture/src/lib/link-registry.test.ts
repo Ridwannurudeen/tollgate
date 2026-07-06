@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  LinkRegistryError,
+  markLinkPreviewGenerated,
   publicLink,
   readLinks,
   registerLink,
@@ -22,6 +22,7 @@ describe("link registry", () => {
           sourceUrl: "https://EXAMPLE.com/photo.jpg#tracking",
           contentType: "image/jpeg",
           sourceContentHash: `0x${"1".repeat(64)}`,
+          hasPreview: true,
           createdAt: "2026-07-06T00:00:00.000Z",
         },
         filePath,
@@ -31,6 +32,8 @@ describe("link registry", () => {
 
       expect(registry.links).toHaveLength(1);
       expect(registry.links[0].sourceUrl).toBe("https://example.com/photo.jpg");
+      expect(registry.links[0].hasPreview).toBe(true);
+      expect(projected.hasPreview).toBe(true);
       expect(projected.sourceUrl).toBeUndefined();
       expect(projected.sourceContentHash).toBeUndefined();
     } finally {
@@ -61,6 +64,30 @@ describe("link registry", () => {
           filePath,
         ),
       ).rejects.toMatchObject({ status: 409 });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("marks a registered link as having a generated preview", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
+    const filePath = path.join(dir, "links.json");
+    try {
+      const link = await registerLink(
+        {
+          id: "link-1",
+          title: "Photo",
+          ownerId: "owner-1",
+          sourceUrl: "https://example.com/photo.jpg",
+        },
+        filePath,
+      );
+
+      const updated = await markLinkPreviewGenerated(link.id, filePath);
+      const registry = await readLinks(filePath);
+
+      expect(updated.hasPreview).toBe(true);
+      expect(registry.links[0].hasPreview).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

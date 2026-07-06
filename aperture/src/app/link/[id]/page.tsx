@@ -55,6 +55,18 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
           <h2>License download</h2>
           <span>{link.id}</span>
         </div>
+        {link.hasPreview && (
+          <figure className="previewFrame">
+            <img
+              alt={`Watermarked preview of ${link.title}`}
+              src={`${basePath}/link/${link.id}/preview`}
+            />
+            <figcaption>
+              Watermarked preview - unlock to download the full-resolution
+              original.
+            </figcaption>
+          </figure>
+        )}
         <p>
           The original host URL is not exposed on this page. Choose your own
           wallet, or use the no-wallet demo unlock funded by Tollgate.

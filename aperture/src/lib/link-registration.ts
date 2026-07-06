@@ -3,11 +3,13 @@ import type { WalletRegistryEntry } from "./types";
 import {
   LinkRegistryError,
   findLinkBySourceUrl,
+  markLinkPreviewGenerated,
   publicLink,
   registerLink,
   type PublicLinkRecord,
 } from "./link-registry";
-import { probeImageSource } from "./link-content";
+import { fetchImageBytes, probeImageSource } from "./link-content";
+import { buildWatermarkedPreview, writeLinkPreview } from "./link-preview";
 import { registerCreator } from "./onboarding";
 
 const MAX_URL_LENGTH = 2048;
@@ -35,8 +37,12 @@ export type LinkRegistrationDeps = {
   basePath: string;
   registerCreator?: typeof registerCreator;
   registerLink?: typeof registerLink;
+  markLinkPreviewGenerated?: typeof markLinkPreviewGenerated;
   findLinkBySourceUrl?: typeof findLinkBySourceUrl;
   probeImageSource?: typeof probeImageSource;
+  fetchImageBytes?: typeof fetchImageBytes;
+  buildWatermarkedPreview?: typeof buildWatermarkedPreview;
+  writeLinkPreview?: typeof writeLinkPreview;
   ownerId?: () => string;
 };
 
@@ -144,8 +150,25 @@ export async function handleLinkRegistration(
     contentType: evidence.contentType,
     sourceContentHash: evidence.sourceContentHash,
   });
+  let resultLink = link;
+  try {
+    const image = await (deps.fetchImageBytes ?? fetchImageBytes)(url);
+    const preview = await (
+      deps.buildWatermarkedPreview ?? buildWatermarkedPreview
+    )(image.bytes);
+    await (deps.writeLinkPreview ?? writeLinkPreview)(link.id, preview.bytes);
+    resultLink = await (
+      deps.markLinkPreviewGenerated ?? markLinkPreviewGenerated
+    )(link.id);
+  } catch (error) {
+    console.warn(
+      `Skipping Aperture preview for ${link.id}: ${
+        error instanceof Error ? error.message : "preview generation failed"
+      }`,
+    );
+  }
   return {
-    link: publicLink(link),
+    link: publicLink(resultLink),
     registered: {
       displayName: photographer.displayName,
       wallet: photographer.wallet,

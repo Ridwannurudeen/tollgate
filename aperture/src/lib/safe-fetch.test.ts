@@ -28,6 +28,9 @@ describe("safe fetch guards", () => {
       "fc00::1",
       "::ffff:127.0.0.1",
       "::ffff:169.254.169.254",
+      "::ffff:7f00:1",
+      "[::ffff:7f00:1]",
+      "[::ffff:a9fe:a9fe]",
     ];
     for (const host of unsafe) {
       expect(isUnsafeFetchHost(host), host).toBe(true);
@@ -42,6 +45,19 @@ describe("safe fetch guards", () => {
       "2606:4700::1111",
     ]) {
       expect(isUnsafeFetchHost(host), host).toBe(false);
+    }
+  });
+
+  it("blocks URL-normalized IPv4-mapped IPv6 literals", async () => {
+    for (const raw of [
+      "http://[::ffff:127.0.0.1]/",
+      "http://[::ffff:169.254.169.254]/",
+    ]) {
+      await expect(
+        assertSafeFetchTarget(new URL(raw), async () => {
+          throw new Error("should have been blocked before resolving");
+        }),
+      ).rejects.toThrow(/not allowed/);
     }
   });
 

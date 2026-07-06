@@ -16,6 +16,7 @@ export type LinkRecord = {
   sourceContentHash?: `0x${string}`;
   priceAtomicUsdc: number;
   createdAt: string;
+  hasPreview?: boolean;
 };
 
 export type PublicLinkRecord = Omit<
@@ -34,6 +35,7 @@ export type RegisterLinkInput = {
   sourceUrl: string;
   contentType?: string;
   sourceContentHash?: `0x${string}`;
+  hasPreview?: boolean;
   priceAtomicUsdc?: number;
   createdAt?: string;
 };
@@ -65,7 +67,8 @@ function isLinkRecord(value: unknown): value is LinkRecord {
     (record.contentType === undefined ||
       typeof record.contentType === "string") &&
     (record.sourceContentHash === undefined ||
-      isHexHash(record.sourceContentHash))
+      isHexHash(record.sourceContentHash)) &&
+    (record.hasPreview === undefined || typeof record.hasPreview === "boolean")
   );
 }
 
@@ -130,6 +133,7 @@ export function publicLink(link: LinkRecord): PublicLinkRecord {
     title: link.title,
     ownerId: link.ownerId,
     ...(link.contentType ? { contentType: link.contentType } : {}),
+    ...(link.hasPreview ? { hasPreview: true } : {}),
     priceAtomicUsdc: link.priceAtomicUsdc,
     createdAt: link.createdAt,
   };
@@ -184,11 +188,33 @@ export async function registerLink(
       ...(input.sourceContentHash
         ? { sourceContentHash: input.sourceContentHash }
         : {}),
+      ...(input.hasPreview ? { hasPreview: true } : {}),
       priceAtomicUsdc:
         input.priceAtomicUsdc ?? APERTURE_LICENSE_FEE_ATOMIC_USDC,
       createdAt: input.createdAt ?? new Date().toISOString(),
     };
     await writeLinks({ links: [record, ...registry.links] }, filePath);
+    return record;
+  });
+}
+
+export async function markLinkPreviewGenerated(
+  id: string,
+  filePath: string = LINKS_PATH,
+): Promise<LinkRecord> {
+  return withLinkWriteLock(async () => {
+    const registry = await readLinks(filePath);
+    const index = registry.links.findIndex((link) => link.id === id);
+    if (index < 0) {
+      throw new LinkRegistryError("link not found.", 404);
+    }
+    const record: LinkRecord = {
+      ...registry.links[index],
+      hasPreview: true,
+    };
+    const nextLinks = registry.links.slice();
+    nextLinks[index] = record;
+    await writeLinks({ links: nextLinks }, filePath);
     return record;
   });
 }

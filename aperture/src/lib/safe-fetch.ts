@@ -6,6 +6,17 @@ function stripBrackets(hostname: string): string {
   return hostname.replace(/^\[/, "").replace(/\]$/, "");
 }
 
+function ipv4FromMappedIpv6(host: string): string | null {
+  const mapped = host.match(/^::ffff:(.+)$/);
+  if (!mapped) return null;
+  if (isCanonicalDottedQuad(mapped[1])) return mapped[1];
+  const hex = mapped[1].match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (!hex) return null;
+  const high = Number.parseInt(hex[1], 16);
+  const low = Number.parseInt(hex[2], 16);
+  return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+}
+
 export function isUnsafeFetchHost(hostname: string): boolean {
   const host = stripBrackets(hostname.toLowerCase());
   if (host === "localhost" || host.endsWith(".localhost")) return true;
@@ -23,8 +34,8 @@ export function isUnsafeFetchHost(hostname: string): boolean {
     if (host === "::" || host === "::1") return true;
     if (/^fe[89ab]/.test(host)) return true;
     if (host.startsWith("fc") || host.startsWith("fd")) return true;
-    const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isUnsafeFetchHost(mapped[1]);
+    const mapped = ipv4FromMappedIpv6(host);
+    if (mapped) return isUnsafeFetchHost(mapped);
   }
   return false;
 }

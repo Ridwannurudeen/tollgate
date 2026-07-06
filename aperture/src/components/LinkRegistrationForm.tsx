@@ -8,6 +8,7 @@ type LinkRegistrationResult = {
     id: string;
     title: string;
     priceAtomicUsdc: number;
+    hasPreview?: boolean;
   };
   registered: {
     displayName: string;
@@ -109,6 +110,18 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
       {result && (
         <div className="linkSuccess" aria-live="polite">
           <p className="eyebrow">Share this link</p>
+          {result.link.hasPreview && (
+            <figure className="previewFrame compactPreview">
+              <img
+                alt={`Watermarked preview of ${result.link.title}`}
+                src={`${basePath}/link/${result.link.id}/preview`}
+              />
+              <figcaption>
+                Buyers see this watermarked preview before unlocking the full
+                original.
+              </figcaption>
+            </figure>
+          )}
           <input readOnly value={result.shareUrl} />
           <div className="actions compactActions">
             <button type="button" onClick={copyShareUrl}>
