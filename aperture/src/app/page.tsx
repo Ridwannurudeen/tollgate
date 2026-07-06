@@ -38,19 +38,20 @@ export default async function Home() {
 
       <section className="hero">
         <div>
-          <p className="eyebrow">Immich sidecar / verified download path</p>
-          <h1>Photographers get paid when shared photos are downloaded.</h1>
+          <p className="eyebrow">Pay-per-photo licensing on Arc</p>
+          <h1>Photographers get paid when their photos are licensed.</h1>
           <p className="lede">
-            Aperture is a payment sidecar for your Immich photo community. It
-            watches shared-link downloads, resolves the asset owner, and writes
-            a payout receipt that can settle through Forum FeeRouter on Arc.
+            Aperture gates any photo URL behind a receipt-checked paywall and
+            writes a payout to the owner that settles through Forum FeeRouter on
+            Arc. It also runs as a sidecar for Immich photo communities,
+            watching shared-link downloads the same way.
           </p>
           <div className="actions">
-            <Link className="button primary" href="/proof">
-              Inspect proof
-            </Link>
-            <Link className="button" href="/link">
+            <Link className="button primary" href="/link">
               Gate a photo link
+            </Link>
+            <Link className="button" href="/proof">
+              Inspect proof
             </Link>
             <a className="button" href="https://immich.app">
               Immich
@@ -60,7 +61,7 @@ export default async function Home() {
         <div className="heroPanel" aria-label="Live licensing stats">
           <div className="liveRow">
             <span className="liveDot" />
-            verified Immich v2.7.5 flow
+            live on Arc testnet
           </div>
           <div className="bigNumber">{ledger.receipts.length}</div>
           <div className="panelLabel">licensed downloads recorded</div>
