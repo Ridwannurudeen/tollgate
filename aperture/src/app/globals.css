@@ -973,6 +973,15 @@ small {
   margin-top: 0;
 }
 
+.compactEmailForm {
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.compactEmailForm button {
+  min-height: 36px;
+}
+
 .walletPills {
   display: flex;
   flex-wrap: wrap;

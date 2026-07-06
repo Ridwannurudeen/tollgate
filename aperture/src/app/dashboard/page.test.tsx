@@ -28,6 +28,12 @@ vi.mock("../../components/SiteFooter", () => ({
   SiteFooter: () => "footer",
 }));
 
+vi.mock("../../components/AddEmailForm", () => ({
+  AddEmailForm: ({ basePath }: { basePath: string }) => (
+    <div>add-email:{basePath}</div>
+  ),
+}));
+
 vi.mock("../../components/LinkedWalletsForm", () => ({
   LinkedWalletsForm: ({ linkedWallets }: { linkedWallets: string[] }) => (
     <div>linked:{linkedWallets.join(",")}</div>
@@ -171,6 +177,7 @@ describe("dashboard page", () => {
       "linked:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     );
     expect(payload).toContain("j***@example.com");
+    expect(payload).not.toContain("add-email:");
     expect(payload).toContain("0.0025");
     expect(payload).toContain("0.0030");
     expect(payload).toContain("0.0055");
@@ -208,6 +215,7 @@ describe("dashboard page", () => {
     expect(payload).toContain(
       "Couldn&#x27;t load citations earnings right now",
     );
+    expect(payload).toContain("add-email:/aperture");
     expect(payload).toContain("Open video proof");
   });
 });

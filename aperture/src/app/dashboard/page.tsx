@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AddEmailForm } from "../../components/AddEmailForm";
 import { CopyButton } from "../../components/DashboardActions";
 import { LinkedWalletsForm } from "../../components/LinkedWalletsForm";
 import { SiteFooter } from "../../components/SiteFooter";
@@ -169,11 +170,11 @@ export default async function DashboardPage() {
             </div>
             <div>
               <small>Login email</small>
-              <strong>
-                {owner.email
-                  ? maskAccountEmail(owner.email)
-                  : "No email login on file"}
-              </strong>
+              {owner.email ? (
+                <strong>{maskAccountEmail(owner.email)}</strong>
+              ) : (
+                <AddEmailForm basePath={basePath} />
+              )}
             </div>
           </div>
         </section>
