@@ -114,6 +114,66 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
     tags: ["citations", "attribution", "publishers", "answers", "economics"],
     priceAtomicUsdc: 1200,
   }),
+  seedSource({
+    id: "x402-settlement-schemes",
+    title: "x402 Settlement Schemes on Arc",
+    creator: "Payments Protocol Notes",
+    handle: "@x402notes",
+    wallet: "0x7777777777777777777777777777777777777777",
+    url: "https://x402.org",
+    summary:
+      "x402 turns HTTP 402 into a real payment step: a resource returns payment requirements, the client signs an EIP-3009 USDC authorization, and the server settles it. The 'exact' scheme settles that authorization directly on Arc as a single USDC transfer, so the reader's debit is a verifiable on-chain transaction. The Circle Gateway-batched scheme instead pools many signed authorizations for gasless sub-cent settlement, referenced by a Gateway payment id rather than one Arc tx.",
+    tags: ["x402", "eip-3009", "settlement", "arc", "usdc"],
+    priceAtomicUsdc: 2300,
+  }),
+  seedSource({
+    id: "feerouter-splits-receipts",
+    title: "FeeRouter Split Payouts and Receipts",
+    creator: "Receipt Ledger Notes",
+    handle: "@receiptledger",
+    wallet: "0x8888888888888888888888888888888888888888",
+    url: "https://forum.gudman.xyz/fee-router",
+    summary:
+      "The FeeRouter contract pays a creator by routing USDC through an on-chain split keyed to the creator's wallet and basis-point shares, so multi-contributor works divide automatically. Each payout emits an evidence receipt hash-chained into a tamper-evident ledger. Sub-cent citations accrue to a claimable FeeRouter balance the creator withdraws with a single claim call, which keeps per-citation gas from swamping the payment.",
+    tags: ["feerouter", "splits", "receipts", "payouts", "arc"],
+    priceAtomicUsdc: 1600,
+  }),
+  seedSource({
+    id: "autonomous-source-buying",
+    title: "How a Source-Buying Answer Agent Works",
+    creator: "Agent Commerce Notes",
+    handle: "@agentcommerce",
+    wallet: "0x9999999999999999999999999999999999999999",
+    url: "https://example.com/source-buying-agent",
+    summary:
+      "An autonomous answer agent appraises candidate sources for relevance, allocates a fixed micro-budget to the best grounding-per-USDC, and buys only what it needs. It drafts an answer grounded strictly in the purchased content, self-critiques to drop any claim a purchased source does not support, and can buy one more source during reflection. Every step is recorded and hashed into the answer, so the reasoning and the payments are auditable together.",
+    tags: ["agents", "rag", "budget", "citations", "grounding"],
+    priceAtomicUsdc: 2000,
+  }),
+  seedSource({
+    id: "unverified-source-escrow",
+    title: "Escrow and Ownership Verification",
+    creator: "Creator Licensing Desk",
+    handle: "@creatorlicensing",
+    wallet: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    url: "https://example.com/ownership-escrow",
+    summary:
+      "A newly registered source is probationary until its owner proves control of the payout wallet by signing an ownership message or placing a token in the site's DNS or a meta tag. Until then, citation payouts for that source are escrowed rather than released, and cleared only once verification passes. This stops an anonymous registrant from pointing someone else's URL at their own wallet to divert a creator's earnings.",
+    tags: ["escrow", "verification", "ownership", "creators", "payouts"],
+    priceAtomicUsdc: 1400,
+  }),
+  seedSource({
+    id: "custodial-payer-wallets",
+    title: "Keyless Custodial Wallets for Readers",
+    creator: "Custodial Wallet Notes",
+    handle: "@custodialnotes",
+    wallet: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    url: "https://developers.circle.com/w3s",
+    summary:
+      "Circle's developer-controlled (W3S) wallets let a reader pay without holding keys or a browser wallet: the server provisions a custodial wallet and signs the x402 EIP-3009 authorization through Circle's API. This makes a one-click paid query possible for someone who has never touched crypto, while the payment still settles as real USDC on Arc and pays the cited creators through the same FeeRouter.",
+    tags: ["circle", "w3s", "custodial", "x402", "usdc"],
+    priceAtomicUsdc: 2100,
+  }),
 ];
 
 const SOURCE_REGISTRY_PATH = path.join(process.cwd(), "data", "sources.json");
