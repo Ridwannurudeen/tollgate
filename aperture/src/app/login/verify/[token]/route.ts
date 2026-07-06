@@ -99,6 +99,19 @@ function displayNameFromEmail(email: string): string {
   return local || "New creator";
 }
 
+const CANONICAL_ORIGIN = "https://tollgate.gudman.xyz";
+
+// `request.url` resolves to the internal bind address (localhost:3036) behind
+// the nginx proxy, so the post-verify redirect must be built from the
+// forwarded Host header (which nginx sets to the real public host) — the same
+// way the emailed magic-link URL is built.
+function publicOrigin(request: NextRequest): string {
+  const host = request.headers.get("host")?.trim();
+  if (!host) return CANONICAL_ORIGIN;
+  const proto = request.headers.get("x-forwarded-proto")?.trim() || "https";
+  return `${proto}://${host}`;
+}
+
 function redirectWithSession(
   request: NextRequest,
   basePath: string,
@@ -108,7 +121,7 @@ function redirectWithSession(
   if (!cookieValue) return unavailablePage();
 
   const response = NextResponse.redirect(
-    new URL(`${basePath}/dashboard`, request.url),
+    new URL(`${basePath}/dashboard`, publicOrigin(request)),
   );
   response.cookies.set(
     SESSION_COOKIE_NAME,
