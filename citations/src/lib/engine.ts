@@ -1,8 +1,5 @@
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
-import {
-  groundingYieldValue,
-  type GroundingYieldMap,
-} from "./grounding-yield";
+import { groundingYieldValue, type GroundingYieldMap } from "./grounding-yield";
 import { sha256Hex } from "./hash";
 import { buildSourceContent, type SourceContent } from "./source-content";
 import type {
@@ -17,7 +14,7 @@ import type {
 
 export const DEFAULT_SOURCE_BUDGET_ATOMIC_USDC = 6_500;
 export const NO_SOURCE_ANSWER =
-  "No registered source covers this question, so the agent did not buy a citation or fabricate an answer. Try a question about the registered sources (AI payments, x402, Arc, agent commerce, creator licensing).";
+  "Tollgate answers only from its registered creator network — it pays each cited creator, so it won't cite a source it can't pay. No registered creator covers this question, so the agent bought nothing and did not fabricate an answer. Try a question its creators cover (AI payments, x402, Arc, agent commerce, creator licensing), or register a source to expand the network.";
 
 const STOP_WORDS = new Set([
   "a",
@@ -173,8 +170,7 @@ export function planCitationMarket(
       priceAtomicUsdc: item.source.priceAtomicUsdc,
       score: item.score,
       valuePerAtomicUsdc:
-        Math.round(item.adjustedValue * 1_000_000) /
-        1_000_000,
+        Math.round(item.adjustedValue * 1_000_000) / 1_000_000,
       selected,
       reason: decisionReason(
         item.source,

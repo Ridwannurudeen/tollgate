@@ -254,6 +254,11 @@ export function AskWorkbench({ initialLedger }: Props) {
         <div className="panel-heading">
           <p className="eyebrow">live demo</p>
           <h3>Ask a paid question</h3>
+          <p className="field-hint">
+            The agent answers from Tollgate&apos;s registered creator network
+            and pays each cited creator on Arc — it is a creator-payment
+            protocol, not a general web search.
+          </p>
         </div>
         <div className="mode-badge-row">
           <span className="mode-badge">
