@@ -35,6 +35,7 @@ describe("browse page", () => {
       {
         id: "link-1",
         title: "Catalog Photo",
+        description: "A watermarked catalog preview with buyer context.",
         ownerId: "owner-1",
         priceAtomicUsdc: 2500,
         createdAt: "2026-07-06T00:00:00.000Z",
@@ -61,6 +62,9 @@ describe("browse page", () => {
     const payload = renderToStaticMarkup(page as ReactElement);
 
     expect(payload).toContain("Catalog Photo");
+    expect(payload).toContain(
+      "A watermarked catalog preview with buyer context.",
+    );
     expect(payload).toContain("Jane Lens");
     expect(payload).toContain("/aperture/link/link-1/preview");
     expect(payload).not.toContain("accountKeyHash");

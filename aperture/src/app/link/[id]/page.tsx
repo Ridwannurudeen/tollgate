@@ -1,3 +1,4 @@
+import React from "react";
 import { notFound } from "next/navigation";
 import { LinkDownloadButton } from "../../../components/LinkDownloadButton";
 import { SiteFooter } from "../../../components/SiteFooter";
@@ -33,44 +34,47 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
       <main className="shell compact">
         <SiteNav />
 
-      <section className="pageHeader">
-        <p className="eyebrow">Aperture gated photo</p>
-        <h1>{link.title}</h1>
-        <p>
-          Photo by {photographer.displayName}. Unlock this photo for{" "}
-          {formatUsdc(price)} digital dollars (USDC); the photographer is paid
-          instantly and the download receipt lands in the proof ledger.
-        </p>
-      </section>
+        <section className="pageHeader">
+          <p className="eyebrow">Aperture gated photo</p>
+          <h1>{link.title}</h1>
+          {link.description && (
+            <p className="linkDescription">{link.description}</p>
+          )}
+          <p>
+            Photo by {photographer.displayName}. Unlock this photo for{" "}
+            {formatUsdc(price)} digital dollars (USDC); the photographer is paid
+            instantly and the download receipt lands in the proof ledger.
+          </p>
+        </section>
 
-      <section className="surface wide">
-        <div className="sectionTitle inlineTitle">
-          <h2>License download</h2>
-          <span>{link.id}</span>
-        </div>
-        {link.hasPreview && (
-          <figure className="previewFrame">
-            <img
-              alt={`Watermarked preview of ${link.title}`}
-              src={`${basePath}/link/${link.id}/preview`}
-            />
-            <figcaption>
-              Watermarked preview - unlock to download the full-resolution
-              original.
-            </figcaption>
-          </figure>
-        )}
-        <p>
-          The original host URL is not exposed on this page. Choose your own
-          wallet, or use the no-wallet demo unlock funded by Tollgate.
-        </p>
-        <LinkDownloadButton
-          basePath={basePath}
-          id={link.id}
-          priceText={`${formatUsdc(price)} USDC`}
-          title={link.title}
-        />
-      </section>
+        <section className="surface wide">
+          <div className="sectionTitle inlineTitle">
+            <h2>License download</h2>
+            <span>{link.id}</span>
+          </div>
+          {link.hasPreview && (
+            <figure className="previewFrame">
+              <img
+                alt={`Watermarked preview of ${link.title}`}
+                src={`${basePath}/link/${link.id}/preview`}
+              />
+              <figcaption>
+                Watermarked preview - unlock to download the full-resolution
+                original.
+              </figcaption>
+            </figure>
+          )}
+          <p>
+            The original host URL is not exposed on this page. Choose your own
+            wallet, or use the no-wallet demo unlock funded by Tollgate.
+          </p>
+          <LinkDownloadButton
+            basePath={basePath}
+            id={link.id}
+            priceText={`${formatUsdc(price)} USDC`}
+            title={link.title}
+          />
+        </section>
       </main>
       <SiteFooter />
     </>

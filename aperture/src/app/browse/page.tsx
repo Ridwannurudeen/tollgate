@@ -29,47 +29,50 @@ export default async function BrowsePage() {
       <main className="shell">
         <SiteNav />
 
-      <section className="pageHeader">
-        <p className="eyebrow">Public catalog</p>
-        <h1>Browse registered photo licenses.</h1>
-        <p>
-          Every work here has a gated Aperture page. Watermarked previews are
-          public; the original image bytes stay behind the paid unlock.
-        </p>
-      </section>
+        <section className="pageHeader">
+          <p className="eyebrow">Public catalog</p>
+          <h1>Browse registered photo licenses.</h1>
+          <p>
+            Every work here has a gated Aperture page. Watermarked previews are
+            public; the original image bytes stay behind the paid unlock.
+          </p>
+        </section>
 
-      <section className="browseGrid" aria-label="Registered Aperture works">
-        {links.length === 0 ? (
-          <div className="empty catalogEmpty">
-            No registered photo links yet.
-          </div>
-        ) : (
-          links.map((link) => (
-            <Link
-              className="workCard browseCard"
-              href={`/link/${link.id}`}
-              key={link.id}
-            >
-              {link.hasPreview ? (
-                <img
-                  alt={`Watermarked preview of ${link.title}`}
-                  src={`${basePath}/link/${link.id}/preview`}
-                />
-              ) : (
-                <div className="previewPlaceholder">Preview pending</div>
-              )}
-              <div>
-                <h2>{link.title}</h2>
-                <p>{owners.get(link.ownerId) ?? "Registered photographer"}</p>
-              </div>
-              <div className="workMeta">
-                <span>{formatUsdc(link.priceAtomicUsdc)} USDC</span>
-                <small>Open gated page</small>
-              </div>
-            </Link>
-          ))
-        )}
-      </section>
+        <section className="browseGrid" aria-label="Registered Aperture works">
+          {links.length === 0 ? (
+            <div className="empty catalogEmpty">
+              No registered photo links yet.
+            </div>
+          ) : (
+            links.map((link) => (
+              <Link
+                className="workCard browseCard"
+                href={`/link/${link.id}`}
+                key={link.id}
+              >
+                {link.hasPreview ? (
+                  <img
+                    alt={`Watermarked preview of ${link.title}`}
+                    src={`${basePath}/link/${link.id}/preview`}
+                  />
+                ) : (
+                  <div className="previewPlaceholder">Preview pending</div>
+                )}
+                <div>
+                  <h2>{link.title}</h2>
+                  {link.description && (
+                    <p className="browseDesc">{link.description}</p>
+                  )}
+                  <p>{owners.get(link.ownerId) ?? "Registered photographer"}</p>
+                </div>
+                <div className="workMeta">
+                  <span>{formatUsdc(link.priceAtomicUsdc)} USDC</span>
+                  <small>Open gated page</small>
+                </div>
+              </Link>
+            ))
+          )}
+        </section>
       </main>
       <SiteFooter />
     </>

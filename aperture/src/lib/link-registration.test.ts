@@ -29,6 +29,7 @@ function registeredLink(input: RegisterLinkInput, id: string): LinkRecord {
   return {
     id,
     title: input.title,
+    ...(input.description ? { description: input.description } : {}),
     ownerId: input.ownerId,
     sourceUrl: input.sourceUrl,
     contentType: input.contentType,
@@ -38,7 +39,7 @@ function registeredLink(input: RegisterLinkInput, id: string): LinkRecord {
   };
 }
 
-function previewDeps(linkId: string) {
+function previewDeps(linkId: string, description?: string) {
   const previewBytes = new Uint8Array([9, 8, 7]);
   return {
     fetchImageBytes: vi.fn(async (_url: string) => ({
@@ -54,6 +55,7 @@ function previewDeps(linkId: string) {
     markLinkPreviewGenerated: vi.fn(async (id: string) => ({
       id,
       title: "Photo",
+      ...(description ? { description } : {}),
       ownerId: "link-owner",
       sourceUrl: "https://photos.example.com/photo.jpg",
       contentType: "image/jpeg",
@@ -76,12 +78,16 @@ describe("handleLinkRegistration", () => {
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
       registeredLink(input, "link-1"),
     );
-    const preview = previewDeps("link-1");
+    const preview = previewDeps(
+      "link-1",
+      "A rainy evening street scene in Lagos.",
+    );
 
     const result = await handleLinkRegistration(
       {
         sourceUrl: "https://photos.example.com/photo.jpg#hidden",
         title: "Photo",
+        description: "  A rainy evening street scene in Lagos.  ",
         displayName: "Jane Lens",
         wallet: photographer.wallet,
       },
@@ -116,6 +122,14 @@ describe("handleLinkRegistration", () => {
     });
     expect(result.accountKey).toBe("aptr_known-key");
     expect(result.registered.ownerId).toBe("link-owner");
+    expect(registerLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "A rainy evening street scene in Lagos.",
+      }),
+    );
+    expect(result.link.description).toBe(
+      "A rainy evening street scene in Lagos.",
+    );
     expect(preview.fetchImageBytes).toHaveBeenCalledWith(
       "https://photos.example.com/photo.jpg",
     );
@@ -285,6 +299,40 @@ describe("handleLinkRegistration", () => {
     ).rejects.toThrow("email must be a valid address.");
   });
 
+  it("rejects malformed descriptions", async () => {
+    await expect(
+      handleLinkRegistration(
+        {
+          sourceUrl: "https://photos.example.com/bad-description.jpg",
+          title: "Bad Description",
+          description: { text: "not allowed" },
+          displayName: "Jane Lens",
+        },
+        {
+          origin: "https://tollgate.gudman.xyz",
+          basePath: "/aperture",
+        },
+      ),
+    ).rejects.toThrow("description must be a string.");
+  });
+
+  it("rejects overlong descriptions", async () => {
+    await expect(
+      handleLinkRegistration(
+        {
+          sourceUrl: "https://photos.example.com/long-description.jpg",
+          title: "Long Description",
+          description: "x".repeat(601),
+          displayName: "Jane Lens",
+        },
+        {
+          origin: "https://tollgate.gudman.xyz",
+          basePath: "/aperture",
+        },
+      ),
+    ).rejects.toThrow("description is too long.");
+  });
+
   it("adds work to the logged-in owner without minting a new wallet or key", async () => {
     const registerCreator = vi.fn();
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
@@ -297,6 +345,7 @@ describe("handleLinkRegistration", () => {
       {
         sourceUrl: "https://photos.example.com/second.jpg",
         title: "Second Photo",
+        description: "Existing owner adds context for buyers.",
         displayName: "Ignored Name",
         wallet: "0x0000000000000000000000000000000000000001",
         email: "ignored@example.com",
@@ -326,6 +375,7 @@ describe("handleLinkRegistration", () => {
     expect(registerLink).toHaveBeenCalledWith(
       expect.objectContaining({
         ownerId: "existing-owner",
+        description: "Existing owner adds context for buyers.",
         sourceUrl: "https://photos.example.com/second.jpg",
       }),
     );

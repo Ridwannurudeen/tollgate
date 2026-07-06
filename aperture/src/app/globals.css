@@ -862,7 +862,8 @@ small {
   text-transform: none;
 }
 
-.registerForm input {
+.registerForm input,
+.registerForm textarea {
   min-height: 42px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
@@ -876,11 +877,19 @@ small {
   text-transform: none;
 }
 
-.registerForm input::placeholder {
+.registerForm textarea {
+  min-height: 104px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.registerForm input::placeholder,
+.registerForm textarea::placeholder {
   color: var(--ink-4);
 }
 
-.registerForm input:focus {
+.registerForm input:focus,
+.registerForm textarea:focus {
   outline: none;
   border-color: var(--green);
   box-shadow: 0 0 0 3px rgba(30, 106, 71, 0.12);
@@ -1225,6 +1234,17 @@ small {
 .workCard p {
   margin: 6px 0 0;
   color: var(--ink-3);
+}
+
+.workCard .browseDesc {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.linkDescription {
+  color: var(--ink-2);
 }
 
 .workMeta,

@@ -10,6 +10,7 @@ let linkWriteLock: Promise<void> = Promise.resolve();
 export type LinkRecord = {
   id: string;
   title: string;
+  description?: string;
   ownerId: string;
   sourceUrl: string;
   contentType?: string;
@@ -31,6 +32,7 @@ export type LinkRegistry = {
 export type RegisterLinkInput = {
   id?: string;
   title: string;
+  description?: string;
   ownerId: string;
   sourceUrl: string;
   contentType?: string;
@@ -59,6 +61,8 @@ function isLinkRecord(value: unknown): value is LinkRecord {
   return (
     typeof record.id === "string" &&
     typeof record.title === "string" &&
+    (record.description === undefined ||
+      typeof record.description === "string") &&
     typeof record.ownerId === "string" &&
     typeof record.sourceUrl === "string" &&
     typeof record.priceAtomicUsdc === "number" &&
@@ -131,6 +135,7 @@ export function publicLink(link: LinkRecord): PublicLinkRecord {
   return {
     id: link.id,
     title: link.title,
+    ...(link.description ? { description: link.description } : {}),
     ownerId: link.ownerId,
     ...(link.contentType ? { contentType: link.contentType } : {}),
     ...(link.hasPreview ? { hasPreview: true } : {}),
@@ -183,6 +188,7 @@ export async function registerLink(
   filePath: string = LINKS_PATH,
 ): Promise<LinkRecord> {
   const title = input.title.trim();
+  const description = input.description?.trim();
   const ownerId = input.ownerId.trim();
   if (!title || !ownerId) {
     throw new LinkRegistryError("title and ownerId are required.");
@@ -200,6 +206,7 @@ export async function registerLink(
     const record: LinkRecord = {
       id: input.id ?? randomUUID(),
       title,
+      ...(description ? { description } : {}),
       ownerId,
       sourceUrl,
       ...(input.contentType ? { contentType: input.contentType } : {}),

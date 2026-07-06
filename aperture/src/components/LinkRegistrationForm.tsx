@@ -8,6 +8,7 @@ type LinkRegistrationResult = {
   link: {
     id: string;
     title: string;
+    description?: string;
     priceAtomicUsdc: number;
     hasPreview?: boolean;
   };
@@ -23,6 +24,7 @@ type LinkRegistrationResult = {
 export function LinkRegistrationForm({ basePath }: { basePath: string }) {
   const [sourceUrl, setSourceUrl] = useState("");
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [wallet, setWallet] = useState("");
   const [email, setEmail] = useState("");
@@ -42,6 +44,7 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
         body: JSON.stringify({
           sourceUrl: sourceUrl.trim(),
           title: title.trim(),
+          description: description.trim() || undefined,
           displayName: displayName.trim(),
           wallet: wallet.trim() || undefined,
           email: email.trim() || undefined,
@@ -91,6 +94,17 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Morning at Surulere"
           required
+        />
+      </label>
+      <label>
+        Description{" "}
+        <span className="hint">(optional - tell buyers what they unlock)</span>
+        <textarea
+          maxLength={600}
+          rows={4}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="What is in the photo, where it was taken, and why it is useful."
         />
       </label>
       <label>
@@ -165,8 +179,8 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
             <div className="accountKeyBox">
               <p className="eyebrow">Save your account key</p>
               <p>
-                Backup key - save it if you want a non-email login. You can
-                also use your email to receive a private login link.
+                Backup key - save it if you want a non-email login. You can also
+                use your email to receive a private login link.
               </p>
               <input readOnly value={result.accountKey} />
               <div className="actions compactActions">

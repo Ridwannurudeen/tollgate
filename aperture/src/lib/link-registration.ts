@@ -20,11 +20,13 @@ import { readWalletForOwner } from "./registry";
 
 const MAX_URL_LENGTH = 2048;
 const MAX_TITLE_LENGTH = 120;
+const MAX_DESCRIPTION_LENGTH = 600;
 const MAX_NAME_LENGTH = 80;
 
 export type LinkRegistrationInput = {
   sourceUrl?: unknown;
   title?: unknown;
+  description?: unknown;
   displayName?: unknown;
   wallet?: unknown;
   email?: unknown;
@@ -91,6 +93,19 @@ function optionalEmail(value: unknown): string | undefined {
   return email;
 }
 
+function optionalDescription(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") {
+    throw new LinkRegistryError("description must be a string.");
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > MAX_DESCRIPTION_LENGTH) {
+    throw new LinkRegistryError("description is too long.");
+  }
+  return trimmed;
+}
+
 // github.com/<owner>/<repo>/blob/<ref>/<path> is GitHub's HTML file-viewer page
 // (content-type text/html), not the image itself, so pasting it fails the
 // image-content-type check. Rewrite it to the raw.githubusercontent.com URL
@@ -149,6 +164,7 @@ export async function handleLinkRegistration(
 ): Promise<LinkRegistrationResult> {
   const url = sourceUrl(input.sourceUrl);
   const title = stringField(input.title, "title", MAX_TITLE_LENGTH);
+  const description = optionalDescription(input.description);
   const sessionOwnerId = deps.sessionOwnerId?.trim();
   const findExisting = deps.findLinkBySourceUrl ?? findLinkBySourceUrl;
   if (await findExisting(url)) {
@@ -188,6 +204,7 @@ export async function handleLinkRegistration(
   }
   const link = await (deps.registerLink ?? registerLink)({
     title,
+    ...(description ? { description } : {}),
     ownerId,
     sourceUrl: url,
     contentType: evidence.contentType,

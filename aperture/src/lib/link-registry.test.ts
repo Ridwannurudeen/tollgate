@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -20,6 +20,7 @@ describe("link registry", () => {
         {
           id: "link-1",
           title: "Photo",
+          description: "A rainy evening street scene in Lagos.",
           ownerId: "link-owner",
           sourceUrl: "https://EXAMPLE.com/photo.jpg#tracking",
           contentType: "image/jpeg",
@@ -34,10 +35,56 @@ describe("link registry", () => {
 
       expect(registry.links).toHaveLength(1);
       expect(registry.links[0].sourceUrl).toBe("https://example.com/photo.jpg");
+      expect(registry.links[0].description).toBe(
+        "A rainy evening street scene in Lagos.",
+      );
       expect(registry.links[0].hasPreview).toBe(true);
+      expect(projected.description).toBe(
+        "A rainy evening street scene in Lagos.",
+      );
       expect(projected.hasPreview).toBe(true);
       expect(projected.sourceUrl).toBeUndefined();
       expect(projected.sourceContentHash).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("filters corrupt links with non-string descriptions", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
+    const filePath = path.join(dir, "links.json");
+    try {
+      await writeFile(
+        filePath,
+        JSON.stringify({
+          links: [
+            {
+              id: "valid",
+              title: "Valid Photo",
+              description: "Plain public description.",
+              ownerId: "owner-1",
+              sourceUrl: "https://example.com/valid.jpg",
+              priceAtomicUsdc: 2500,
+              createdAt: "2026-07-06T00:00:00.000Z",
+            },
+            {
+              id: "invalid",
+              title: "Invalid Photo",
+              description: { text: "not allowed" },
+              ownerId: "owner-1",
+              sourceUrl: "https://example.com/invalid.jpg",
+              priceAtomicUsdc: 2500,
+              createdAt: "2026-07-06T00:00:00.000Z",
+            },
+          ],
+        }),
+        "utf8",
+      );
+
+      const registry = await readLinks(filePath);
+
+      expect(registry.links.map((link) => link.id)).toEqual(["valid"]);
+      expect(registry.links[0].description).toBe("Plain public description.");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
