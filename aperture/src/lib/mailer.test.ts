@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sendLoginLinkEmail } from "./mailer";
+import { sendLoginLinkEmail, sendSignupLinkEmail } from "./mailer";
 
 describe("sendLoginLinkEmail", () => {
   const savedKey = process.env.RESEND_API_KEY;
@@ -58,6 +58,35 @@ describe("sendLoginLinkEmail", () => {
           "content-type": "application/json",
         }),
       }),
+    );
+  });
+
+  it("sends a signup confirmation email through Resend", async () => {
+    process.env.RESEND_API_KEY = "re_test";
+    process.env.APERTURE_MAIL_FROM = "Aperture <no-reply@send.gudman.xyz>";
+    let sentBody = "";
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => {
+      sentBody = String(_init.body ?? "");
+      return new Response("", { status: 202 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sent = await sendSignupLinkEmail(
+      "jane@example.com",
+      "https://tollgate.gudman.xyz/aperture/login/verify/signup-token",
+    );
+    const body = JSON.parse(sentBody) as {
+      subject?: string;
+      html?: string;
+    };
+
+    expect(sent).toBe(true);
+    expect(body.subject).toBe(
+      "Confirm your email to create your Aperture creator account",
+    );
+    expect(body.html).toContain("Create your Aperture account");
+    expect(body.html).toContain(
+      "https://tollgate.gudman.xyz/aperture/login/verify/signup-token",
     );
   });
 

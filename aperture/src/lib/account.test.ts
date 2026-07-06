@@ -8,10 +8,12 @@ import {
   findOwnerByEmail,
   generateAccountKey,
   generateLoginToken,
+  generateSignupToken,
   maskAccountEmail,
   normalizeAccountEmail,
   redeemLoginToken,
   signSession,
+  verifySignupToken,
   verifySession,
 } from "./account";
 import { readWalletRegistry, writeWalletRegistry } from "./registry";
@@ -186,6 +188,41 @@ describe("email login", () => {
           Date.parse("2026-07-06T00:30:00.000Z"),
         ),
       ).toBeNull();
+    });
+  });
+
+  it("generates and verifies signed signup tokens", () => {
+    withSessionSecret("session-secret", () => {
+      const token = generateSignupToken(" Jane@Example.COM ", 1_000);
+
+      expect(token).toMatch(/^[A-Za-z0-9_-]+\.[0-9a-f]{64}$/);
+      expect(verifySignupToken(token ?? "", 1_000)).toBe("jane@example.com");
+    });
+  });
+
+  it("rejects expired, tampered, malformed, and secretless signup tokens", () => {
+    withSessionSecret("session-secret", () => {
+      const token = generateSignupToken("jane@example.com", 1_000) ?? "";
+      const [payload, signature] = token.split(".");
+      const tamperedPayload = Buffer.from(
+        JSON.stringify({
+          email: "other@example.com",
+          exp: 1_000 + 20 * 60 * 1_000,
+        }),
+        "utf8",
+      ).toString("base64url");
+
+      expect(verifySignupToken(token, 1_000 + 20 * 60 * 1_000 + 1)).toBeNull();
+      expect(
+        verifySignupToken(`${tamperedPayload}.${signature}`, 1_000),
+      ).toBeNull();
+      expect(verifySignupToken(`${payload}.00`, 1_000)).toBeNull();
+      expect(verifySignupToken("not-a-token", 1_000)).toBeNull();
+    });
+
+    withSessionSecret(undefined, () => {
+      expect(generateSignupToken("jane@example.com", 1_000)).toBeNull();
+      expect(verifySignupToken("payload.signature", 1_000)).toBeNull();
     });
   });
 });

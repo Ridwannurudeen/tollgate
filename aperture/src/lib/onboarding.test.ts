@@ -56,6 +56,29 @@ describe("registerCreator", () => {
     });
   });
 
+  it("stores normalized emails and rejects duplicates across owners", async () => {
+    await withTempRegistry(async (filePath) => {
+      const first = await registerCreator({
+        ownerId: "owner-1",
+        displayName: "Jane Lens",
+        wallet: "0x12f25b721cc21c38495e33a4c8524dd0b647ba03",
+        email: " Jane@Example.COM ",
+        filePath,
+      });
+
+      expect(first.email).toBe("jane@example.com");
+      await expect(
+        registerCreator({
+          ownerId: "owner-2",
+          displayName: "Other Lens",
+          wallet: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          email: "jane@example.com",
+          filePath,
+        }),
+      ).rejects.toThrow("email already registered");
+    });
+  });
+
   it("self-custody: a valid ownership signature marks the entry wallet-signed", async () => {
     await withTempRegistry(async (filePath) => {
       const account = privateKeyToAccount(generatePrivateKey());

@@ -32,9 +32,7 @@ export function LoginForm({ basePath }: { basePath: string }) {
         );
         return;
       }
-      setEmailStatus(
-        "If that email is registered, a login link is on its way.",
-      );
+      setEmailStatus("If that email can receive mail, a link is on its way.");
     } catch {
       setEmailStatus("Network error - please try again.");
     } finally {
@@ -87,7 +85,7 @@ export function LoginForm({ basePath }: { basePath: string }) {
           />
         </label>
         <button type="submit" disabled={emailSubmitting}>
-          {emailSubmitting ? "Sending link..." : "Send login link"}
+          {emailSubmitting ? "Sending link..." : "Send link"}
         </button>
         {emailStatus && <p className="formStatus">{emailStatus}</p>}
       </form>

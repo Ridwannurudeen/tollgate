@@ -1,4 +1,5 @@
 import { getAddress, isAddress, verifyMessage, type Address } from "viem";
+import { normalizeAccountEmail } from "./account";
 import { w3sMintWallet } from "./circle-w3s";
 import { sha256Hex } from "./hash";
 import {
@@ -112,6 +113,12 @@ export async function registerCreator(
   if (!ownerId || !displayName) {
     throw new Error("ownerId and displayName are required.");
   }
+  const email = input.email?.trim()
+    ? normalizeAccountEmail(input.email)
+    : undefined;
+  if (input.email?.trim() && !email) {
+    throw new Error("email must be a valid address.");
+  }
 
   let entry: WalletRegistryEntry;
   if (input.wallet) {
@@ -159,6 +166,15 @@ export async function registerCreator(
   return withRegistryWriteLock(async () => {
     const registry = await readWalletRegistry(input.filePath);
     const existing = findWalletForOwner(registry, ownerId);
+    if (
+      email &&
+      registry.photographers.some(
+        (candidate) =>
+          candidate.ownerId !== ownerId && candidate.email === email,
+      )
+    ) {
+      throw new Error("email already registered.");
+    }
     const finalEntry: WalletRegistryEntry = {
       ...entry,
       ...(input.accountKeyHash
@@ -166,11 +182,7 @@ export async function registerCreator(
         : existing?.accountKeyHash
           ? { accountKeyHash: existing.accountKeyHash }
           : {}),
-      ...(input.email?.trim()
-        ? { email: input.email.trim().toLowerCase() }
-        : existing?.email
-          ? { email: existing.email }
-          : {}),
+      ...(email ? { email } : existing?.email ? { email: existing.email } : {}),
       ...(existing?.linkedWallets
         ? { linkedWallets: existing.linkedWallets }
         : {}),

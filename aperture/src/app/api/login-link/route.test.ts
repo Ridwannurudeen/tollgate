@@ -5,12 +5,15 @@ import { POST } from "./route";
 const mocks = vi.hoisted(() => ({
   findOwnerByEmail: vi.fn(),
   generateLoginToken: vi.fn(),
+  generateSignupToken: vi.fn(),
   sendLoginLinkEmail: vi.fn(),
+  sendSignupLinkEmail: vi.fn(),
 }));
 
 vi.mock("../../../lib/account", () => ({
   findOwnerByEmail: mocks.findOwnerByEmail,
   generateLoginToken: mocks.generateLoginToken,
+  generateSignupToken: mocks.generateSignupToken,
   normalizeAccountEmail: (value: string) => {
     const trimmed = value.trim().toLowerCase();
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) ? trimmed : null;
@@ -19,6 +22,7 @@ vi.mock("../../../lib/account", () => ({
 
 vi.mock("../../../lib/mailer", () => ({
   sendLoginLinkEmail: mocks.sendLoginLinkEmail,
+  sendSignupLinkEmail: mocks.sendSignupLinkEmail,
 }));
 
 function request(
@@ -44,12 +48,16 @@ describe("POST /api/login-link", () => {
   beforeEach(() => {
     mocks.findOwnerByEmail.mockReset();
     mocks.generateLoginToken.mockReset();
+    mocks.generateSignupToken.mockReset();
     mocks.sendLoginLinkEmail.mockReset();
+    mocks.sendSignupLinkEmail.mockReset();
     mocks.sendLoginLinkEmail.mockResolvedValue(true);
+    mocks.sendSignupLinkEmail.mockResolvedValue(true);
   });
 
-  it("returns the same success response for unknown emails", async () => {
+  it("returns the same success response and sends a signup link for unknown emails", async () => {
     mocks.findOwnerByEmail.mockResolvedValue(null);
+    mocks.generateSignupToken.mockReturnValue("signup-token.signature");
 
     const response = await POST(request("198.51.100.231", "jane@example.com"));
     const body = (await response.json()) as { ok: boolean };
@@ -58,6 +66,11 @@ describe("POST /api/login-link", () => {
     expect(body.ok).toBe(true);
     expect(mocks.generateLoginToken).not.toHaveBeenCalled();
     expect(mocks.sendLoginLinkEmail).not.toHaveBeenCalled();
+    expect(mocks.generateSignupToken).toHaveBeenCalledWith("jane@example.com");
+    expect(mocks.sendSignupLinkEmail).toHaveBeenCalledWith(
+      "jane@example.com",
+      "https://tollgate.gudman.xyz/aperture/login/verify/signup-token.signature",
+    );
   });
 
   it("sends a single-use login link for known emails", async () => {
@@ -82,6 +95,8 @@ describe("POST /api/login-link", () => {
       "jane@example.com",
       "https://tollgate.gudman.xyz/aperture/login/verify/" + "a".repeat(64),
     );
+    expect(mocks.generateSignupToken).not.toHaveBeenCalled();
+    expect(mocks.sendSignupLinkEmail).not.toHaveBeenCalled();
   });
 
   it("falls back to the canonical origin for untrusted host headers", async () => {
@@ -105,6 +120,7 @@ describe("POST /api/login-link", () => {
 
   it("rate-limits login-link requests per IP", async () => {
     mocks.findOwnerByEmail.mockResolvedValue(null);
+    mocks.generateSignupToken.mockReturnValue("signup-token.signature");
     const ip = "198.51.100.234";
 
     for (let index = 0; index < 5; index += 1) {

@@ -1,10 +1,15 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   SESSION_COOKIE_NAME,
+  findOwnerByEmail,
   redeemLoginToken,
   sessionCookieOptions,
   signSession,
+  verifySignupToken,
 } from "../../../../lib/account";
+import { registerCreator } from "../../../../lib/onboarding";
+import type { WalletRegistryEntry } from "../../../../lib/types";
 
 export const runtime = "nodejs";
 
@@ -69,28 +74,38 @@ function invalidPage(basePath: string) {
   });
 }
 
-export async function GET(request: NextRequest, context: RouteContext) {
-  const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
-  if (!process.env.APERTURE_SESSION_SECRET?.trim()) {
-    return loginPage({
-      title: "Email login is not configured.",
-      status: 503,
-      body: '<p style="font-size:16px;line-height:1.65;color:#4f4b3f;">Ask the operator to configure Aperture sessions, then request a new login link.</p>',
-    });
-  }
+function unavailablePage() {
+  return loginPage({
+    title: "Email login is not configured.",
+    status: 503,
+    body: '<p style="font-size:16px;line-height:1.65;color:#4f4b3f;">Ask the operator to configure Aperture sessions, then request a new login link.</p>',
+  });
+}
 
-  const { token } = await context.params;
-  const owner = await redeemLoginToken(token);
-  if (!owner) return invalidPage(basePath);
+function signupFailedPage(basePath: string) {
+  const loginHref = `${basePath}/login`;
+  return loginPage({
+    title: "Couldn't create your account.",
+    status: 503,
+    body: [
+      '<p style="font-size:16px;line-height:1.65;color:#4f4b3f;">Aperture could not finish creating your creator account. Request a new link and try again.</p>',
+      `<a href="${escapeHtml(loginHref)}" style="display:inline-flex;align-items:center;min-height:42px;padding:0 18px;border:1px solid #0e3d28;border-radius:999px;background:#1e6a47;color:#f6f2e7;font:600 11px IBM Plex Mono,monospace;letter-spacing:.08em;text-decoration:none;text-transform:uppercase;">Request a new link</a>`,
+    ].join(""),
+  });
+}
 
-  const cookieValue = signSession(owner.ownerId);
-  if (!cookieValue) {
-    return loginPage({
-      title: "Email login is not configured.",
-      status: 503,
-      body: '<p style="font-size:16px;line-height:1.65;color:#4f4b3f;">Ask the operator to configure Aperture sessions, then request a new login link.</p>',
-    });
-  }
+function displayNameFromEmail(email: string): string {
+  const local = email.split("@")[0]?.trim().slice(0, 80);
+  return local || "New creator";
+}
+
+function redirectWithSession(
+  request: NextRequest,
+  basePath: string,
+  ownerId: string,
+) {
+  const cookieValue = signSession(ownerId);
+  if (!cookieValue) return unavailablePage();
 
   const response = NextResponse.redirect(
     new URL(`${basePath}/dashboard`, request.url),
@@ -101,4 +116,37 @@ export async function GET(request: NextRequest, context: RouteContext) {
     sessionCookieOptions(),
   );
   return response;
+}
+
+async function ownerForSignupEmail(
+  email: string,
+): Promise<WalletRegistryEntry | null> {
+  const existing = await findOwnerByEmail(email).catch(() => null);
+  if (existing) return existing;
+  try {
+    return await registerCreator({
+      ownerId: `link-${randomUUID()}`,
+      displayName: displayNameFromEmail(email),
+      email,
+    });
+  } catch {
+    return findOwnerByEmail(email).catch(() => null);
+  }
+}
+
+export async function GET(request: NextRequest, context: RouteContext) {
+  const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
+  if (!process.env.APERTURE_SESSION_SECRET?.trim()) {
+    return unavailablePage();
+  }
+
+  const { token } = await context.params;
+  const owner = await redeemLoginToken(token);
+  if (owner) return redirectWithSession(request, basePath, owner.ownerId);
+
+  const signupEmail = verifySignupToken(token);
+  if (!signupEmail) return invalidPage(basePath);
+  const signupOwner = await ownerForSignupEmail(signupEmail);
+  if (!signupOwner) return signupFailedPage(basePath);
+  return redirectWithSession(request, basePath, signupOwner.ownerId);
 }

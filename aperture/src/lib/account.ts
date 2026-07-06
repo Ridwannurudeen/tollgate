@@ -14,6 +14,10 @@ export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 export const LOGIN_TOKEN_TTL_MS = 20 * 60 * 1000;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type SignupTokenPayload = {
+  email: string;
+  exp: number;
+};
 
 export function generateAccountKey(): string {
   return `aptr_${randomBytes(32).toString("hex")}`;
@@ -125,6 +129,70 @@ function sessionSignature(ownerId: string, secret: string): string {
   return createHmac("sha256", secret).update(ownerId).digest("hex");
 }
 
+function signupTokenSignature(payload: string, secret: string): string {
+  return createHmac("sha256", secret).update(payload).digest("hex");
+}
+
+function timingSafeHexEquals(supplied: string, expected: string): boolean {
+  if (!/^[0-9a-f]{64}$/i.test(supplied)) return false;
+  const suppliedBuffer = Buffer.from(supplied, "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  return (
+    suppliedBuffer.byteLength === expectedBuffer.byteLength &&
+    timingSafeEqual(suppliedBuffer, expectedBuffer)
+  );
+}
+
+function isSignupTokenPayload(value: unknown): value is SignupTokenPayload {
+  return (
+    Boolean(value && typeof value === "object") &&
+    typeof (value as SignupTokenPayload).email === "string" &&
+    typeof (value as SignupTokenPayload).exp === "number" &&
+    Number.isFinite((value as SignupTokenPayload).exp)
+  );
+}
+
+export function generateSignupToken(
+  email: string,
+  now = Date.now(),
+): string | null {
+  const secret = sessionSecret();
+  const normalizedEmail = normalizeAccountEmail(email);
+  if (!secret || !normalizedEmail) return null;
+  const payload = Buffer.from(
+    JSON.stringify({
+      email: normalizedEmail,
+      exp: now + LOGIN_TOKEN_TTL_MS,
+    }),
+    "utf8",
+  ).toString("base64url");
+  return `${payload}.${signupTokenSignature(payload, secret)}`;
+}
+
+export function verifySignupToken(
+  token: string,
+  now = Date.now(),
+): string | null {
+  const secret = sessionSecret();
+  if (!secret) return null;
+  const [payload, suppliedSignature, extra] = token.trim().split(".");
+  if (!payload || !suppliedSignature || extra !== undefined) return null;
+  const expectedSignature = signupTokenSignature(payload, secret);
+  if (!timingSafeHexEquals(suppliedSignature, expectedSignature)) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as unknown;
+    if (!isSignupTokenPayload(parsed) || parsed.exp <= now) return null;
+    const normalizedEmail = normalizeAccountEmail(parsed.email);
+    return normalizedEmail && normalizedEmail === parsed.email
+      ? normalizedEmail
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function signSession(ownerId: string): string | null {
   const secret = sessionSecret();
   if (!secret) return null;
@@ -140,10 +208,7 @@ export function verifySession(cookieValue: string | undefined): string | null {
   const supplied = cookieValue.slice(separator + 1);
   if (!ownerId || !/^[0-9a-f]{64}$/i.test(supplied)) return null;
   const expected = sessionSignature(ownerId, secret);
-  const suppliedBuffer = Buffer.from(supplied, "hex");
-  const expectedBuffer = Buffer.from(expected, "hex");
-  if (suppliedBuffer.byteLength !== expectedBuffer.byteLength) return null;
-  return timingSafeEqual(suppliedBuffer, expectedBuffer) ? ownerId : null;
+  return timingSafeHexEquals(supplied, expected) ? ownerId : null;
 }
 
 export function sessionCookieOptions(maxAge = SESSION_MAX_AGE_SECONDS) {

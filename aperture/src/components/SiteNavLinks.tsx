@@ -65,7 +65,7 @@ export function SiteNavLinks({ basePath, ownerName }: SiteNavLinksProps) {
             className={loginActive ? "active" : undefined}
             href="/login"
           >
-            Log in
+            Sign in
           </Link>
         )}
       </div>

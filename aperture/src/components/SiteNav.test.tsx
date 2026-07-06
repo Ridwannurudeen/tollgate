@@ -31,7 +31,7 @@ describe("SiteNav", () => {
 
     expect(markup).toContain("Browse");
     expect(markup).toContain("Sell your photos");
-    expect(markup).toContain("Log in");
+    expect(markup).toContain("Sign in");
     expect(markup).not.toContain("Dashboard");
     expect(markup).not.toContain("Log out");
     expect(markup).toContain('aria-current="page"');
@@ -50,7 +50,7 @@ describe("SiteNav", () => {
     expect(markup).toContain("Jane Lens");
     expect(markup).toContain("Dashboard");
     expect(markup).toContain("Log out");
-    expect(markup).not.toContain(">Log in<");
+    expect(markup).not.toContain(">Sign in<");
     expect(markup).toContain('aria-current="page"');
   });
 });

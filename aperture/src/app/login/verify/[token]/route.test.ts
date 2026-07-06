@@ -3,12 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 
 const mocks = vi.hoisted(() => ({
+  findOwnerByEmail: vi.fn(),
   redeemLoginToken: vi.fn(),
+  registerCreator: vi.fn(),
   signSession: vi.fn(),
+  verifySignupToken: vi.fn(),
 }));
 
 vi.mock("../../../../lib/account", () => ({
   SESSION_COOKIE_NAME: "aperture_session",
+  findOwnerByEmail: mocks.findOwnerByEmail,
   redeemLoginToken: mocks.redeemLoginToken,
   sessionCookieOptions: () => ({
     httpOnly: true,
@@ -18,6 +22,11 @@ vi.mock("../../../../lib/account", () => ({
     maxAge: 2592000,
   }),
   signSession: mocks.signSession,
+  verifySignupToken: mocks.verifySignupToken,
+}));
+
+vi.mock("../../../../lib/onboarding", () => ({
+  registerCreator: mocks.registerCreator,
 }));
 
 function request(token = "a".repeat(64)): NextRequest {
@@ -33,8 +42,12 @@ describe("GET /login/verify/[token]", () => {
   beforeEach(() => {
     process.env.APERTURE_SESSION_SECRET = "session-secret";
     process.env.APERTURE_BASE_PATH = "/aperture";
+    mocks.findOwnerByEmail.mockReset();
     mocks.redeemLoginToken.mockReset();
+    mocks.registerCreator.mockReset();
     mocks.signSession.mockReset();
+    mocks.verifySignupToken.mockReset();
+    mocks.verifySignupToken.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -68,6 +81,7 @@ describe("GET /login/verify/[token]", () => {
     );
     expect(mocks.redeemLoginToken).toHaveBeenCalledWith("a".repeat(64));
     expect(mocks.signSession).toHaveBeenCalledWith("owner-1");
+    expect(mocks.verifySignupToken).not.toHaveBeenCalled();
     expect(cookie).toContain("aperture_session=owner-1.signature");
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("Secure");
@@ -83,6 +97,73 @@ describe("GET /login/verify/[token]", () => {
 
     expect(response.status).toBe(400);
     expect(html).toContain("Login link invalid or expired.");
+    expect(mocks.verifySignupToken).toHaveBeenCalledWith("bad");
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("creates and logs in a new account for a valid signup token", async () => {
+    mocks.redeemLoginToken.mockResolvedValue(null);
+    mocks.verifySignupToken.mockReturnValue("jane@example.com");
+    mocks.findOwnerByEmail.mockResolvedValue(null);
+    mocks.registerCreator.mockResolvedValue({
+      ownerId: "link-new",
+      displayName: "jane",
+      email: "jane@example.com",
+      wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+    });
+    mocks.signSession.mockReturnValue("link-new.signature");
+
+    const response = await GET(request("signup.payload"), {
+      params: Promise.resolve({ token: "signup.payload" }),
+    });
+    const cookie = response.headers.get("set-cookie") ?? "";
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "https://tollgate.gudman.xyz/aperture/dashboard",
+    );
+    expect(mocks.registerCreator).toHaveBeenCalledWith({
+      ownerId: expect.stringMatching(/^link-/),
+      displayName: "jane",
+      email: "jane@example.com",
+    });
+    expect(mocks.signSession).toHaveBeenCalledWith("link-new");
+    expect(cookie).toContain("aperture_session=link-new.signature");
+  });
+
+  it("logs into an existing account for a replayed signup token without creating a duplicate", async () => {
+    mocks.redeemLoginToken.mockResolvedValue(null);
+    mocks.verifySignupToken.mockReturnValue("jane@example.com");
+    mocks.findOwnerByEmail.mockResolvedValue({
+      ownerId: "owner-existing",
+      displayName: "Jane Lens",
+      email: "jane@example.com",
+    });
+    mocks.signSession.mockReturnValue("owner-existing.signature");
+
+    const response = await GET(request("signup.payload"), {
+      params: Promise.resolve({ token: "signup.payload" }),
+    });
+
+    expect(response.status).toBe(307);
+    expect(mocks.registerCreator).not.toHaveBeenCalled();
+    expect(mocks.signSession).toHaveBeenCalledWith("owner-existing");
+  });
+
+  it("returns a creation error page if signup account creation fails", async () => {
+    mocks.redeemLoginToken.mockResolvedValue(null);
+    mocks.verifySignupToken.mockReturnValue("jane@example.com");
+    mocks.findOwnerByEmail.mockResolvedValue(null);
+    mocks.registerCreator.mockRejectedValue(new Error("circle offline"));
+
+    const response = await GET(request("signup.payload"), {
+      params: Promise.resolve({ token: "signup.payload" }),
+    });
+    const html = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(html).toContain("Couldn't create your account.");
+    expect(mocks.signSession).not.toHaveBeenCalled();
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 

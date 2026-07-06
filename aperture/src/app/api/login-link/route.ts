@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   findOwnerByEmail,
   generateLoginToken,
+  generateSignupToken,
   normalizeAccountEmail,
 } from "../../../lib/account";
 import { assertLoginLinkRateLimit } from "../../../lib/link-rate-limit";
-import { sendLoginLinkEmail } from "../../../lib/mailer";
+import { sendLoginLinkEmail, sendSignupLinkEmail } from "../../../lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -71,14 +72,24 @@ export async function POST(request: NextRequest) {
   if (!email) return ok();
 
   const owner = await findOwnerByEmail(email);
-  if (!owner?.email) return ok();
-  const login = await generateLoginToken(owner.ownerId);
-  if (!login) return ok();
-
   const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
-  await sendLoginLinkEmail(
-    owner.email,
-    `${loginOrigin(request)}${basePath}/login/verify/${login.token}`,
-  );
+  if (owner?.email) {
+    const login = await generateLoginToken(owner.ownerId);
+    if (login) {
+      await sendLoginLinkEmail(
+        owner.email,
+        `${loginOrigin(request)}${basePath}/login/verify/${login.token}`,
+      );
+    }
+    return ok();
+  }
+
+  const signupToken = generateSignupToken(email);
+  if (signupToken) {
+    await sendSignupLinkEmail(
+      email,
+      `${loginOrigin(request)}${basePath}/login/verify/${signupToken}`,
+    );
+  }
   return ok();
 }

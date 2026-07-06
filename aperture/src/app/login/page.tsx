@@ -12,24 +12,23 @@ export default function LoginPage() {
       <main className="shell compact">
         <SiteNav />
 
-      <section className="pageHeader">
-        <p className="eyebrow">Creator account</p>
-        <h1>Log in with a private email link.</h1>
-        <p>
-          Enter the email you added during registration. Aperture sends a
-          single-use link that opens your creator dashboard, no wallet signature
-          or browser wallet required.
-        </p>
-      </section>
+        <section className="pageHeader">
+          <p className="eyebrow">Creator account</p>
+          <h1>Sign in or create your Aperture account.</h1>
+          <p>
+            Enter your email. Aperture sends a private link that signs you in,
+            or creates your creator account if you&apos;re new.
+          </p>
+        </section>
 
-      <section className="surface accountSurface">
-        <h2>Email login</h2>
-        <p>
-          The response is private: it looks the same whether or not the email is
-          registered.
-        </p>
-        <LoginForm basePath={basePath} />
-      </section>
+        <section className="surface accountSurface">
+          <h2>Email link</h2>
+          <p>
+            The response is private: it looks the same for new and existing
+            emails.
+          </p>
+          <LoginForm basePath={basePath} />
+        </section>
       </main>
       <SiteFooter />
     </>
