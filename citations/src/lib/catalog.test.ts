@@ -2,12 +2,20 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   appendSource,
+  buildSourceOwnershipMessage,
   fetchSourceContentExcerpt,
   htmlToText,
   refetchCustomSourceContent,
+  verifySourceOwnership,
 } from "./catalog";
+import { shouldEscrowSource } from "./escrow";
+import {
+  verificationToken,
+  verifySourceByWebProof,
+} from "./source-verification";
 import type { CreatorSource, SourceRegistrationInput } from "./types";
 
 const mocks = vi.hoisted(() => ({
@@ -53,6 +61,18 @@ function restoreFetchEnv(previous: string | undefined): void {
   }
 }
 
+async function withRegistrationFetchDisabled<T>(
+  test: () => Promise<T>,
+): Promise<T> {
+  const previous = process.env.TOLLGATE_REGISTRATION_FETCH;
+  process.env.TOLLGATE_REGISTRATION_FETCH = "0";
+  try {
+    return await test();
+  } finally {
+    restoreFetchEnv(previous);
+  }
+}
+
 async function withTempRegistry<T>(
   test: (filePath: string) => Promise<T>,
 ): Promise<T> {
@@ -62,6 +82,31 @@ async function withTempRegistry<T>(
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+async function signedOwnershipInput(input: SourceRegistrationInput): Promise<{
+  input: SourceRegistrationInput;
+  account: ReturnType<typeof privateKeyToAccount>;
+}> {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const timestamp = "2026-07-06T12:00:00.000Z";
+  const url = String(input.url);
+  const signature = await account.signMessage({
+    message: buildSourceOwnershipMessage({
+      sourceUrl: url,
+      wallet: account.address,
+      timestamp,
+    }),
+  });
+  return {
+    account,
+    input: {
+      ...input,
+      wallet: account.address,
+      ownershipSignature: signature,
+      ownershipTimestamp: timestamp,
+    },
+  };
 }
 
 describe("appendSource registration content evidence", () => {
@@ -255,6 +300,208 @@ describe("appendSource registration content evidence", () => {
       );
       expect(updated[0]?.contentHash).toMatch(/^0x[0-9a-f]{64}$/);
       expect(updated[0]?.contentFetchedAt).toBeTruthy();
+    });
+  });
+});
+
+describe("source ownership trust gates", () => {
+  beforeEach(() => {
+    mocks.readRsshubSources.mockReset();
+    mocks.readRsshubSources.mockResolvedValue([]);
+    mocks.safeFetch.mockReset();
+  });
+
+  it("keeps wallet-signature registration probationary while storing the proof", async () => {
+    const signed = await signedOwnershipInput({
+      ...sourceInput,
+      title: "Signed Registration Source",
+      url: "https://example.com/signed-registration",
+    });
+
+    await withTempRegistry(async (filePath) => {
+      const result = await withRegistrationFetchDisabled(() =>
+        appendSource(signed.input, filePath),
+      );
+
+      expect(result.source.verifiedCreator).toBe(false);
+      expect(result.source.probation).toBe(true);
+      expect(result.source.ownershipProof?.method).toBe("wallet-signature");
+      expect(result.source.ownershipProof?.signer).toBe(signed.account.address);
+      expect(result.source.ownershipProof?.signatureHash).toMatch(
+        /^0x[0-9a-f]{64}$/,
+      );
+    });
+  });
+
+  it("keeps unsigned registration probationary without storing a proof", async () => {
+    await withTempRegistry(async (filePath) => {
+      const result = await withRegistrationFetchDisabled(() =>
+        appendSource(
+          {
+            ...sourceInput,
+            title: "Unsigned Registration Source",
+            url: "https://example.com/unsigned-registration",
+          },
+          filePath,
+        ),
+      );
+
+      expect(result.source.verifiedCreator).toBe(false);
+      expect(result.source.probation).toBe(true);
+      expect(result.source.ownershipProof).toBeUndefined();
+    });
+  });
+
+  it("keeps wallet-signature verification probationary but records the proof", async () => {
+    const account = privateKeyToAccount(generatePrivateKey());
+    const timestamp = "2026-07-06T12:30:00.000Z";
+    const url = "https://example.com/probation-wallet";
+
+    await withTempRegistry(async (filePath) => {
+      const registered = await withRegistrationFetchDisabled(() =>
+        appendSource(
+          {
+            ...sourceInput,
+            title: "Probation Wallet Source",
+            wallet: account.address,
+            url,
+          },
+          filePath,
+        ),
+      );
+      const signature = await account.signMessage({
+        message: buildSourceOwnershipMessage({
+          sourceUrl: registered.source.url,
+          wallet: account.address,
+          timestamp,
+        }),
+      });
+
+      const result = await verifySourceOwnership(
+        registered.source.id,
+        { ownershipSignature: signature, ownershipTimestamp: timestamp },
+        filePath,
+      );
+
+      expect(result.source.verifiedCreator).toBe(false);
+      expect(result.source.probation).toBe(true);
+      expect(result.source.ownershipProof?.method).toBe("wallet-signature");
+      expect(result.source.ownershipProof?.signer).toBe(account.address);
+    });
+  });
+
+  it("lets meta-tag domain proof clear probation", async () => {
+    const previousSecret = process.env.TOLLGATE_VERIFY_SECRET;
+    process.env.TOLLGATE_VERIFY_SECRET = "secret";
+
+    try {
+      await withTempRegistry(async (filePath) => {
+        const registered = await withRegistrationFetchDisabled(() =>
+          appendSource(
+            {
+              ...sourceInput,
+              title: "Meta Verified Source",
+              url: "https://example.com/meta-verified",
+            },
+            filePath,
+          ),
+        );
+        const token = verificationToken(registered.source.id);
+        mocks.safeFetch.mockResolvedValueOnce(
+          response(
+            `<html><head><meta name="tollgate-verification" content="${token}"></head></html>`,
+          ),
+        );
+
+        const result = await verifySourceByWebProof(
+          registered.source,
+          "meta-tag",
+          { filePath },
+        );
+
+        expect(result.source.verifiedCreator).toBe(true);
+        expect(result.source.probation).toBe(false);
+        expect(result.source.ownershipProof?.method).toBe("meta-tag");
+      });
+    } finally {
+      if (previousSecret === undefined) {
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      } else {
+        process.env.TOLLGATE_VERIFY_SECRET = previousSecret;
+      }
+    }
+  });
+
+  it("does not demote a domain-verified source when wallet-signature proof is refreshed", async () => {
+    const previousSecret = process.env.TOLLGATE_VERIFY_SECRET;
+    process.env.TOLLGATE_VERIFY_SECRET = "secret";
+    const account = privateKeyToAccount(generatePrivateKey());
+    const timestamp = "2026-07-06T13:00:00.000Z";
+
+    try {
+      await withTempRegistry(async (filePath) => {
+        const registered = await withRegistrationFetchDisabled(() =>
+          appendSource(
+            {
+              ...sourceInput,
+              title: "Domain Then Wallet Source",
+              wallet: account.address,
+              url: "https://example.com/domain-then-wallet",
+            },
+            filePath,
+          ),
+        );
+        const token = verificationToken(registered.source.id);
+        mocks.safeFetch.mockResolvedValueOnce(
+          response(`<meta name="tollgate-verification" content="${token}">`),
+        );
+        const domainVerified = await verifySourceByWebProof(
+          registered.source,
+          "meta-tag",
+          { filePath },
+        );
+        const signature = await account.signMessage({
+          message: buildSourceOwnershipMessage({
+            sourceUrl: domainVerified.source.url,
+            wallet: account.address,
+            timestamp,
+          }),
+        });
+
+        const refreshed = await verifySourceOwnership(
+          registered.source.id,
+          { ownershipSignature: signature, ownershipTimestamp: timestamp },
+          filePath,
+        );
+
+        expect(refreshed.source.verifiedCreator).toBe(true);
+        expect(refreshed.source.probation).toBe(false);
+        expect(refreshed.source.ownershipProof?.method).toBe(
+          "wallet-signature",
+        );
+      });
+    } finally {
+      if (previousSecret === undefined) {
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      } else {
+        process.env.TOLLGATE_VERIFY_SECRET = previousSecret;
+      }
+    }
+  });
+
+  it("still escrows wallet-signature-only sources", async () => {
+    const signed = await signedOwnershipInput({
+      ...sourceInput,
+      title: "Escrowed Signed Source",
+      url: "https://example.com/escrowed-signed",
+    });
+
+    await withTempRegistry(async (filePath) => {
+      const result = await withRegistrationFetchDisabled(() =>
+        appendSource(signed.input, filePath),
+      );
+
+      expect(shouldEscrowSource(result.source)).toBe(true);
     });
   });
 });

@@ -26,7 +26,7 @@ export default async function SourcesPage() {
             <h1>Browse every registered work Tollgate can pay.</h1>
             <p className="hero-text">
               Public sources include seed demos, verified creators, and
-              probationary self-registered work waiting for wallet ownership
+              probationary self-registered work waiting for domain ownership
               proof.
             </p>
           </div>

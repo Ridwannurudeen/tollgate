@@ -767,7 +767,7 @@ describe("LeptonWeb settlement engine", () => {
     expect(source.verifiedCreator).toBe(false);
   });
 
-  it("marks a source verified when ownership signature recovers the wallet", async () => {
+  it("stores wallet-signature proof without granting source verification", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-sources-"));
     const filePath = path.join(dir, "sources.json");
     const account = privateKeyToAccount(generatePrivateKey());
@@ -800,7 +800,8 @@ describe("LeptonWeb settlement engine", () => {
         ),
       );
 
-      expect(result.source.verifiedCreator).toBe(true);
+      expect(result.source.verifiedCreator).toBe(false);
+      expect(result.source.probation).toBe(true);
       expect(result.source.ownershipProof?.method).toBe("wallet-signature");
       expect(result.source.ownershipProof?.signer).toBe(account.address);
       expect(result.source.ownershipProof?.signatureHash).toMatch(

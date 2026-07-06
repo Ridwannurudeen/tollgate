@@ -158,7 +158,7 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
     wallet: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     url: "https://example.com/ownership-escrow",
     summary:
-      "A newly registered source is probationary until its owner proves control of the payout wallet by signing an ownership message or placing a token in the site's DNS or a meta tag. Until then, citation payouts for that source are escrowed rather than released, and cleared only once verification passes. This stops an anonymous registrant from pointing someone else's URL at their own wallet to divert a creator's earnings.",
+      "A newly registered source is probationary until its owner proves control of the source domain with a DNS TXT record or meta tag. A wallet signature can confirm the payout wallet, but it does not clear probation by itself. Until domain verification passes, citation payouts for that source are escrowed rather than released. This stops an anonymous registrant from pointing someone else's URL at their own wallet to divert a creator's earnings.",
     tags: ["escrow", "verification", "ownership", "creators", "payouts"],
     priceAtomicUsdc: 1400,
   }),
@@ -836,8 +836,8 @@ export async function appendSource(
   const contentEvidence = await registrationContentEvidence(normalized);
   const source: CreatorSource = {
     ...normalized,
-    verifiedCreator: ownershipProof !== undefined,
-    probation: ownershipProof === undefined,
+    verifiedCreator: false,
+    probation: true,
     ...(ownershipProof ? { ownershipProof } : {}),
     ...contentEvidence,
   };
@@ -876,10 +876,12 @@ export async function updateSourceVerification(
     if (index < 0) {
       throw new SourceRegistryError("source not found.", 404);
     }
+    const domainVerified =
+      ownershipProof.method === "meta-tag" ||
+      ownershipProof.method === "dns-txt";
     const source: CreatorSource = {
       ...customSources[index],
-      verifiedCreator: true,
-      probation: false,
+      ...(domainVerified ? { verifiedCreator: true, probation: false } : {}),
       ownershipProof,
     };
     const nextCustomSources = customSources.slice();

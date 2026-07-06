@@ -7,6 +7,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createQueryRecord } from "./engine";
 import {
   assertValidFeeRouterSplit,
+  createFeeRouterPublicClient,
   refundReaderPayment,
   routeCitationPayments,
   type FeeRouterWalletClient,
@@ -98,6 +99,14 @@ function mockClients(
 }
 
 describe("assertValidFeeRouterSplit", () => {
+  it("uses Arc-speed polling for the default FeeRouter public client", () => {
+    const client = createFeeRouterPublicClient() as PublicClient & {
+      pollingInterval: number;
+    };
+
+    expect(client.pollingInterval).toBe(250);
+  });
+
   it("accepts a 10000 bps split", () => {
     expect(() =>
       assertValidFeeRouterSplit(

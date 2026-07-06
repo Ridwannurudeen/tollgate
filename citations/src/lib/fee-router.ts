@@ -27,6 +27,7 @@ const SPLIT_REGISTRY_PATH = path.join(
   "fee-router-splits.json",
 );
 const FEE_ROUTER_CLAIMABLE_CACHE_TTL_MS = 60_000;
+const ARC_POLLING_INTERVAL_MS = 250;
 // Approving the exact payout amount resets the allowance to ~0 after every pay,
 // so concurrent payouts (demand engine + live queries) race a tiny allowance and
 // revert with "transfer amount exceeds allowance". Instead top up to a large
@@ -137,6 +138,7 @@ export function createFeeRouterPublicClient() {
   return createPublicClient({
     chain: arcTestnet,
     transport: http(ARC_RPC_URL),
+    pollingInterval: ARC_POLLING_INTERVAL_MS,
   });
 }
 
@@ -333,6 +335,7 @@ export function createFeeRouterSigner(
           account,
           chain: arcTestnet,
           transport: http(ARC_RPC_URL),
+          pollingInterval: ARC_POLLING_INTERVAL_MS,
         }),
       ),
   };

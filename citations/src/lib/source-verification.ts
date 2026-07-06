@@ -105,10 +105,15 @@ export async function verifyDnsTxtSource(
 export async function verifySourceByWebProof(
   source: CreatorSource,
   method: "meta-tag" | "dns-txt",
+  options: {
+    filePath?: string;
+    fetchOptions?: SafeFetchOptions;
+    resolver?: typeof resolveTxt;
+  } = {},
 ): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
   const ownershipProof =
     method === "meta-tag"
-      ? await verifyMetaTagSource(source)
-      : await verifyDnsTxtSource(source);
-  return updateSourceVerification(source.id, ownershipProof);
+      ? await verifyMetaTagSource(source, options.fetchOptions)
+      : await verifyDnsTxtSource(source, options.resolver);
+  return updateSourceVerification(source.id, ownershipProof, options.filePath);
 }
