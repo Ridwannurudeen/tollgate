@@ -15,6 +15,7 @@ export default async function OnboardingPage() {
           Aperture
         </Link>
         <div className="navlinks">
+          <Link href="/link">Photo link</Link>
           <Link href="/proof">Proof</Link>
           <Link href="/install">Install</Link>
         </div>
@@ -27,6 +28,11 @@ export default async function OnboardingPage() {
           Aperture pays the uploader first because Immich v2.7.5 does not expose
           EXIF Artist or Copyright through its API. When filesystem EXIF is
           enabled, receipts can also show the embedded credit.
+        </p>
+        <p>
+          Already host your photos elsewhere?{" "}
+          <Link href="/link">Paste a photo URL instead</Link> and share an
+          Aperture payment-gated link.
         </p>
       </section>
 

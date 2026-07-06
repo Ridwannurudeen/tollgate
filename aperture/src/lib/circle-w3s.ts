@@ -14,6 +14,7 @@ import {
   createPublicKey,
   randomUUID,
 } from "node:crypto";
+import { type Address, type Hex } from "viem";
 
 const W3S_BASE = "https://api.circle.com/v1/w3s";
 const KEY_TTL_MS = 5 * 60 * 1000;
@@ -90,7 +91,7 @@ export async function w3sCreateWalletSet(name: string): Promise<string> {
 
 export type MintedWallet = {
   id: string;
-  address: `0x${string}`;
+  address: Address;
   blockchain: string;
   state: string;
 };
@@ -118,4 +119,59 @@ export async function w3sMintWallet(args: {
     `/wallets/${created.data.wallets[0].id}`,
   );
   return resp.data.wallet;
+}
+
+export type Eip712Message = {
+  domain: Record<string, unknown>;
+  types: Record<string, unknown>;
+  primaryType: string;
+  message: Record<string, unknown>;
+};
+
+export function encodeEip712(typed: Eip712Message): string {
+  const domainTypes: Array<[string, string]> = [
+    ["name", "string"],
+    ["version", "string"],
+    ["chainId", "uint256"],
+    ["verifyingContract", "address"],
+    ["salt", "bytes32"],
+  ];
+  const eip712Domain = domainTypes
+    .filter(([field]) => typed.domain[field] !== undefined)
+    .map(([name, type]) => ({ name, type }));
+  return JSON.stringify(
+    {
+      types: { EIP712Domain: eip712Domain, ...typed.types },
+      domain: typed.domain,
+      primaryType: typed.primaryType,
+      message: typed.message,
+    },
+    (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+  );
+}
+
+export async function w3sSignTypedData(
+  walletId: string,
+  typed: Eip712Message,
+  memo?: string,
+): Promise<Hex> {
+  const resp = await request<{ data: { signature: Hex } }>(
+    "POST",
+    "/developer/sign/typedData",
+    {
+      walletId,
+      data: encodeEip712(typed),
+      entitySecretCiphertext: await sealEntitySecret(),
+      ...(memo ? { memo } : {}),
+    },
+  );
+  return resp.data.signature;
+}
+
+export function payerWalletId(): string {
+  return requireEnv("CIRCLE_PAYER_WALLET_ID");
+}
+
+export function payerAddress(): Address {
+  return requireEnv("CIRCLE_PAYER_ADDRESS") as Address;
 }

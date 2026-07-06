@@ -3,7 +3,7 @@ import type { Address, Hex } from "viem";
 export type DownloadArchiveEvent = {
   remoteAddress: string;
   method: "POST";
-  path: "/api/download/archive";
+  path: "/api/download/archive" | `/api/links/${string}/download`;
   sharedLinkKey: string;
   status: number | null;
   userAgent: string | null;

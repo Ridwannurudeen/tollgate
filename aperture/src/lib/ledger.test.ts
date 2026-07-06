@@ -112,9 +112,7 @@ describe("license ledger", () => {
 
       expect(ledger.receipts).toHaveLength(3);
       expect(verification.ok).toBe(true);
-      expect(verification.latestHash).toBe(
-        ledger.receipts.at(-1)?.receiptHash,
-      );
+      expect(verification.latestHash).toBe(ledger.receipts.at(-1)?.receiptHash);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -149,6 +147,47 @@ describe("license ledger", () => {
 
       expect(ledger.receipts).toHaveLength(1);
       expect(verification.ok).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the hash chain valid for synthesized BYO-link receipts", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-ledger-link-"));
+    const filePath = path.join(dir, "ledger.json");
+    try {
+      await appendLicenseReceipt(
+        {
+          eventId:
+            "0x5555555555555555555555555555555555555555555555555555555555555555",
+          event: {
+            remoteAddress: "198.51.100.1",
+            method: "POST",
+            path: "/api/links/link-1/download",
+            sharedLinkKey: "aperture-link:link-1",
+            status: 200,
+            userAgent: "browser",
+            referer: null,
+            createdAt: "2026-07-06T00:00:00.000Z",
+            rawLine:
+              "aperture-link link-1 2026-07-06T00:00:00.000Z /api/links/link-1/download 200",
+          },
+          sharedLinkId: "link-1",
+          assetId: "link-1",
+          ownerId: "owner-1",
+          photographer,
+          amountAtomicUsdc: 2500,
+          evidence: {
+            settlementMode: "x402-verified",
+            paymentResource: "aperture-link:link-1",
+          },
+        },
+        filePath,
+      );
+
+      const ledger = await readLicenseLedger(filePath);
+      expect(verifyLicenseLedger(ledger).ok).toBe(true);
+      expect(JSON.stringify(ledger)).not.toContain("photos.example.com");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

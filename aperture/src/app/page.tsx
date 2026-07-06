@@ -52,6 +52,9 @@ export default async function Home() {
             <Link className="button" href="/download">
               Download trigger
             </Link>
+            <Link className="button" href="/link">
+              Gate a photo link
+            </Link>
             <a className="button" href="https://immich.app">
               Immich
             </a>
@@ -118,6 +121,10 @@ export default async function Home() {
           <Link href="/download">
             <span>Public trigger</span>
             <small>same-host Immich archive download path</small>
+          </Link>
+          <Link href="/link">
+            <span>Paste a photo URL</span>
+            <small>gate an already-hosted image without Immich</small>
           </Link>
         </div>
       </section>

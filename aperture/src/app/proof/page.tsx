@@ -120,7 +120,11 @@ export default async function ProofPage() {
                 <div className="row receiptRow" key={receipt.receiptHash}>
                   <div>
                     <strong>{receipt.photographer}</strong>
-                    <small>{receipt.assetId}</small>
+                    <small>
+                      {receipt.paymentResource.startsWith("aperture-link:")
+                        ? `pasted-link photo ${receipt.assetId}`
+                        : receipt.assetId}
+                    </small>
                     {receipt.exifArtist ? (
                       <small>EXIF artist: {receipt.exifArtist}</small>
                     ) : null}
