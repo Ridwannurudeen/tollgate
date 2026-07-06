@@ -90,6 +90,11 @@ export async function generateLoginToken(
   });
 }
 
+// Non-consuming lookup: the token stays valid until it expires (its 20-min TTL)
+// rather than being cleared on first use. Email providers (Gmail, security
+// scanners) pre-fetch links to check them, which would otherwise burn a
+// single-use token before the human clicks. A fresh login-link request
+// overwrites loginTokenHash, invalidating any prior token.
 export async function redeemLoginToken(
   token: string,
   filePath?: string,
@@ -98,27 +103,15 @@ export async function redeemLoginToken(
   const trimmed = token.trim();
   if (!/^[0-9a-f]{64}$/i.test(trimmed)) return null;
   const hash = accountKeyHash(trimmed);
-  return withRegistryWriteLock(async () => {
-    const registry = await readWalletRegistry(filePath);
-    let redeemed: WalletRegistryEntry | null = null;
-    const photographers = registry.photographers.map((entry) => {
-      if (
-        entry.loginTokenHash !== hash ||
-        !entry.loginTokenExpiresAt ||
-        Date.parse(entry.loginTokenExpiresAt) <= now
-      ) {
-        return entry;
-      }
-      const cleared = { ...entry };
-      delete cleared.loginTokenHash;
-      delete cleared.loginTokenExpiresAt;
-      redeemed = cleared;
-      return cleared;
-    });
-    if (!redeemed) return null;
-    await writeWalletRegistry({ photographers }, filePath);
-    return redeemed;
-  });
+  const registry = await readWalletRegistry(filePath);
+  return (
+    registry.photographers.find(
+      (entry) =>
+        entry.loginTokenHash === hash &&
+        !!entry.loginTokenExpiresAt &&
+        Date.parse(entry.loginTokenExpiresAt) > now,
+    ) ?? null
+  );
 }
 
 function sessionSecret(): string | null {

@@ -123,7 +123,7 @@ describe("email login", () => {
     });
   });
 
-  it("generates, redeems, and clears single-use login tokens without rotating the account key", async () => {
+  it("generates and resolves login tokens (reusable within TTL, survives link pre-fetch) without rotating the account key", async () => {
     await withTempRegistry(async (filePath) => {
       const oldHash = accountKeyHash("aptr_old");
       await writeWalletRegistry(
@@ -148,15 +148,18 @@ describe("email login", () => {
       expect(login?.hash).toMatch(/^0x[0-9a-f]{64}$/);
 
       const redeemed = await redeemLoginToken(login?.token ?? "", filePath);
+      // Reusable within TTL: a second lookup (e.g. the human's click after a
+      // scanner pre-fetched the link) still resolves, and the token is NOT
+      // cleared.
       const second = await redeemLoginToken(login?.token ?? "", filePath);
       const read = await readWalletRegistry(filePath);
 
       expect(redeemed?.ownerId).toBe("owner-1");
       expect(redeemed?.accountKeyHash).toBe(oldHash);
-      expect(second).toBeNull();
+      expect(second?.ownerId).toBe("owner-1");
       expect(read.photographers[0].accountKeyHash).toBe(oldHash);
-      expect(read.photographers[0].loginTokenHash).toBeUndefined();
-      expect(read.photographers[0].loginTokenExpiresAt).toBeUndefined();
+      expect(read.photographers[0].loginTokenHash).toBe(login?.hash);
+      expect(read.photographers[0].loginTokenExpiresAt).toBe(login?.expiresAt);
     });
   });
 
