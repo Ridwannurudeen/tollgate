@@ -61,6 +61,42 @@ function optionalWallet(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
+// github.com/<owner>/<repo>/blob/<ref>/<path> is GitHub's HTML file-viewer page
+// (content-type text/html), not the image itself, so pasting it fails the
+// image-content-type check. Rewrite it to the raw.githubusercontent.com URL
+// that actually serves the image bytes.
+function normalizeGitHubBlobUrl(parsed: URL): URL | null {
+  if (parsed.hostname !== "github.com") return null;
+  const match = parsed.pathname.match(
+    /^\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/,
+  );
+  if (!match) return null;
+  const [, owner, repo, ref, path] = match;
+  return new URL(
+    `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`,
+  );
+}
+
+// drive.google.com/file/d/<id>/view is Drive's HTML preview page (text/html).
+// The uc?export=view&id=<id> endpoint 303-redirects to
+// drive.usercontent.google.com, which serves the real image bytes; safeFetch
+// already follows and re-validates redirects, so rewriting here is enough.
+function normalizeGoogleDriveViewUrl(parsed: URL): URL | null {
+  if (parsed.hostname !== "drive.google.com") return null;
+  const match = parsed.pathname.match(/^\/file\/d\/([^/]+)/);
+  if (!match) return null;
+  const [, fileId] = match;
+  return new URL(`https://drive.google.com/uc?export=view&id=${fileId}`);
+}
+
+function normalizeKnownViewerUrl(parsed: URL): URL {
+  return (
+    normalizeGitHubBlobUrl(parsed) ??
+    normalizeGoogleDriveViewUrl(parsed) ??
+    parsed
+  );
+}
+
 function sourceUrl(value: unknown): string {
   const raw = stringField(value, "photo URL", MAX_URL_LENGTH);
   let parsed: URL;
@@ -72,6 +108,7 @@ function sourceUrl(value: unknown): string {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new LinkRegistryError("photo URL must use http or https.");
   }
+  parsed = normalizeKnownViewerUrl(parsed);
   parsed.hash = "";
   return parsed.toString();
 }
