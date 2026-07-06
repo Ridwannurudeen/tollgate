@@ -33,7 +33,11 @@ function isRegistryEntry(value: unknown): value is WalletRegistryEntry {
       record.approvalStatus === "pending" ||
       record.approvalStatus === "operator-approved" ||
       record.approvalStatus === "wallet-signed") &&
-    (record.accountKeyHash === undefined || isHexHash(record.accountKeyHash))
+    (record.accountKeyHash === undefined || isHexHash(record.accountKeyHash)) &&
+    (record.email === undefined || typeof record.email === "string") &&
+    (record.loginTokenHash === undefined || isHexHash(record.loginTokenHash)) &&
+    (record.loginTokenExpiresAt === undefined ||
+      typeof record.loginTokenExpiresAt === "string")
   );
 }
 

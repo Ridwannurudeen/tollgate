@@ -28,6 +28,8 @@ export type RegisterCreatorInput = {
   filePath?: string;
   /** Hash of the one-time account key; plaintext is never persisted. */
   accountKeyHash?: `0x${string}`;
+  /** Optional email login address, stored lowercased. */
+  email?: string;
 };
 
 export function buildOwnerOwnershipMessage({
@@ -163,6 +165,11 @@ export async function registerCreator(
         ? { accountKeyHash: input.accountKeyHash }
         : existing?.accountKeyHash
           ? { accountKeyHash: existing.accountKeyHash }
+          : {}),
+      ...(input.email?.trim()
+        ? { email: input.email.trim().toLowerCase() }
+        : existing?.email
+          ? { email: existing.email }
           : {}),
     };
     await writeWalletRegistry(

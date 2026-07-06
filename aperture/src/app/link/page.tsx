@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { LinkRegistrationForm } from "../../components/LinkRegistrationForm";
+import { SiteFooter } from "../../components/SiteFooter";
+import { SiteNav } from "../../components/SiteNav";
 
 export const dynamic = "force-dynamic";
 
@@ -7,20 +8,9 @@ export default function LinkRegistrationPage() {
   const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
 
   return (
-    <main className="shell compact">
-      <nav className="topbar">
-        <Link className="brand" href="/">
-          Aperture
-        </Link>
-        <div className="navlinks">
-          <Link href="/browse">Browse</Link>
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/proof">Proof</Link>
-          <Link href="/install">Install</Link>
-          <Link href="/onboarding">Onboarding</Link>
-          <Link href="/login">Log in</Link>
-        </div>
-      </nav>
+    <>
+      <main className="shell compact">
+        <SiteNav />
 
       <section className="pageHeader">
         <p className="eyebrow">Bring your own photo link</p>
@@ -53,6 +43,8 @@ export default function LinkRegistrationPage() {
           </div>
         </div>
       </section>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

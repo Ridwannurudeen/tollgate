@@ -50,6 +50,12 @@ export type WalletRegistryEntry = {
   walletId?: string;
   /** Hash of the one-time Aperture account key; plaintext is shown only once. */
   accountKeyHash?: `0x${string}`;
+  /** Optional login address, stored lowercased. */
+  email?: string;
+  /** Hash of the single-use email login token. */
+  loginTokenHash?: `0x${string}`;
+  /** ISO expiry for the email login token. */
+  loginTokenExpiresAt?: string;
   /** Present only when the creator proved wallet control with a signature. */
   ownershipProof?: OwnershipProof;
 };

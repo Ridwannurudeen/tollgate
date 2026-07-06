@@ -222,6 +222,69 @@ describe("handleLinkRegistration", () => {
     }
   });
 
+  it("stores a lowercased login email for a new logged-out account", async () => {
+    const registerCreator = vi.fn(async () => ({
+      ...photographer,
+      email: "jane@example.com",
+    }));
+    const registerLink = vi.fn(async (input: RegisterLinkInput) =>
+      registeredLink(input, "link-email"),
+    );
+    const preview = previewDeps("link-email");
+
+    await handleLinkRegistration(
+      {
+        sourceUrl: "https://photos.example.com/email.jpg",
+        title: "Email Photo",
+        displayName: "Jane Lens",
+        email: " Jane@Example.COM ",
+      },
+      {
+        origin: "https://tollgate.gudman.xyz",
+        basePath: "/aperture",
+        ownerId: () => "link-owner",
+        findLinkBySourceUrl: async () => null,
+        probeImageSource: async () => ({
+          contentType: "image/jpeg",
+          sourceContentHash: hash("8"),
+        }),
+        registerCreator,
+        registerLink,
+        generateAccountKey: () => "aptr_known-key",
+        fetchImageBytes: preview.fetchImageBytes,
+        buildWatermarkedPreview: preview.buildWatermarkedPreview,
+        writeLinkPreview: preview.writeLinkPreview,
+        markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
+      },
+    );
+
+    expect(registerCreator).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "jane@example.com" }),
+    );
+  });
+
+  it("rejects malformed login emails on new logged-out accounts", async () => {
+    await expect(
+      handleLinkRegistration(
+        {
+          sourceUrl: "https://photos.example.com/bad-email.jpg",
+          title: "Bad Email",
+          displayName: "Jane Lens",
+          email: "not-an-email",
+        },
+        {
+          origin: "https://tollgate.gudman.xyz",
+          basePath: "/aperture",
+          findLinkBySourceUrl: async () => null,
+          probeImageSource: async () => ({
+            contentType: "image/jpeg",
+            sourceContentHash: hash("9"),
+          }),
+        },
+      ),
+    ).rejects.toThrow("email must be a valid address.");
+  });
+
   it("adds work to the logged-in owner without minting a new wallet or key", async () => {
     const registerCreator = vi.fn();
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
@@ -236,6 +299,7 @@ describe("handleLinkRegistration", () => {
         title: "Second Photo",
         displayName: "Ignored Name",
         wallet: "0x0000000000000000000000000000000000000001",
+        email: "ignored@example.com",
       },
       {
         origin: "https://tollgate.gudman.xyz",

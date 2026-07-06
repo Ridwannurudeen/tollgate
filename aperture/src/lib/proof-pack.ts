@@ -21,11 +21,19 @@ export async function buildProofPack() {
     (sum, creator) => sum + creator.earned,
     0,
   );
-  // Public payload: strip custodial Circle walletIds, account key hashes, and
-  // ownershipProof so the unauthenticated /api/proof endpoint never leaks them.
+  // Public payload: strip custodial Circle walletIds, account key/login
+  // hashes, email, and ownershipProof so /api/proof never leaks private fields.
   const publicRegistry = {
     photographers: registry.photographers.map(
-      ({ walletId, accountKeyHash, ownershipProof, ...entry }) => entry,
+      ({
+        walletId,
+        accountKeyHash,
+        email,
+        loginTokenHash,
+        loginTokenExpiresAt,
+        ownershipProof,
+        ...entry
+      }) => entry,
     ),
   };
 

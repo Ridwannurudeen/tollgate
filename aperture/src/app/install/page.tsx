@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { SiteFooter } from "../../components/SiteFooter";
+import { SiteNav } from "../../components/SiteNav";
 
 const commands = [
   "npm ci",
@@ -11,16 +12,9 @@ const commands = [
 
 export default function InstallPage() {
   return (
-    <main className="shell compact">
-      <nav className="topbar">
-        <Link className="brand" href="/">
-          Aperture
-        </Link>
-        <div className="navlinks">
-          <Link href="/proof">Proof</Link>
-          <Link href="/onboarding">Onboarding</Link>
-        </div>
-      </nav>
+    <>
+      <main className="shell compact">
+        <SiteNav />
 
       <section className="pageHeader">
         <p className="eyebrow">VPS operator runbook</p>
@@ -66,6 +60,8 @@ APERTURE_IMMICH_LIBRARY_ROOT=/opt/immich/library`}</pre>
           downloads hit nginx and the watcher records the billable resolve.
         </p>
       </section>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

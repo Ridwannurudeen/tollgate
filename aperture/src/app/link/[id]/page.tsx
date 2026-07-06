@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LinkDownloadButton } from "../../../components/LinkDownloadButton";
+import { SiteFooter } from "../../../components/SiteFooter";
+import { SiteNav } from "../../../components/SiteNav";
 import { APERTURE_LICENSE_FEE_ATOMIC_USDC } from "../../../lib/config";
 import { findLink } from "../../../lib/link-registry";
 import { readWalletForOwner } from "../../../lib/registry";
@@ -28,17 +29,9 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
   const price = link.priceAtomicUsdc || APERTURE_LICENSE_FEE_ATOMIC_USDC;
 
   return (
-    <main className="shell compact">
-      <nav className="topbar">
-        <Link className="brand" href="/">
-          Aperture
-        </Link>
-        <div className="navlinks">
-          <Link href="/link">Create link</Link>
-          <Link href="/proof">Proof</Link>
-          <Link href="/onboarding">Onboarding</Link>
-        </div>
-      </nav>
+    <>
+      <main className="shell compact">
+        <SiteNav />
 
       <section className="pageHeader">
         <p className="eyebrow">Aperture gated photo</p>
@@ -78,6 +71,8 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
           title={link.title}
         />
       </section>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

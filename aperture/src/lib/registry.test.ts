@@ -23,6 +23,9 @@ describe("wallet registry", () => {
           createdAt: "2026-06-24T00:00:00.000Z",
           approvalStatus: "operator-approved",
           accountKeyHash: `0x${"a".repeat(64)}`,
+          email: "photo@example.com",
+          loginTokenHash: `0x${"b".repeat(64)}`,
+          loginTokenExpiresAt: "2026-07-06T00:20:00.000Z",
         },
       );
       await writeWalletRegistry(registry, filePath);
@@ -30,6 +33,9 @@ describe("wallet registry", () => {
       const entry = findWalletForOwner(read, "owner-1");
       expect(entry?.displayName).toBe("Photographer");
       expect(entry?.accountKeyHash).toBe(`0x${"a".repeat(64)}`);
+      expect(entry?.email).toBe("photo@example.com");
+      expect(entry?.loginTokenHash).toBe(`0x${"b".repeat(64)}`);
+      expect(entry?.loginTokenExpiresAt).toBe("2026-07-06T00:20:00.000Z");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

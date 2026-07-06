@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ARC_EXPLORER_URL } from "../lib/chain";
+import { SiteFooter } from "../components/SiteFooter";
+import { SiteNav } from "../components/SiteNav";
 import { readLicenseLedger, summarizeLedger } from "../lib/ledger";
 import { readWalletRegistry } from "../lib/registry";
 
@@ -24,20 +25,9 @@ export default async function Home() {
   );
 
   return (
-    <main className="shell">
-      <nav className="topbar">
-        <div className="brand">Aperture</div>
-        <div className="navlinks">
-          <a href="https://tollgate.gudman.xyz">Citations app</a>
-          <Link href="/browse">Browse</Link>
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/proof">Proof</Link>
-          <Link href="/install">Install</Link>
-          <Link href="/onboarding">Onboarding</Link>
-          <Link href="/login">Log in</Link>
-          <a href={ARC_EXPLORER_URL}>Arcscan</a>
-        </div>
-      </nav>
+    <>
+      <main className="shell">
+        <SiteNav />
 
       <section className="hero">
         <div>
@@ -128,6 +118,8 @@ export default async function Home() {
           </Link>
         </div>
       </section>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

@@ -16,6 +16,14 @@ vi.mock("../../lib/registry", () => ({
   readWalletRegistry: mocks.readWalletRegistry,
 }));
 
+vi.mock("../../components/SiteNav", () => ({
+  SiteNav: () => "nav",
+}));
+
+vi.mock("../../components/SiteFooter", () => ({
+  SiteFooter: () => "footer",
+}));
+
 describe("browse page", () => {
   beforeEach(() => {
     mocks.listPublicLinks.mockReset();
@@ -42,6 +50,9 @@ describe("browse page", () => {
           createdAt: "2026-07-06T00:00:00.000Z",
           approvalStatus: "operator-approved",
           accountKeyHash: `0x${"a".repeat(64)}`,
+          email: "jane@example.com",
+          loginTokenHash: `0x${"b".repeat(64)}`,
+          loginTokenExpiresAt: "2026-07-06T00:20:00.000Z",
         },
       ],
     });
@@ -53,6 +64,9 @@ describe("browse page", () => {
     expect(payload).toContain("Jane Lens");
     expect(payload).toContain("/aperture/link/link-1/preview");
     expect(payload).not.toContain("accountKeyHash");
+    expect(payload).not.toContain("jane@example.com");
+    expect(payload).not.toContain("loginTokenHash");
+    expect(payload).not.toContain("loginTokenExpiresAt");
     expect(payload).not.toContain("sourceUrl");
   });
 });

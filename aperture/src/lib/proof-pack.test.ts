@@ -43,7 +43,10 @@ describe("buildProofPack", () => {
           createdAt: "2026-07-06T00:00:00.000Z",
           approvalStatus: "operator-approved",
           walletId: "circle-wallet-id",
+          email: "jane@example.com",
           accountKeyHash: `0x${"a".repeat(64)}`,
+          loginTokenHash: `0x${"c".repeat(64)}`,
+          loginTokenExpiresAt: "2026-07-06T00:20:00.000Z",
           ownershipProof: {
             method: "wallet-signature",
             signer: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
@@ -61,7 +64,10 @@ describe("buildProofPack", () => {
 
     expect(payload).toContain("Jane Lens");
     expect(payload).not.toContain("circle-wallet-id");
+    expect(payload).not.toContain("jane@example.com");
     expect(payload).not.toContain("accountKeyHash");
+    expect(payload).not.toContain("loginTokenHash");
+    expect(payload).not.toContain("loginTokenExpiresAt");
     expect(payload).not.toContain("ownershipProof");
     expect(payload).not.toContain("signatureHash");
   });

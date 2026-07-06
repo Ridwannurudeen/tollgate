@@ -283,6 +283,92 @@ small {
   color: var(--green-deep);
 }
 
+.navlinks a.active,
+.navlinks a[aria-current="page"] {
+  border-color: rgba(30, 106, 71, 0.28);
+  background: rgba(30, 106, 71, 0.08);
+  color: var(--green-deep);
+}
+
+.primaryNav {
+  flex: 1;
+  justify-content: center;
+}
+
+.primaryLink {
+  border-color: var(--green-deep) !important;
+  background: var(--green) !important;
+  color: var(--paper-raised) !important;
+}
+
+.navAuth {
+  min-width: 220px;
+}
+
+.navAuth .button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+
+.navIdentity {
+  overflow: hidden;
+  max-width: 150px;
+  color: var(--ink-2);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.siteFooter {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  width: min(1200px, calc(100% - 32px));
+  margin: -48px auto 0;
+  padding: 28px 0 42px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+}
+
+.siteFooter strong {
+  display: block;
+  color: var(--ink-1);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 520;
+}
+
+.siteFooter span,
+.siteFooter a {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.siteFooter nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.siteFooter a {
+  text-decoration: none;
+}
+
+.siteFooter a:hover {
+  color: var(--green-deep);
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.16fr) minmax(320px, 0.84fr);
@@ -828,6 +914,26 @@ small {
   line-height: 1.55;
 }
 
+.loginStack {
+  display: grid;
+  gap: 18px;
+}
+
+.keyLogin {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.keyLogin summary {
+  cursor: pointer;
+  color: var(--green);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .previewFrame {
   display: grid;
   gap: 8px;
@@ -943,7 +1049,7 @@ small {
 
 .accountGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 1px;
   overflow: hidden;
   margin-top: 18px;
@@ -1111,6 +1217,22 @@ small {
   }
 
   .navlinks {
+    justify-content: flex-start;
+  }
+
+  .primaryNav {
+    justify-content: flex-start;
+  }
+
+  .navAuth {
+    min-width: 0;
+  }
+
+  .siteFooter {
+    flex-direction: column;
+  }
+
+  .siteFooter nav {
     justify-content: flex-start;
   }
 

@@ -36,8 +36,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const sessionOwner = await getSessionOwner();
+    const body = (await request.json().catch(() => null)) ?? {};
     const result = await handleLinkRegistration(
-      (await request.json().catch(() => null)) ?? {},
+      sessionOwner && body && typeof body === "object" && !Array.isArray(body)
+        ? { ...body, email: undefined }
+        : body,
       {
         origin: publicOrigin(request.headers, "http://127.0.0.1:3092"),
         basePath: process.env.APERTURE_BASE_PATH ?? "/aperture",

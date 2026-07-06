@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { SiteFooter } from "../../components/SiteFooter";
+import { SiteNav } from "../../components/SiteNav";
 import { ARC_EXPLORER_URL } from "../../lib/chain";
 import {
   readLicenseLedger,
@@ -36,21 +37,9 @@ export default async function ProofPage() {
   );
 
   return (
-    <main className="shell compact">
-      <nav className="topbar">
-        <Link className="brand" href="/">
-          Aperture
-        </Link>
-        <div className="navlinks">
-          <Link href="/">Home</Link>
-          <Link href="/browse">Browse</Link>
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/install">Install</Link>
-          <Link href="/onboarding">Onboarding</Link>
-          <Link href="/login">Log in</Link>
-          <a href={ARC_EXPLORER_URL}>Arcscan</a>
-        </div>
-      </nav>
+    <>
+      <main className="shell compact">
+        <SiteNav />
 
       <section className="proofHeader">
         <div>
@@ -150,6 +139,8 @@ export default async function ProofPage() {
             })}
         </div>
       </section>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

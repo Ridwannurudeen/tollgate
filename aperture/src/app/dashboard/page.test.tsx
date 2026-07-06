@@ -16,6 +16,15 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("../../lib/account", () => ({
   getSessionOwner: mocks.getSessionOwner,
+  maskAccountEmail: (email: string) => email.replace(/^(.).+@/, "$1***@"),
+}));
+
+vi.mock("../../components/SiteNav", () => ({
+  SiteNav: () => "nav",
+}));
+
+vi.mock("../../components/SiteFooter", () => ({
+  SiteFooter: () => "footer",
 }));
 
 vi.mock("../../lib/ledger", () => ({
@@ -58,6 +67,9 @@ describe("dashboard page", () => {
       approvalStatus: "operator-approved",
       custody: "circle-w3s",
       accountKeyHash: `0x${"a".repeat(64)}`,
+      email: "jane@example.com",
+      loginTokenHash: `0x${"c".repeat(64)}`,
+      loginTokenExpiresAt: "2026-07-06T00:20:00.000Z",
     });
     mocks.readLinksByOwner.mockResolvedValue([
       {
@@ -87,10 +99,14 @@ describe("dashboard page", () => {
     const payload = renderToStaticMarkup(page as ReactElement);
 
     expect(payload).toContain("Private Source Photo");
+    expect(payload).toContain("j***@example.com");
     expect(payload).toContain("0.0025");
     expect(payload).not.toContain("secret.example.com");
     expect(payload).not.toContain("sourceContentHash");
     expect(payload).not.toContain("accountKeyHash");
+    expect(payload).not.toContain("jane@example.com");
+    expect(payload).not.toContain("loginTokenHash");
+    expect(payload).not.toContain("loginTokenExpiresAt");
     expect(payload).not.toContain("0.0090");
   });
 });

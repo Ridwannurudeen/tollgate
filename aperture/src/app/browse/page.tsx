@@ -1,5 +1,7 @@
 import React from "react";
 import Link from "next/link";
+import { SiteFooter } from "../../components/SiteFooter";
+import { SiteNav } from "../../components/SiteNav";
 import { listPublicLinks } from "../../lib/link-registry";
 import { readWalletRegistry } from "../../lib/registry";
 
@@ -23,18 +25,9 @@ export default async function BrowsePage() {
   );
 
   return (
-    <main className="shell">
-      <nav className="topbar">
-        <Link className="brand" href="/">
-          Aperture
-        </Link>
-        <div className="navlinks">
-          <Link href="/link">Create link</Link>
-          <Link href="/dashboard">Dashboard</Link>
-          <Link href="/proof">Proof</Link>
-          <Link href="/login">Log in</Link>
-        </div>
-      </nav>
+    <>
+      <main className="shell">
+        <SiteNav />
 
       <section className="pageHeader">
         <p className="eyebrow">Public catalog</p>
@@ -77,6 +70,8 @@ export default async function BrowsePage() {
           ))
         )}
       </section>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

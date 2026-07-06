@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { WalletRegistryEntry } from "./types";
-import { accountKeyHash, generateAccountKey } from "./account";
+import {
+  accountKeyHash,
+  generateAccountKey,
+  normalizeAccountEmail,
+} from "./account";
 import {
   LinkRegistryError,
   findLinkBySourceUrl,
@@ -23,6 +27,7 @@ export type LinkRegistrationInput = {
   title?: unknown;
   displayName?: unknown;
   wallet?: unknown;
+  email?: unknown;
 };
 
 export type LinkRegistrationResult = {
@@ -71,6 +76,19 @@ function optionalWallet(value: unknown): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+function optionalEmail(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") {
+    throw new LinkRegistryError("email must be a string.");
+  }
+  if (!value.trim()) return undefined;
+  const email = normalizeAccountEmail(value);
+  if (!email) {
+    throw new LinkRegistryError("email must be a valid address.");
+  }
+  return email;
 }
 
 // github.com/<owner>/<repo>/blob/<ref>/<path> is GitHub's HTML file-viewer page
@@ -157,6 +175,7 @@ export async function handleLinkRegistration(
       MAX_NAME_LENGTH,
     );
     const wallet = optionalWallet(input.wallet);
+    const email = optionalEmail(input.email);
     accountKey = (deps.generateAccountKey ?? generateAccountKey)();
     ownerId = deps.ownerId?.() ?? `link-${randomUUID()}`;
     photographer = await (deps.registerCreator ?? registerCreator)({
@@ -164,6 +183,7 @@ export async function handleLinkRegistration(
       displayName,
       wallet,
       accountKeyHash: accountKeyHash(accountKey),
+      ...(email ? { email } : {}),
     });
   }
   const link = await (deps.registerLink ?? registerLink)({

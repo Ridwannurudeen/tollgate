@@ -1,0 +1,118 @@
+import { NextRequest } from "next/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { POST } from "./route";
+
+const mocks = vi.hoisted(() => ({
+  findOwnerByEmail: vi.fn(),
+  generateLoginToken: vi.fn(),
+  sendLoginLinkEmail: vi.fn(),
+}));
+
+vi.mock("../../../lib/account", () => ({
+  findOwnerByEmail: mocks.findOwnerByEmail,
+  generateLoginToken: mocks.generateLoginToken,
+  normalizeAccountEmail: (value: string) => {
+    const trimmed = value.trim().toLowerCase();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) ? trimmed : null;
+  },
+}));
+
+vi.mock("../../../lib/mailer", () => ({
+  sendLoginLinkEmail: mocks.sendLoginLinkEmail,
+}));
+
+function request(
+  ip: string,
+  email: string,
+  host = "tollgate.gudman.xyz",
+): NextRequest {
+  return new NextRequest(
+    "https://tollgate.gudman.xyz/aperture/api/login-link",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        host,
+        "x-real-ip": ip,
+      },
+      body: JSON.stringify({ email }),
+    },
+  );
+}
+
+describe("POST /api/login-link", () => {
+  beforeEach(() => {
+    mocks.findOwnerByEmail.mockReset();
+    mocks.generateLoginToken.mockReset();
+    mocks.sendLoginLinkEmail.mockReset();
+    mocks.sendLoginLinkEmail.mockResolvedValue(true);
+  });
+
+  it("returns the same success response for unknown emails", async () => {
+    mocks.findOwnerByEmail.mockResolvedValue(null);
+
+    const response = await POST(request("198.51.100.231", "jane@example.com"));
+    const body = (await response.json()) as { ok: boolean };
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(mocks.generateLoginToken).not.toHaveBeenCalled();
+    expect(mocks.sendLoginLinkEmail).not.toHaveBeenCalled();
+  });
+
+  it("sends a single-use login link for known emails", async () => {
+    mocks.findOwnerByEmail.mockResolvedValue({
+      ownerId: "owner-1",
+      email: "jane@example.com",
+    });
+    mocks.generateLoginToken.mockResolvedValue({
+      token: "a".repeat(64),
+      hash: `0x${"b".repeat(64)}`,
+      expiresAt: "2026-07-06T00:20:00.000Z",
+    });
+
+    const response = await POST(
+      request("198.51.100.232", " Jane@Example.COM "),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.findOwnerByEmail).toHaveBeenCalledWith("jane@example.com");
+    expect(mocks.generateLoginToken).toHaveBeenCalledWith("owner-1");
+    expect(mocks.sendLoginLinkEmail).toHaveBeenCalledWith(
+      "jane@example.com",
+      "https://tollgate.gudman.xyz/aperture/login/verify/" + "a".repeat(64),
+    );
+  });
+
+  it("falls back to the canonical origin for untrusted host headers", async () => {
+    mocks.findOwnerByEmail.mockResolvedValue({
+      ownerId: "owner-1",
+      email: "jane@example.com",
+    });
+    mocks.generateLoginToken.mockResolvedValue({
+      token: "c".repeat(64),
+      hash: `0x${"d".repeat(64)}`,
+      expiresAt: "2026-07-06T00:20:00.000Z",
+    });
+
+    await POST(request("198.51.100.233", "jane@example.com", "evil.test"));
+
+    expect(mocks.sendLoginLinkEmail).toHaveBeenCalledWith(
+      "jane@example.com",
+      "https://tollgate.gudman.xyz/aperture/login/verify/" + "c".repeat(64),
+    );
+  });
+
+  it("rate-limits login-link requests per IP", async () => {
+    mocks.findOwnerByEmail.mockResolvedValue(null);
+    const ip = "198.51.100.234";
+
+    for (let index = 0; index < 5; index += 1) {
+      const response = await POST(request(ip, `jane${index}@example.com`));
+      expect(response.status).toBe(200);
+    }
+    const blocked = await POST(request(ip, "final@example.com"));
+
+    expect(blocked.status).toBe(429);
+  });
+});

@@ -53,6 +53,20 @@ function request(ip: string): NextRequest {
   });
 }
 
+function requestWithBody(
+  ip: string,
+  body: Record<string, unknown>,
+): NextRequest {
+  return new NextRequest("http://aperture.test/aperture/api/links", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-real-ip": ip,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 describe("POST /api/links", () => {
   beforeEach(() => {
     mocks.handleLinkRegistration.mockReset();
@@ -127,10 +141,38 @@ describe("POST /api/links", () => {
 
     expect(response.status).toBe(201);
     expect(mocks.handleLinkRegistration).toHaveBeenCalledWith(
-      expect.any(Object),
+      expect.objectContaining({ email: undefined }),
       expect.objectContaining({ sessionOwnerId: "existing-owner" }),
     );
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("passes login email only for logged-out registration", async () => {
+    mocks.handleLinkRegistration.mockResolvedValue({
+      accountKey: "aptr_key",
+      link: { id: "link-3", title: "Photo", priceAtomicUsdc: 2500 },
+      registered: {
+        ownerId: "owner-3",
+        displayName: "Jane Lens",
+        wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+        approvalStatus: "operator-approved",
+      },
+      shareUrl: "https://tollgate.gudman.xyz/aperture/link/link-3",
+    });
+
+    await POST(
+      requestWithBody("198.51.100.204", {
+        sourceUrl: "https://photos.example.com/photo.jpg",
+        title: "Photo",
+        displayName: "Jane Lens",
+        email: "jane@example.com",
+      }),
+    );
+
+    expect(mocks.handleLinkRegistration).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "jane@example.com" }),
+      expect.not.objectContaining({ sessionOwnerId: expect.any(String) }),
+    );
   });
 });
 

@@ -25,6 +25,7 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
   const [title, setTitle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [wallet, setWallet] = useState("");
+  const [email, setEmail] = useState("");
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<LinkRegistrationResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +44,7 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
           title: title.trim(),
           displayName: displayName.trim(),
           wallet: wallet.trim() || undefined,
+          email: email.trim() || undefined,
         }),
       });
       const body = await response.json();
@@ -101,6 +103,19 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
         />
       </label>
       <label>
+        Email{" "}
+        <span className="hint">
+          (recommended - so you can log in with just a link)
+        </span>
+        <input
+          autoComplete="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="jane@example.com"
+          type="email"
+        />
+      </label>
+      <label>
         Payout wallet{" "}
         <span className="hint">
           (optional - leave blank and we create one for you)
@@ -150,8 +165,8 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
             <div className="accountKeyBox">
               <p className="eyebrow">Save your account key</p>
               <p>
-                This key is shown once. Use it to log back in from another
-                device and manage every photo you register.
+                Backup key - save it if you want a non-email login. You can
+                also use your email to receive a private login link.
               </p>
               <input readOnly value={result.accountKey} />
               <div className="actions compactActions">

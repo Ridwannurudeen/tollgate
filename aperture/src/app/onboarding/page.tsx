@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { SiteFooter } from "../../components/SiteFooter";
+import { SiteNav } from "../../components/SiteNav";
 import { readWalletRegistry } from "../../lib/registry";
 import { RegisterCreatorForm } from "../../components/RegisterCreatorForm";
 
@@ -9,17 +11,9 @@ export default async function OnboardingPage() {
   const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
 
   return (
-    <main className="shell compact">
-      <nav className="topbar">
-        <Link className="brand" href="/">
-          Aperture
-        </Link>
-        <div className="navlinks">
-          <Link href="/link">Photo link</Link>
-          <Link href="/proof">Proof</Link>
-          <Link href="/install">Install</Link>
-        </div>
-      </nav>
+    <>
+      <main className="shell compact">
+        <SiteNav />
 
       <section className="pageHeader">
         <p className="eyebrow">Photographer onboarding</p>
@@ -94,6 +88,8 @@ export default async function OnboardingPage() {
           </div>
         </div>
       </section>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { SiteFooter } from "../../components/SiteFooter";
+import { SiteNav } from "../../components/SiteNav";
 import { LoginForm } from "../../components/LoginForm";
 
 export const dynamic = "force-dynamic";
@@ -7,36 +8,30 @@ export default function LoginPage() {
   const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
 
   return (
-    <main className="shell compact">
-      <nav className="topbar">
-        <Link className="brand" href="/">
-          Aperture
-        </Link>
-        <div className="navlinks">
-          <Link href="/browse">Browse</Link>
-          <Link href="/link">Create link</Link>
-          <Link href="/proof">Proof</Link>
-        </div>
-      </nav>
+    <>
+      <main className="shell compact">
+        <SiteNav />
 
       <section className="pageHeader">
         <p className="eyebrow">Creator account</p>
-        <h1>Log in with your Aperture account key.</h1>
+        <h1>Log in with a private email link.</h1>
         <p>
-          Paste the one-time key you received when you registered your first
-          gated photo. No wallet signature, browser wallet, or email account is
-          required.
+          Enter the email you added during registration. Aperture sends a
+          single-use link that opens your creator dashboard, no wallet signature
+          or browser wallet required.
         </p>
       </section>
 
       <section className="surface accountSurface">
-        <h2>Account key</h2>
+        <h2>Email login</h2>
         <p>
-          The plaintext key is shown only once during registration. Aperture
-          stores only its hash and uses it to recover your creator dashboard.
+          The response is private: it looks the same whether or not the email is
+          registered.
         </p>
         <LoginForm basePath={basePath} />
       </section>
-    </main>
+      </main>
+      <SiteFooter />
+    </>
   );
 }
