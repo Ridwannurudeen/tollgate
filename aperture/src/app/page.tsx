@@ -41,9 +41,9 @@ export default async function Home() {
           <p className="eyebrow">Immich sidecar / verified download path</p>
           <h1>Photographers get paid when shared photos are downloaded.</h1>
           <p className="lede">
-            Aperture watches Immich shared-link downloads, resolves the asset
-            owner, and writes a payout receipt that can settle through Forum
-            FeeRouter on Arc.
+            Aperture is a payment sidecar for your Immich photo community. It
+            watches shared-link downloads, resolves the asset owner, and writes
+            a payout receipt that can settle through Forum FeeRouter on Arc.
           </p>
           <div className="actions">
             <Link className="button primary" href="/proof">
@@ -96,6 +96,11 @@ export default async function Home() {
         <div>
           <p className="eyebrow">Operator-ready sidecar</p>
           <h2>Install beside Immich without upstream patches.</h2>
+          <p>
+            The sidecar pattern is platform-portable: any photo platform that
+            exposes download events can pay its photographers this way. Immich
+            is the live integration today.
+          </p>
         </div>
         <div className="operatorGrid">
           <Link href="/api/health">

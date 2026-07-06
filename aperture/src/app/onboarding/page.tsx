@@ -30,6 +30,37 @@ export default async function OnboardingPage() {
         </p>
       </section>
 
+      <section className="flow" aria-label="How photographers get paid">
+        {[
+          [
+            "01",
+            "Get an Immich account",
+            "Join this community's photo server and upload your photos there. Aperture is the payment sidecar; Immich hosts the files.",
+          ],
+          [
+            "02",
+            "Share your work",
+            "Create Immich shared links the same way you do today.",
+          ],
+          [
+            "03",
+            "Register below",
+            "Add your Immich owner ID and payout wallet, or leave wallet blank and we create a Circle W3S custodial wallet for you.",
+          ],
+          [
+            "04",
+            "Get paid per license",
+            "Every licensed download pays USDC on Arc through the FeeRouter, with a verifiable receipt.",
+          ],
+        ].map(([step, title, body]) => (
+          <div className="flowCard" key={step}>
+            <span>{step}</span>
+            <h2>{title}</h2>
+            <p>{body}</p>
+          </div>
+        ))}
+      </section>
+
       <section className="twoColumn">
         <div className="surface">
           <h2>Register to get paid</h2>
