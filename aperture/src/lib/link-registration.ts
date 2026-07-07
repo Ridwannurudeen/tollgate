@@ -25,7 +25,7 @@ import { buildWatermarkedPreview, writeLinkPreview } from "./link-preview";
 import { registerCreator } from "./onboarding";
 import { readWalletForOwner } from "./registry";
 import { sha256Hex } from "./hash";
-import { computeDHash } from "./perceptual-hash";
+import { computeDHash, type DHashResult } from "./perceptual-hash";
 import {
   buildVideoThumbnail,
   extractRepresentativeFrame,
@@ -321,12 +321,17 @@ function sourceUrl(value: unknown): string {
 }
 
 async function rejectNearDuplicate(
-  perceptualHash: string,
+  perceptualHash: DHashResult,
   deps: LinkRegistrationDeps,
 ): Promise<void> {
+  if (perceptualHash.lowDetail) {
+    // Flat media has no useful dHash signal; this intentionally accepts even
+    // exact flat repeats rather than rejecting unrelated solid-color works.
+    return;
+  }
   const duplicate = await (
     deps.findNearDuplicateLink ?? findNearDuplicateLink
-  )(perceptualHash);
+  )(perceptualHash.hash);
   if (duplicate) {
     throw new LinkRegistryError(
       "this looks like content that's already registered on Tollgate.",
@@ -359,7 +364,7 @@ export async function handleLinkRegistration(
     sourceUrl: url,
     contentType: image.contentType,
     sourceContentHash: image.sourceContentHash,
-    perceptualHash,
+    perceptualHash: perceptualHash.hash,
   });
   let resultLink = link;
   try {
@@ -436,7 +441,7 @@ export async function handleLinkUploadRegistration(
     sourceKind: "upload",
     originalContentType: evidence.contentType,
     sourceContentHash: evidence.sourceContentHash,
-    perceptualHash,
+    perceptualHash: perceptualHash.hash,
     hasPreview: true,
   });
 

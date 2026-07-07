@@ -96,7 +96,12 @@ describe("handleLinkUploadRegistration upload guards", () => {
         generateAccountKey: () => "aptr_key",
         probeVideo,
         extractRepresentativeFrame,
-        computeDHash: async () => "1111111111111111",
+        computeDHash: async () => ({
+          hash: "1111111111111111",
+          grayscaleVariance: 1024,
+          grayscaleStdDev: 32,
+          lowDetail: false,
+        }),
         findNearDuplicateLink: async () => null,
         buildVideoThumbnail,
         writeLinkPreview: async () => {},

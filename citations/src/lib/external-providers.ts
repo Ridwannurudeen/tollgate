@@ -6,6 +6,7 @@ import {
   usdcRouterAbi,
   type FeeRouterWalletClient,
 } from "./fee-router";
+import { withReservedNonce } from "./fee-router-nonce";
 import { sha256Hex } from "./hash";
 import type { ExternalAssist } from "./types";
 
@@ -69,14 +70,17 @@ async function askCitePay(
     publicClient,
     walletClient: options.walletClient,
   });
-  const transaction = await walletClient.writeContract({
-    address: ARC_USDC,
-    abi: usdcRouterAbi,
-    functionName: "transfer",
-    args: [provider.recipient, BigInt(provider.priceAtomicUsdc)],
-    account,
-    chain: arcTestnet,
-  });
+  const transaction = await withReservedNonce(publicClient, account, (nonce) =>
+    walletClient.writeContract({
+      address: ARC_USDC,
+      abi: usdcRouterAbi,
+      functionName: "transfer",
+      args: [provider.recipient, BigInt(provider.priceAtomicUsdc)],
+      account,
+      chain: arcTestnet,
+      nonce,
+    }),
+  );
   const receipt = await publicClient.waitForTransactionReceipt({
     hash: transaction,
   });

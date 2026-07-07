@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { Hex, PublicClient } from "viem";
 import { generatePrivateKey } from "viem/accounts";
 import {
@@ -6,8 +6,13 @@ import {
   type ExternalProviderAskOptions,
 } from "./external-providers";
 import type { FeeRouterWriteContractRequest } from "./fee-router";
+import { resetFeeRouterNonceStateForTests } from "./fee-router-nonce";
 
 const TEST_KEY = generatePrivateKey();
+
+beforeEach(() => {
+  resetFeeRouterNonceStateForTests();
+});
 
 describe("EXTERNAL_PROVIDERS.citepay", () => {
   it("transfers the query fee and posts the tx hash with the verified query field", async () => {
@@ -18,6 +23,7 @@ describe("EXTERNAL_PROVIDERS.citepay", () => {
     let postedBody: unknown;
     let postedTxHash = "";
     const publicClient = {
+      getTransactionCount: async () => 90,
       waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => {
         waitedHash = hash;
         return { status: "success" };
@@ -65,6 +71,7 @@ describe("EXTERNAL_PROVIDERS.citepay", () => {
     expect(writes[0]).toMatchObject({
       functionName: "transfer",
       args: ["0x5389688243328c26a92b301faEEAb5fbf9AFf105", 1_000n],
+      nonce: 90,
     });
     expect(waitedHash).toBe(txHash);
     expect(postedUrl).toBe("https://citepay-markets.vercel.app/api/ask");

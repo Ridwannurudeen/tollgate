@@ -6,6 +6,11 @@ import {
   handleLinkUploadRegistration,
 } from "./link-registration";
 import { LINK_DOWNLOAD_MAX_BYTES } from "./link-content";
+import {
+  NEAR_DUPLICATE_THRESHOLD,
+  computeDHash,
+  hammingDistance,
+} from "./perceptual-hash";
 import type { WalletRegistryEntry } from "./types";
 
 const photographer: WalletRegistryEntry = {
@@ -29,6 +34,12 @@ const loggedInPhotographer: WalletRegistryEntry = {
 };
 
 const hash = (char: string) => `0x${char.repeat(64)}` as `0x${string}`;
+const dHash = (perceptualHash: string, lowDetail = false) => ({
+  hash: perceptualHash,
+  grayscaleVariance: lowDetail ? 0 : 1024,
+  grayscaleStdDev: lowDetail ? 0 : 32,
+  lowDetail,
+});
 
 function registeredLink(input: RegisterLinkInput, id: string): LinkRecord {
   return {
@@ -56,7 +67,9 @@ function previewDeps(linkId: string, description?: string) {
       contentType: "image/jpeg" as const,
       sourceContentHash: hash("f"),
     })),
-    computeDHash: vi.fn(async (_bytes: Uint8Array) => "1111111111111111"),
+    computeDHash: vi.fn(async (_bytes: Uint8Array) =>
+      dHash("1111111111111111"),
+    ),
     findNearDuplicateLink: vi.fn(async (_perceptualHash: string) => null),
     buildWatermarkedPreview: vi.fn(async (_bytes: Uint8Array) => ({
       bytes: previewBytes,
@@ -87,6 +100,45 @@ async function pngBytes(): Promise<Uint8Array> {
       channels: 3,
       background: { r: 120, g: 170, b: 210 },
     },
+  })
+    .png()
+    .toBuffer();
+  return new Uint8Array(bytes);
+}
+
+async function flatPngBytes(background: {
+  r: number;
+  g: number;
+  b: number;
+}): Promise<Uint8Array> {
+  const bytes = await sharp({
+    create: {
+      width: 64,
+      height: 64,
+      channels: 3,
+      background,
+    },
+  })
+    .png()
+    .toBuffer();
+  return new Uint8Array(bytes);
+}
+
+async function texturedPngBytes(): Promise<Uint8Array> {
+  const width = 96;
+  const height = 72;
+  const pixels = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 3;
+      const ridge = (x * 9 + y * 5) % 43;
+      pixels[offset] = (40 + x * 2 + ridge) % 256;
+      pixels[offset + 1] = (80 + y * 3 + ridge * 2) % 256;
+      pixels[offset + 2] = (120 + x + y * 2 + ridge * 3) % 256;
+    }
+  }
+  const bytes = await sharp(pixels, {
+    raw: { width, height, channels: 3 },
   })
     .png()
     .toBuffer();
@@ -280,7 +332,7 @@ describe("handleLinkRegistration", () => {
           registerLink,
           generateAccountKey: () => "aptr_known-key",
           fetchImageBytes,
-          computeDHash: async () => "2222222222222222",
+          computeDHash: async () => dHash("2222222222222222"),
           buildWatermarkedPreview,
           writeLinkPreview,
           markLinkPreviewGenerated,
@@ -360,7 +412,7 @@ describe("handleLinkRegistration", () => {
             contentType: "image/jpeg",
             sourceContentHash: hash("9"),
           }),
-          computeDHash: async () => "9999999999999999",
+          computeDHash: async () => dHash("9999999999999999"),
         },
       ),
     ).rejects.toThrow("email must be a valid address.");
@@ -467,7 +519,7 @@ describe("handleLinkUploadRegistration", () => {
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
       registeredLink(input, "upload-1"),
     );
-    const computeDHash = vi.fn(async () => "2222222222222222");
+    const computeDHash = vi.fn(async () => dHash("2222222222222222"));
     const findNearDuplicateLink = vi.fn(async () => null);
     const buildWatermarkedPreview = vi.fn(async () => ({
       bytes: previewBytes,
@@ -542,7 +594,7 @@ describe("handleLinkUploadRegistration", () => {
     );
     const representativeFrame = new Uint8Array([5, 6, 7]);
     const extractRepresentativeFrame = vi.fn(async () => representativeFrame);
-    const computeDHash = vi.fn(async () => "3333333333333333");
+    const computeDHash = vi.fn(async () => dHash("3333333333333333"));
     const findNearDuplicateLink = vi.fn(async () => null);
     const probeVideo = vi.fn(async () => ({
       contentType: "video/mp4" as const,
@@ -660,7 +712,7 @@ describe("handleLinkUploadRegistration", () => {
         {
           origin: "https://tollgate.gudman.xyz",
           basePath: "/aperture",
-          computeDHash: async () => "4444444444444444",
+          computeDHash: async () => dHash("4444444444444444"),
           findNearDuplicateLink: async () => ({
             id: "existing",
             title: "Existing",
@@ -685,6 +737,137 @@ describe("handleLinkUploadRegistration", () => {
     expect(buildWatermarkedPreview).not.toHaveBeenCalled();
     expect(writeLinkPreview).not.toHaveBeenCalled();
     expect(writeLinkOriginal).not.toHaveBeenCalled();
+  });
+
+  it("keeps textured upload duplicate rejection intact", async () => {
+    const originalBytes = await texturedPngBytes();
+    const duplicateBytes = new Uint8Array(
+      await sharp(originalBytes).resize(72, 54).jpeg({ quality: 68 }).toBuffer(),
+    );
+    const originalHash = await computeDHash(originalBytes);
+    const duplicateHash = await computeDHash(duplicateBytes);
+    const existingPerceptualHash = originalHash.hash;
+    const existing: LinkRecord = {
+      id: "existing-textured",
+      title: "Existing Textured",
+      ownerId: "owner",
+      sourceKind: "upload",
+      sourceContentHash: hash("b"),
+      perceptualHash: existingPerceptualHash,
+      priceAtomicUsdc: 2500,
+      createdAt: "2026-07-06T00:00:00.000Z",
+    };
+    const registerCreator = vi.fn();
+    const registerLink = vi.fn();
+    const buildWatermarkedPreview = vi.fn();
+    const writeLinkPreview = vi.fn();
+    const writeLinkOriginal = vi.fn();
+    const findNearDuplicateLink = vi.fn(async (perceptualHash: string) =>
+      hammingDistance(perceptualHash, existingPerceptualHash) <=
+      NEAR_DUPLICATE_THRESHOLD
+        ? existing
+        : null,
+    );
+
+    expect(originalHash.lowDetail).toBe(false);
+    expect(duplicateHash.lowDetail).toBe(false);
+    expect(
+      hammingDistance(originalHash.hash, duplicateHash.hash),
+    ).toBeLessThanOrEqual(NEAR_DUPLICATE_THRESHOLD);
+    await expect(
+      handleLinkUploadRegistration(
+        {
+          fileBytes: duplicateBytes,
+          title: "Copied Textured Upload",
+          displayName: "Jane Lens",
+        },
+        {
+          origin: "https://tollgate.gudman.xyz",
+          basePath: "/aperture",
+          findNearDuplicateLink,
+          registerCreator,
+          registerLink,
+          buildWatermarkedPreview,
+          writeLinkPreview,
+          writeLinkOriginal,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+
+    expect(findNearDuplicateLink).toHaveBeenCalledWith(duplicateHash.hash);
+    expect(registerCreator).not.toHaveBeenCalled();
+    expect(registerLink).not.toHaveBeenCalled();
+    expect(buildWatermarkedPreview).not.toHaveBeenCalled();
+    expect(writeLinkPreview).not.toHaveBeenCalled();
+    expect(writeLinkOriginal).not.toHaveBeenCalled();
+  });
+
+  it("allows two distinct flat uploads that share an uninformative dHash", async () => {
+    const blueBytes = await flatPngBytes({ r: 24, g: 80, b: 180 });
+    const redBytes = await flatPngBytes({ r: 180, g: 40, b: 24 });
+    const blueHash = await computeDHash(blueBytes);
+    const redHash = await computeDHash(redBytes);
+    const registerCreator = vi.fn(async () => photographer);
+    const registerLink = vi.fn(async (input: RegisterLinkInput) =>
+      registeredLink(input, input.id ?? "missing-id"),
+    );
+    const findNearDuplicateLink = vi.fn(async () => {
+      throw new Error("flat uploads should skip duplicate lookup");
+    });
+    const buildWatermarkedPreview = vi.fn(async () => ({
+      bytes: new Uint8Array([7]),
+      contentType: "image/webp" as const,
+    }));
+    const writeLinkPreview = vi.fn(async () => {});
+    const writeLinkOriginal = vi.fn(async () => {});
+    let nextLink = 0;
+
+    expect(blueHash.lowDetail).toBe(true);
+    expect(redHash.lowDetail).toBe(true);
+    expect(redHash.hash).toBe(blueHash.hash);
+
+    const deps = {
+      origin: "https://tollgate.gudman.xyz",
+      basePath: "/aperture",
+      ownerId: () => "link-owner",
+      linkId: () => `flat-${(nextLink += 1)}`,
+      registerCreator,
+      registerLink,
+      generateAccountKey: () => "aptr_flat-key",
+      findNearDuplicateLink,
+      buildWatermarkedPreview,
+      writeLinkPreview,
+      writeLinkOriginal,
+    };
+
+    await expect(
+      handleLinkUploadRegistration(
+        {
+          fileBytes: blueBytes,
+          title: "Blue Flat Upload",
+          displayName: "Jane Lens",
+        },
+        deps,
+      ),
+    ).resolves.toMatchObject({ link: { id: "flat-1" } });
+    await expect(
+      handleLinkUploadRegistration(
+        {
+          fileBytes: redBytes,
+          title: "Red Flat Upload",
+          displayName: "Jane Lens",
+        },
+        deps,
+      ),
+    ).resolves.toMatchObject({ link: { id: "flat-2" } });
+
+    expect(findNearDuplicateLink).not.toHaveBeenCalled();
+    expect(registerLink).toHaveBeenCalledTimes(2);
+    expect(
+      registerLink.mock.calls.map(
+        ([input]) => (input as RegisterLinkInput).perceptualHash,
+      ),
+    ).toEqual([blueHash.hash, redHash.hash]);
   });
 
   it("rejects oversized upload bytes before image decoding", async () => {
@@ -727,7 +910,7 @@ describe("handleLinkUploadRegistration", () => {
         readWalletForOwner,
         registerCreator,
         registerLink,
-        computeDHash: async () => "5555555555555555",
+        computeDHash: async () => dHash("5555555555555555"),
         findNearDuplicateLink: async () => null,
         buildWatermarkedPreview: async () => ({
           bytes: new Uint8Array([1]),

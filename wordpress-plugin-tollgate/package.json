@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/static.test.mjs",
+    "wp:test-env": "node tests/wp-env-smoke.mjs",
     "wp:server": "node tests/playground-server.mjs",
     "wp:smoke": "node tests/playground-smoke.mjs"
   },
   "devDependencies": {
+    "@wordpress/env": "^11.10.0",
     "@wp-playground/cli": "^3.1.44"
   }
 }

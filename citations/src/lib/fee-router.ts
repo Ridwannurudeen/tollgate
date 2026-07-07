@@ -14,6 +14,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { ARC_RPC_URL, ARC_USDC, arcTestnet } from "./chain";
 import { w3sExecuteContract } from "./circle-w3s";
 import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "./fee-router-contract";
+import { withReservedNonce } from "./fee-router-nonce";
 import type {
   Citation,
   CreatorSource,
@@ -28,6 +29,7 @@ const SPLIT_REGISTRY_PATH = path.join(
 );
 const FEE_ROUTER_CLAIMABLE_CACHE_TTL_MS = 60_000;
 const ARC_POLLING_INTERVAL_MS = 250;
+const DEFAULT_FEE_ROUTER_TENANT_ID = "citations-core";
 // Approving the exact payout amount resets the allowance to ~0 after every pay,
 // so concurrent payouts (demand engine + live queries) race a tiny allowance and
 // revert with "transfer amount exceeds allowance". Instead top up to a large
@@ -101,6 +103,7 @@ export type FeeRouterRouteOptions = {
   publicClient?: PublicClient;
   walletClient?: FeeRouterWalletClient;
   splitRegistryPath?: string;
+  tenantId?: string;
 };
 
 export type FeeRouterWriteContractRequest = {
@@ -110,6 +113,7 @@ export type FeeRouterWriteContractRequest = {
   args?: readonly unknown[];
   account?: unknown;
   chain?: typeof arcTestnet;
+  nonce?: number;
 };
 
 export type FeeRouterWalletClient = {
@@ -122,6 +126,7 @@ export type FeeRouterSigner = {
 };
 
 export type FeeRouterSplitRecord = {
+  tenantId: string;
   wallet: Address;
   splitId: string;
   recipients: Address[];
@@ -349,17 +354,21 @@ function isHexString(value: unknown): value is Hex {
   return typeof value === "string" && /^0x[a-fA-F0-9]+$/.test(value);
 }
 
-function isFeeRouterSplitRegistry(
-  value: unknown,
-): value is FeeRouterSplitRegistry {
-  if (!value || typeof value !== "object") return false;
+function normalizeFeeRouterTenantId(value: unknown): string {
+  return typeof value === "string" && value.trim()
+    ? value.trim().slice(0, 120)
+    : DEFAULT_FEE_ROUTER_TENANT_ID;
+}
+
+function parseFeeRouterSplitRegistry(value: unknown): FeeRouterSplitRegistry {
+  if (!value || typeof value !== "object") return { splits: [] };
   const splits = (value as Record<string, unknown>).splits;
-  return (
-    Array.isArray(splits) &&
-    splits.every((split) => {
-      if (!split || typeof split !== "object") return false;
+  if (!Array.isArray(splits)) return { splits: [] };
+  return {
+    splits: splits.flatMap((split) => {
+      if (!split || typeof split !== "object") return [];
       const record = split as Record<string, unknown>;
-      return (
+      if (
         isAddressString(record.wallet) &&
         typeof record.splitId === "string" &&
         Array.isArray(record.recipients) &&
@@ -368,9 +377,22 @@ function isFeeRouterSplitRegistry(
         record.bps.every((bps) => typeof bps === "number") &&
         isHexString(record.createSplitTx) &&
         typeof record.createdAt === "string"
-      );
-    })
-  );
+      ) {
+        return [
+          {
+            tenantId: normalizeFeeRouterTenantId(record.tenantId),
+            wallet: record.wallet,
+            splitId: record.splitId,
+            recipients: record.recipients,
+            bps: record.bps,
+            createSplitTx: record.createSplitTx,
+            createdAt: record.createdAt,
+          },
+        ];
+      }
+      return [];
+    }),
+  };
 }
 
 export async function readFeeRouterSplitRegistry(
@@ -378,7 +400,7 @@ export async function readFeeRouterSplitRegistry(
 ): Promise<FeeRouterSplitRegistry> {
   try {
     const parsed = JSON.parse(await readFile(filePath, "utf8")) as unknown;
-    return isFeeRouterSplitRegistry(parsed) ? parsed : { splits: [] };
+    return parseFeeRouterSplitRegistry(parsed);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") return { splits: [] };
@@ -439,6 +461,7 @@ async function verifyCreatorSplit(
 }
 
 async function ensureCreatorSplit(
+  tenantId: string,
   wallet: Address,
   recipients: Address[],
   bps: number[],
@@ -452,6 +475,7 @@ async function ensureCreatorSplit(
     const registry = await readFeeRouterSplitRegistry(registryPath);
     const existing = registry.splits.find(
       (split) =>
+        split.tenantId === tenantId &&
         split.wallet.toLowerCase() === wallet.toLowerCase() &&
         sameAddressList(split.recipients, recipients) &&
         sameBpsList(split.bps, bps),
@@ -469,14 +493,20 @@ async function ensureCreatorSplit(
       account: account.address,
       chain: arcTestnet,
     });
-    // Serialized in-process; ops should run one FeeRouter settlement worker per app instance.
-    const createSplitTx = await walletClient.writeContract({
-      ...request,
+    const createSplitTx = await withReservedNonce(
+      publicClient,
       account,
-    });
+      (nonce) =>
+        walletClient.writeContract({
+          ...request,
+          account,
+          nonce,
+        }),
+    );
     await publicClient.waitForTransactionReceipt({ hash: createSplitTx });
 
     const record: FeeRouterSplitRecord = {
+      tenantId,
       wallet,
       splitId: splitId.toString(),
       recipients,
@@ -490,6 +520,10 @@ async function ensureCreatorSplit(
     );
     return record;
   });
+}
+
+function feeRouterTenantId(options: FeeRouterRouteOptions): string {
+  return normalizeFeeRouterTenantId(options.tenantId);
 }
 
 function escrowUnverifiedEnabled(): boolean {
@@ -558,6 +592,7 @@ export async function routeCitationPayments(
 
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
   const { account, walletClient } = createFeeRouterSigner(options);
+  const tenantId = feeRouterTenantId(options);
   const totalAtomicUsdc = routeableCitations.reduce(
     (sum, citation) => sum + BigInt(citation.amountAtomicUsdc),
     0n,
@@ -582,20 +617,24 @@ export async function routeCitationPayments(
   }
 
   if (allowance < totalAtomicUsdc) {
-    const approveTx = await walletClient.writeContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "approve",
-      args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
-      account,
-      chain: arcTestnet,
-    });
+    const approveTx = await withReservedNonce(publicClient, account, (nonce) =>
+      walletClient.writeContract({
+        address: ARC_USDC,
+        abi: usdcRouterAbi,
+        functionName: "approve",
+        args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
+        account,
+        chain: arcTestnet,
+        nonce,
+      }),
+    );
     await publicClient.waitForTransactionReceipt({ hash: approveTx });
   }
 
   for (const citation of routeableCitations) {
     const splitInput = splitForCitation(citation);
     const split = await ensureCreatorSplit(
+      tenantId,
       splitInput.wallet,
       splitInput.recipients,
       splitInput.bps,
@@ -605,14 +644,17 @@ export async function routeCitationPayments(
       options.splitRegistryPath,
     );
 
-    const payTx = await walletClient.writeContract({
-      address: FEE_ROUTER_ADDRESS,
-      abi: feeRouterV1Abi,
-      functionName: "pay",
-      args: [BigInt(split.splitId), BigInt(citation.amountAtomicUsdc)],
-      account,
-      chain: arcTestnet,
-    });
+    const payTx = await withReservedNonce(publicClient, account, (nonce) =>
+      walletClient.writeContract({
+        address: FEE_ROUTER_ADDRESS,
+        abi: feeRouterV1Abi,
+        functionName: "pay",
+        args: [BigInt(split.splitId), BigInt(citation.amountAtomicUsdc)],
+        account,
+        chain: arcTestnet,
+        nonce,
+      }),
+    );
     await publicClient.waitForTransactionReceipt({ hash: payTx });
 
     evidenceBySourceId[citation.sourceId] = {
@@ -646,6 +688,7 @@ export async function routeEscrowReleasePayment(
 
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
   const { account, walletClient } = createFeeRouterSigner(options);
+  const tenantId = feeRouterTenantId(options);
   const amount = BigInt(amountAtomicUsdc);
   const [balance, allowance] = await Promise.all([
     publicClient.readContract({
@@ -667,14 +710,17 @@ export async function routeEscrowReleasePayment(
   }
 
   if (allowance < amount) {
-    const approveTx = await walletClient.writeContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "approve",
-      args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
-      account,
-      chain: arcTestnet,
-    });
+    const approveTx = await withReservedNonce(publicClient, account, (nonce) =>
+      walletClient.writeContract({
+        address: ARC_USDC,
+        abi: usdcRouterAbi,
+        functionName: "approve",
+        args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
+        account,
+        chain: arcTestnet,
+        nonce,
+      }),
+    );
     await publicClient.waitForTransactionReceipt({ hash: approveTx });
   }
 
@@ -685,6 +731,7 @@ export async function routeEscrowReleasePayment(
     (contributor) => contributor.shareBps,
   ) ?? [10_000];
   const split = await ensureCreatorSplit(
+    tenantId,
     source.wallet,
     recipients,
     bps,
@@ -693,14 +740,17 @@ export async function routeEscrowReleasePayment(
     account,
     options.splitRegistryPath,
   );
-  const payTx = await walletClient.writeContract({
-    address: FEE_ROUTER_ADDRESS,
-    abi: feeRouterV1Abi,
-    functionName: "pay",
-    args: [BigInt(split.splitId), amount],
-    account,
-    chain: arcTestnet,
-  });
+  const payTx = await withReservedNonce(publicClient, account, (nonce) =>
+    walletClient.writeContract({
+      address: FEE_ROUTER_ADDRESS,
+      abi: feeRouterV1Abi,
+      functionName: "pay",
+      args: [BigInt(split.splitId), amount],
+      account,
+      chain: arcTestnet,
+      nonce,
+    }),
+  );
   await publicClient.waitForTransactionReceipt({ hash: payTx });
 
   return {
@@ -739,14 +789,17 @@ export async function refundReaderPayment(
     args: [account.address],
   })) as bigint;
   if (balance < amount) return null;
-  const refundTx = await walletClient.writeContract({
-    address: ARC_USDC,
-    abi: usdcRouterAbi,
-    functionName: "transfer",
-    args: [recipient, amount],
-    account,
-    chain: arcTestnet,
-  });
+  const refundTx = await withReservedNonce(publicClient, account, (nonce) =>
+    walletClient.writeContract({
+      address: ARC_USDC,
+      abi: usdcRouterAbi,
+      functionName: "transfer",
+      args: [recipient, amount],
+      account,
+      chain: arcTestnet,
+      nonce,
+    }),
+  );
   await publicClient.waitForTransactionReceipt({ hash: refundTx });
   return refundTx;
 }

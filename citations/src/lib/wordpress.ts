@@ -435,8 +435,12 @@ export async function settleWordPressPost(
     input,
     (deps.now?.() ?? new Date()).toISOString(),
   );
+  const feeRouterOptions = {
+    ...(deps.feeRouterOptions ?? {}),
+    tenantId: site.id,
+  };
   const evidenceBySourceId = await (deps.routeCitationPayments ??
-    routeCitationPayments)(query, deps.feeRouterOptions ?? {});
+    routeCitationPayments)(query, feeRouterOptions);
   const settlement = await (deps.appendSettlement ?? appendSettlement)(
     query,
     evidenceBySourceId,
