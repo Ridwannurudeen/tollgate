@@ -1,4 +1,4 @@
-# Codex scope — buyer/seller messaging on Aperture
+# Scope - buyer/seller messaging on Aperture
 
 Add a simple, safe messaging channel between a prospective buyer and a photo/video's seller — for pre-purchase questions (licensing terms, usage rights, custom requests) or post-purchase follow-up. Polling-based (no websockets), text-only, reusing the existing account/session system entirely — no new identity concept.
 

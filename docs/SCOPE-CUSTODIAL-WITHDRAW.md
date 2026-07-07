@@ -1,4 +1,4 @@
-# Codex scope — withdraw custodial (Circle W3S) balance to an external wallet
+# Scope - withdraw custodial (Circle W3S) balance to an external wallet
 
 **Real, verified gap:** a creator who signed up with just an email gets a Circle-managed ("circle-w3s" custody) wallet — they never hold its private key. Money settles into it (Aperture: `payTo: photographer.wallet` directly at sale; Citations: `FeeRouter.claim()` moves split funds into the same custodial wallet), but **there is currently no way for that creator to move funds OUT of the custodial wallet to anywhere they actually control.** Citations' claim route only moves funds *into* the custodial wallet; Aperture has no claim/withdraw endpoint at all; neither app's `circle-w3s.ts` has a transfer-out function. Self-custody creators don't have this problem — they already hold the key.
 
@@ -46,7 +46,7 @@ This touches real money movement — read every relevant file before editing in 
 - No swallowed errors on the transfer call — a failed Circle API call must surface clearly, not silently report success.
 - No new dependency; reuses the existing Circle W3S contract-execution API and USDC ABI already in the codebase.
 
-## Operator tasks (NOT Codex)
+## Operator tasks
 - Confirm `CIRCLE_API_KEY`/`CIRCLE_ENTITY_SECRET` (already required for existing custodial flows) remain valid in both `/etc/aperture.env` and `/etc/tollgate.env`.
 - Deploy both apps; live-verify: as a real custodial creator with a nonzero balance, withdraw a small amount to a wallet you control, confirm the tx lands on Arcscan and the balance updates; confirm a self-custody creator does NOT see/can't use the withdraw action; confirm an oversized withdrawal request is rejected, not partially executed.
 
