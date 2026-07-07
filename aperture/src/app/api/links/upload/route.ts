@@ -4,6 +4,7 @@ import { handleLinkUploadRegistration } from "../../../../lib/link-registration"
 import { LINK_DOWNLOAD_MAX_BYTES } from "../../../../lib/link-content";
 import { assertLinkRegistrationRateLimit } from "../../../../lib/link-rate-limit";
 import { publicOrigin } from "../../../../lib/x402-server";
+import { VIDEO_UPLOAD_MAX_BYTES } from "../../../../lib/video-content";
 import {
   SESSION_COOKIE_NAME,
   getSessionOwner,
@@ -25,13 +26,34 @@ function requestIp(request: NextRequest): string {
   return "local";
 }
 
-function fileField(value: FormDataEntryValue | null): File {
-  if (!(value instanceof File)) {
-    throw new LinkRegistryError("image file is required.");
+type MediaKind = "photo" | "video";
+
+function mediaKindField(value: FormDataEntryValue | null): MediaKind {
+  if (value === null || value === "") return "photo";
+  if (typeof value !== "string") {
+    throw new LinkRegistryError("mediaKind must be photo or video.");
   }
-  if (value.size > LINK_DOWNLOAD_MAX_BYTES) {
+  const trimmed = value.trim();
+  if (!trimmed) return "photo";
+  if (trimmed !== "photo" && trimmed !== "video") {
+    throw new LinkRegistryError("mediaKind must be photo or video.");
+  }
+  return trimmed;
+}
+
+function fileField(value: FormDataEntryValue | null, kind: MediaKind): File {
+  if (!(value instanceof File)) {
     throw new LinkRegistryError(
-      "photo is larger than the 25 MB upload cap.",
+      kind === "video" ? "video file is required." : "image file is required.",
+    );
+  }
+  const maxBytes =
+    kind === "video" ? VIDEO_UPLOAD_MAX_BYTES : LINK_DOWNLOAD_MAX_BYTES;
+  if (value.size > maxBytes) {
+    throw new LinkRegistryError(
+      kind === "video"
+        ? "video is larger than the 100 MB upload cap."
+        : "photo is larger than the 25 MB upload cap.",
       413,
     );
   }
@@ -51,11 +73,16 @@ export async function POST(request: NextRequest) {
   try {
     const sessionOwner = await getSessionOwner();
     const form = await request.formData();
-    const file = fileField(form.get("file"));
+    const kind = mediaKindField(form.get("mediaKind"));
+    const file = fileField(form.get("file"), kind);
     const bytes = new Uint8Array(await file.arrayBuffer());
-    if (bytes.byteLength > LINK_DOWNLOAD_MAX_BYTES) {
+    const maxBytes =
+      kind === "video" ? VIDEO_UPLOAD_MAX_BYTES : LINK_DOWNLOAD_MAX_BYTES;
+    if (bytes.byteLength > maxBytes) {
       throw new LinkRegistryError(
-        "photo is larger than the 25 MB upload cap.",
+        kind === "video"
+          ? "video is larger than the 100 MB upload cap."
+          : "photo is larger than the 25 MB upload cap.",
         413,
       );
     }
@@ -63,6 +90,7 @@ export async function POST(request: NextRequest) {
     const result = await handleLinkUploadRegistration(
       {
         fileBytes: bytes,
+        mediaKind: kind,
         title: form.get("title"),
         description: form.get("description"),
         displayName: form.get("displayName"),

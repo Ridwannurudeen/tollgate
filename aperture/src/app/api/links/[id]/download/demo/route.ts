@@ -37,10 +37,10 @@ function jsonError(error: string, status: number): NextResponse {
 
 async function responseError(response: Response): Promise<string> {
   if (response.status === 404) {
-    return "This photo link is unavailable.";
+    return "This media link is unavailable.";
   }
   if (response.status === 502) {
-    return "The photo source could not be unlocked right now. Use your own wallet or try again shortly.";
+    return "The media source could not be unlocked right now. Use your own wallet or try again shortly.";
   }
   return "The no-wallet unlock could not complete. Use your own wallet or try again shortly.";
 }
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     address = payerAddress();
   } catch {
     return jsonError(
-      "Custodial unlock isn't configured yet. Use your own wallet to unlock this photo.",
+      "Custodial unlock isn't configured yet. Use your own wallet to unlock this media.",
       503,
     );
   }

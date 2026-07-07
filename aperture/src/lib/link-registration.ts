@@ -12,6 +12,7 @@ import {
   markLinkPreviewGenerated,
   publicLink,
   registerLink,
+  type LinkMediaKind,
   type PublicLinkRecord,
 } from "./link-registry";
 import {
@@ -27,6 +28,7 @@ import { buildWatermarkedPreview, writeLinkPreview } from "./link-preview";
 import { registerCreator } from "./onboarding";
 import { readWalletForOwner } from "./registry";
 import { sha256Hex } from "./hash";
+import { buildVideoThumbnail, probeVideo } from "./video-content";
 
 const MAX_URL_LENGTH = 2048;
 const MAX_TITLE_LENGTH = 120;
@@ -46,6 +48,7 @@ export type LinkRegistrationInput = {
 
 export type LinkUploadRegistrationInput = {
   fileBytes: Uint8Array;
+  mediaKind?: unknown;
   title?: unknown;
   description?: unknown;
   displayName?: unknown;
@@ -73,8 +76,10 @@ export type LinkRegistrationDeps = {
   probeImageSource?: typeof probeImageSource;
   fetchImageBytes?: typeof fetchImageBytes;
   buildWatermarkedPreview?: typeof buildWatermarkedPreview;
+  buildVideoThumbnail?: typeof buildVideoThumbnail;
   writeLinkPreview?: typeof writeLinkPreview;
   writeLinkOriginal?: typeof writeLinkOriginal;
+  probeVideo?: typeof probeVideo;
   readWalletForOwner?: typeof readWalletForOwner;
   generateAccountKey?: typeof generateAccountKey;
   ownerId?: () => string;
@@ -127,6 +132,14 @@ function optionalDescription(value: unknown): string | undefined {
     throw new LinkRegistryError("description is too long.");
   }
   return trimmed;
+}
+
+function mediaKind(value: unknown): LinkMediaKind {
+  if (value === undefined || value === null || value === "") return "photo";
+  if (value !== "photo" && value !== "video") {
+    throw new LinkRegistryError("mediaKind must be photo or video.");
+  }
+  return value;
 }
 
 async function photographerForRegistration(
@@ -225,6 +238,25 @@ async function uploadedImageEvidence(bytes: Uint8Array): Promise<{
 
   return {
     ...type,
+    sourceContentHash: sha256Hex({
+      type: "aperture-upload-original",
+      body: Buffer.from(bytes).toString("base64"),
+    }),
+  };
+}
+
+async function uploadedVideoEvidence(
+  bytes: Uint8Array,
+  probe: typeof probeVideo,
+): Promise<{
+  contentType: string;
+  ext: NonNullable<ReturnType<typeof originalExtensionForContentType>>;
+  sourceContentHash: `0x${string}`;
+}> {
+  const evidence = await probe(bytes);
+  return {
+    contentType: evidence.contentType,
+    ext: evidence.ext,
     sourceContentHash: sha256Hex({
       type: "aperture-upload-original",
       body: Buffer.from(bytes).toString("base64"),
@@ -344,13 +376,20 @@ export async function handleLinkUploadRegistration(
 ): Promise<LinkRegistrationResult> {
   const title = stringField(input.title, "title", MAX_TITLE_LENGTH);
   const description = optionalDescription(input.description);
-  const evidence = await uploadedImageEvidence(input.fileBytes);
+  const kind = mediaKind(input.mediaKind);
+  const evidence =
+    kind === "video"
+      ? await uploadedVideoEvidence(input.fileBytes, deps.probeVideo ?? probeVideo)
+      : await uploadedImageEvidence(input.fileBytes);
   const { accountKey, ownerId, photographer } =
     await photographerForRegistration(input, deps);
   const id = deps.linkId?.() ?? randomUUID();
-  const preview = await (
-    deps.buildWatermarkedPreview ?? buildWatermarkedPreview
-  )(input.fileBytes);
+  const preview =
+    kind === "video"
+      ? await (deps.buildVideoThumbnail ?? buildVideoThumbnail)(input.fileBytes)
+      : await (deps.buildWatermarkedPreview ?? buildWatermarkedPreview)(
+          input.fileBytes,
+        );
   await (deps.writeLinkPreview ?? writeLinkPreview)(id, preview.bytes);
   await (deps.writeLinkOriginal ?? writeLinkOriginal)(
     id,
@@ -362,6 +401,7 @@ export async function handleLinkUploadRegistration(
     title,
     ...(description ? { description } : {}),
     ownerId,
+    ...(kind === "video" ? { mediaKind: kind } : {}),
     sourceKind: "upload",
     originalContentType: evidence.contentType,
     sourceContentHash: evidence.sourceContentHash,

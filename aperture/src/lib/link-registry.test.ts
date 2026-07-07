@@ -79,6 +79,57 @@ describe("link registry", () => {
     }
   });
 
+  it("registers an uploaded video and exposes only public media metadata", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
+    const filePath = path.join(dir, "links.json");
+    try {
+      const link = await registerLink(
+        {
+          id: "video-1",
+          title: "Uploaded Video",
+          ownerId: "link-owner",
+          mediaKind: "video",
+          sourceKind: "upload",
+          originalContentType: "video/mp4",
+          sourceContentHash: `0x${"5".repeat(64)}`,
+          hasPreview: true,
+          createdAt: "2026-07-06T00:00:00.000Z",
+        },
+        filePath,
+      );
+      const projected = publicLink(link) as Record<string, unknown>;
+
+      expect(link.mediaKind).toBe("video");
+      expect(link.sourceKind).toBe("upload");
+      expect(projected.mediaKind).toBe("video");
+      expect(projected.sourceUrl).toBeUndefined();
+      expect(projected.sourceContentHash).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects URL-based video records", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
+    const filePath = path.join(dir, "links.json");
+    try {
+      await expect(
+        registerLink(
+          {
+            id: "video-url",
+            title: "Hosted Video",
+            ownerId: "link-owner",
+            mediaKind: "video",
+            sourceUrl: "https://example.com/video.mp4",
+          },
+          filePath,
+        ),
+      ).rejects.toThrow("video links must be uploaded files.");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("filters corrupt links with non-string descriptions", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
     const filePath = path.join(dir, "links.json");

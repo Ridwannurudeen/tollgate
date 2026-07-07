@@ -31,17 +31,18 @@ export default async function Home() {
 
       <section className="hero">
         <div>
-          <p className="eyebrow">Pay-per-photo licensing on Arc</p>
-          <h1>Photographers get paid when their photos are licensed.</h1>
+          <p className="eyebrow">Pay-per-media licensing on Arc</p>
+          <h1>Photographers get paid when their photos and videos are licensed.</h1>
           <p className="lede">
-            Aperture gates any photo URL behind a receipt-checked paywall and
-            writes a payout to the owner that settles through Forum FeeRouter on
-            Arc. It also runs as a sidecar for Immich photo communities,
-            watching shared-link downloads the same way.
+            Aperture gates uploaded photos, uploaded videos, and hosted photo
+            URLs behind a receipt-checked paywall, then writes a payout to the
+            owner that settles through Forum FeeRouter on Arc. It also runs as a
+            sidecar for Immich photo communities, watching shared-link downloads
+            the same way.
           </p>
           <div className="actions">
             <Link className="button primary" href="/link">
-              Gate a photo link
+              Gate media
             </Link>
             <Link className="button" href="/browse">
               Browse works
@@ -94,9 +95,9 @@ export default async function Home() {
           <p className="eyebrow">Operator-ready sidecar</p>
           <h2>Install beside Immich without upstream patches.</h2>
           <p>
-            The sidecar pattern is platform-portable: any photo platform that
-            exposes download events can pay its photographers this way. Immich
-            is the live integration today.
+            The sidecar pattern is platform-portable: any media platform that
+            exposes download events can pay its creators this way. Immich is the
+            live integration today.
           </p>
         </div>
         <div className="operatorGrid">
@@ -113,8 +114,8 @@ export default async function Home() {
             <small>systemd, nginx, access-log watcher</small>
           </Link>
           <Link href="/link">
-            <span>Paste a photo URL</span>
-            <small>gate an already-hosted image without Immich</small>
+            <span>Gate media</span>
+            <small>upload photos or videos without Immich</small>
           </Link>
         </div>
       </section>

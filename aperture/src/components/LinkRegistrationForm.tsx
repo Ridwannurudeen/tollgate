@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 type RegistrationMode = "upload" | "link";
+type MediaKind = "photo" | "video";
 
 type LinkRegistrationResult = {
   shareUrl: string;
@@ -11,6 +12,7 @@ type LinkRegistrationResult = {
     id: string;
     title: string;
     description?: string;
+    mediaKind?: MediaKind;
     priceAtomicUsdc: number;
     hasPreview?: boolean;
   };
@@ -25,6 +27,7 @@ type LinkRegistrationResult = {
 
 export function LinkRegistrationForm({ basePath }: { basePath: string }) {
   const [mode, setMode] = useState<RegistrationMode>("upload");
+  const [mediaKind, setMediaKind] = useState<MediaKind>("photo");
   const [sourceUrl, setSourceUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -45,11 +48,16 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
       let response: Response;
       if (mode === "upload") {
         if (!file) {
-          setStatus("Choose an image file to upload.");
+          setStatus(
+            mediaKind === "video"
+              ? "Choose a video file to upload."
+              : "Choose an image file to upload.",
+          );
           return;
         }
         const body = new FormData();
         body.set("file", file);
+        body.set("mediaKind", mediaKind);
         body.set("title", title.trim());
         body.set("displayName", displayName.trim());
         if (description.trim()) body.set("description", description.trim());
@@ -100,6 +108,25 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
 
   return (
     <form className="registerForm" onSubmit={submit}>
+      <div className="modeToggle" aria-label="Media type">
+        <button
+          aria-pressed={mediaKind === "photo"}
+          type="button"
+          onClick={() => setMediaKind("photo")}
+        >
+          Photo
+        </button>
+        <button
+          aria-pressed={mediaKind === "video"}
+          type="button"
+          onClick={() => {
+            setMediaKind("video");
+            setMode("upload");
+          }}
+        >
+          Video
+        </button>
+      </div>
       <div className="modeToggle" aria-label="Photo source">
         <button
           aria-pressed={mode === "upload"}
@@ -110,6 +137,7 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
         </button>
         <button
           aria-pressed={mode === "link"}
+          disabled={mediaKind === "video"}
           type="button"
           onClick={() => setMode("link")}
         >
@@ -118,9 +146,13 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
       </div>
       {mode === "upload" ? (
         <label>
-          Photo file
+          {mediaKind === "video" ? "Video file" : "Photo file"}
           <input
-            accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/tiff"
+            accept={
+              mediaKind === "video"
+                ? "video/mp4,video/webm,video/quicktime"
+                : "image/jpeg,image/png,image/webp,image/gif,image/avif,image/tiff"
+            }
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             required
             type="file"
@@ -155,7 +187,11 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
           rows={4}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          placeholder="What is in the photo, where it was taken, and why it is useful."
+          placeholder={
+            mediaKind === "video"
+              ? "What is in the clip, its length, quality, and usage context."
+              : "What is in the photo, where it was taken, and why it is useful."
+          }
         />
       </label>
       <label>
@@ -194,7 +230,9 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
       <button type="submit" disabled={submitting}>
         {submitting
           ? mode === "upload"
-            ? "Uploading photo..."
+            ? mediaKind === "video"
+              ? "Uploading video..."
+              : "Uploading photo..."
             : "Checking photo..."
           : "Create gated link"}
       </button>
@@ -210,7 +248,7 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
               />
               <figcaption>
                 Buyers see this watermarked preview before unlocking the full
-                original.
+                {result.link.mediaKind === "video" ? " video." : " original."}
               </figcaption>
             </figure>
           )}

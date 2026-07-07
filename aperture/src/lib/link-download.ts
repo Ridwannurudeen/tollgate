@@ -110,6 +110,10 @@ function safeFilename(title: string, id: string, ext = "jpg"): string {
   return `${base}.${ext}`;
 }
 
+function mediaLabel(link: LinkRecord): string {
+  return link.mediaKind === "video" ? "video" : "photo";
+}
+
 async function payoutEvidence(
   photographer: WalletRegistryEntry,
   amountAtomicUsdc: number,
@@ -169,7 +173,7 @@ export async function handleLinkDownload(
       return {
         status: 502,
         headers: {},
-        body: { error: "uploaded photo metadata is missing." },
+        body: { error: `uploaded ${mediaLabel(link)} metadata is missing.` },
       };
     }
     uploadExtension = uploadExt;
@@ -215,7 +219,7 @@ export async function handleLinkDownload(
     const body = paymentRequiredBody(
       requirements,
       resourceUrl,
-      "Paid Aperture photo download.",
+      `Paid Aperture ${mediaLabel(link)} download.`,
     );
     return {
       status: 402,
@@ -275,7 +279,7 @@ export async function handleLinkDownload(
       return {
         status: 502,
         headers: {},
-        body: { error: "uploaded photo metadata is missing." },
+        body: { error: `uploaded ${mediaLabel(link)} metadata is missing.` },
       };
     }
     try {
@@ -296,7 +300,7 @@ export async function handleLinkDownload(
             : {},
         body: {
           error:
-            "Payment settled and receipt was recorded, but the uploaded photo stream failed. Retry this link shortly.",
+            `Payment settled and receipt was recorded, but the uploaded ${mediaLabel(link)} stream failed. Retry this link shortly.`,
           receiptHash: receipt.receiptHash,
         },
       };

@@ -236,7 +236,7 @@ small {
 }
 
 .brand::after {
-  content: "photo proof";
+  content: "media proof";
   display: block;
   margin-top: 2px;
   color: var(--ink-3);
@@ -1238,6 +1238,35 @@ small {
   background: var(--ink-block);
   color: var(--ink-block-ink);
   object-fit: cover;
+}
+
+.mediaPreview {
+  position: relative;
+  min-width: 0;
+}
+
+.previewFrame .mediaPreview img {
+  margin: 0;
+}
+
+.mediaBadge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(246, 242, 231, 0.26);
+  border-radius: 999px;
+  background: rgba(14, 61, 40, 0.82);
+  color: var(--paper-raised);
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .previewPlaceholder {

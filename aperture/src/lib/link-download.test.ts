@@ -258,6 +258,111 @@ describe("handleLinkDownload", () => {
     expect(fetchImageBytes).not.toHaveBeenCalled();
   });
 
+  it("settles and streams stored original bytes for video upload links", async () => {
+    const readLinkOriginal = vi.fn(async () => new Uint8Array([10, 11, 12]));
+    const result = await handleLinkDownload("video-1", {
+      ...baseDeps(new Headers({ [PAYMENT_SIGNATURE_HEADER]: "paid" })),
+      findLink: async () => ({
+        id: "video-1",
+        title: "Uploaded Clip",
+        ownerId: "link-owner",
+        mediaKind: "video",
+        sourceKind: "upload",
+        originalContentType: "video/mp4",
+        sourceContentHash: `0x${"6".repeat(64)}` as Hex,
+        priceAtomicUsdc: 2500,
+        createdAt: "2026-07-06T00:00:00.000Z",
+      }),
+      assertLinkOriginalReadable: async () => {},
+      readLinkOriginal,
+      settlePayment: async () => ({
+        ok: true,
+        mode: "x402-verified",
+        responseHeader: "settled",
+      }),
+      routeLicensePayment: async () => null,
+      appendReceipt: async (input) => ({
+        receipt: fakeReceipt({
+          eventId: input.eventId,
+          settlementMode: input.evidence.settlementMode,
+          paymentResource: input.evidence.paymentResource,
+        }),
+        created: true,
+      }),
+    });
+
+    expect(result.status).toBe(200);
+    expect("bytes" in result && Array.from(result.bytes)).toEqual([10, 11, 12]);
+    expect(result.headers["content-type"]).toBe("video/mp4");
+    expect(result.headers["content-disposition"]).toContain(
+      "uploaded-clip.mp4",
+    );
+    expect(readLinkOriginal).toHaveBeenCalledWith("video-1", "mp4");
+  });
+
+  it("describes unpaid video upload links as video downloads", async () => {
+    const result = await handleLinkDownload("video-1", {
+      ...baseDeps(),
+      findLink: async () => ({
+        id: "video-1",
+        title: "Uploaded Clip",
+        ownerId: "link-owner",
+        mediaKind: "video",
+        sourceKind: "upload",
+        originalContentType: "video/mp4",
+        sourceContentHash: `0x${"6".repeat(64)}` as Hex,
+        priceAtomicUsdc: 2500,
+        createdAt: "2026-07-06T00:00:00.000Z",
+      }),
+      assertLinkOriginalReadable: async () => {},
+    });
+
+    expect(result.status).toBe(402);
+    expect("body" in result && JSON.stringify(result.body)).toContain(
+      "Paid Aperture video download.",
+    );
+  });
+
+  it("returns a video-specific retryable error if uploaded video streaming fails after settlement", async () => {
+    const result = await handleLinkDownload("video-1", {
+      ...baseDeps(new Headers({ [PAYMENT_SIGNATURE_HEADER]: "paid" })),
+      findLink: async () => ({
+        id: "video-1",
+        title: "Uploaded Clip",
+        ownerId: "link-owner",
+        mediaKind: "video",
+        sourceKind: "upload",
+        originalContentType: "video/mp4",
+        sourceContentHash: `0x${"6".repeat(64)}` as Hex,
+        priceAtomicUsdc: 2500,
+        createdAt: "2026-07-06T00:00:00.000Z",
+      }),
+      assertLinkOriginalReadable: async () => {},
+      readLinkOriginal: async () => {
+        throw new Error("missing");
+      },
+      settlePayment: async () => ({
+        ok: true,
+        mode: "x402-verified",
+        responseHeader: "settled",
+      }),
+      routeLicensePayment: async () => null,
+      appendReceipt: async (input) => ({
+        receipt: fakeReceipt({
+          eventId: input.eventId,
+          settlementMode: input.evidence.settlementMode,
+          paymentResource: input.evidence.paymentResource,
+        }),
+        created: true,
+      }),
+    });
+
+    expect(result.status).toBe(502);
+    expect("body" in result && JSON.stringify(result.body)).toContain(
+      "uploaded video stream failed",
+    );
+  });
+
   it("does not read full upload bytes when payment settlement fails", async () => {
     const readLinkOriginal = vi.fn();
     const result = await handleLinkDownload("upload-1", {

@@ -41,6 +41,16 @@ describe("browse page", () => {
         createdAt: "2026-07-06T00:00:00.000Z",
         hasPreview: true,
       },
+      {
+        id: "video-1",
+        title: "Catalog Clip",
+        description: "A short licensed clip with a watermarked thumbnail.",
+        mediaKind: "video",
+        ownerId: "owner-1",
+        priceAtomicUsdc: 2500,
+        createdAt: "2026-07-07T00:00:00.000Z",
+        hasPreview: true,
+      },
     ]);
     mocks.readWalletRegistry.mockResolvedValue({
       photographers: [
@@ -62,11 +72,19 @@ describe("browse page", () => {
     const payload = renderToStaticMarkup(page as ReactElement);
 
     expect(payload).toContain("Catalog Photo");
+    expect(payload).toContain("Catalog Clip");
     expect(payload).toContain(
       "A watermarked catalog preview with buyer context.",
     );
+    expect(payload).toContain(
+      "A short licensed clip with a watermarked thumbnail.",
+    );
+    expect(payload).toContain("photo and video licenses");
     expect(payload).toContain("Jane Lens");
     expect(payload).toContain("/aperture/link/link-1/preview");
+    expect(payload).toContain("/aperture/link/video-1/preview");
+    expect(payload).toContain("mediaBadge");
+    expect(payload).toContain(">video<");
     expect(payload).not.toContain("accountKeyHash");
     expect(payload).not.toContain("jane@example.com");
     expect(payload).not.toContain("loginTokenHash");

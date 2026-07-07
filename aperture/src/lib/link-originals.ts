@@ -10,6 +10,9 @@ const ORIGINAL_EXTENSIONS = new Set([
   "gif",
   "avif",
   "tiff",
+  "mp4",
+  "webm",
+  "mov",
 ]);
 
 export type LinkOriginalExtension =
@@ -18,7 +21,10 @@ export type LinkOriginalExtension =
   | "webp"
   | "gif"
   | "avif"
-  | "tiff";
+  | "tiff"
+  | "mp4"
+  | "webm"
+  | "mov";
 
 export function originalExtensionForContentType(
   contentType: string,
@@ -36,6 +42,12 @@ export function originalExtensionForContentType(
       return "avif";
     case "image/tiff":
       return "tiff";
+    case "video/mp4":
+      return "mp4";
+    case "video/webm":
+      return "webm";
+    case "video/quicktime":
+      return "mov";
     default:
       return null;
   }

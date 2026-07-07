@@ -8,12 +8,14 @@ const EMPTY_LINKS: LinkRegistry = { links: [] };
 let linkWriteLock: Promise<void> = Promise.resolve();
 
 export type LinkSourceKind = "url" | "upload";
+export type LinkMediaKind = "photo" | "video";
 
 export type LinkRecord = {
   id: string;
   title: string;
   description?: string;
   ownerId: string;
+  mediaKind?: LinkMediaKind;
   sourceKind?: LinkSourceKind;
   sourceUrl?: string;
   contentType?: string;
@@ -38,6 +40,7 @@ export type RegisterLinkInput = {
   title: string;
   description?: string;
   ownerId: string;
+  mediaKind?: LinkMediaKind;
   sourceKind?: LinkSourceKind;
   sourceUrl?: string;
   contentType?: string;
@@ -65,12 +68,14 @@ function isLinkRecord(value: unknown): value is LinkRecord {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   const sourceKind = record.sourceKind ?? "url";
+  const mediaKind = record.mediaKind ?? "photo";
   return (
     typeof record.id === "string" &&
     typeof record.title === "string" &&
     (record.description === undefined ||
       typeof record.description === "string") &&
     typeof record.ownerId === "string" &&
+    (mediaKind === "photo" || mediaKind === "video") &&
     (sourceKind === "url" || sourceKind === "upload") &&
     (sourceKind === "upload"
       ? record.sourceUrl === undefined || typeof record.sourceUrl === "string"
@@ -149,6 +154,7 @@ export function publicLink(link: LinkRecord): PublicLinkRecord {
     title: link.title,
     ...(link.description ? { description: link.description } : {}),
     ownerId: link.ownerId,
+    ...(link.mediaKind === "video" ? { mediaKind: "video" as const } : {}),
     ...(link.contentType ? { contentType: link.contentType } : {}),
     ...(link.hasPreview ? { hasPreview: true } : {}),
     priceAtomicUsdc: link.priceAtomicUsdc,
@@ -212,6 +218,13 @@ export async function registerLink(
   if (sourceKind !== "url" && sourceKind !== "upload") {
     throw new LinkRegistryError("sourceKind must be url or upload.");
   }
+  const mediaKind = input.mediaKind ?? "photo";
+  if (mediaKind !== "photo" && mediaKind !== "video") {
+    throw new LinkRegistryError("mediaKind must be photo or video.");
+  }
+  if (sourceKind === "url" && mediaKind === "video") {
+    throw new LinkRegistryError("video links must be uploaded files.");
+  }
   const sourceUrl =
     sourceKind === "url" && input.sourceUrl
       ? normalizedSourceUrlKey(input.sourceUrl)
@@ -237,6 +250,7 @@ export async function registerLink(
       title,
       ...(description ? { description } : {}),
       ownerId,
+      ...(mediaKind === "video" ? { mediaKind } : {}),
       ...(sourceKind === "upload" ? { sourceKind } : {}),
       ...(sourceUrl ? { sourceUrl } : {}),
       ...(input.contentType ? { contentType: input.contentType } : {}),

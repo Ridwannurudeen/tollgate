@@ -9,9 +9,12 @@ import {
 } from "./link-originals";
 
 describe("link originals", () => {
-  it("maps supported image content types to stored extensions", () => {
+  it("maps supported media content types to stored extensions", () => {
     expect(originalExtensionForContentType("image/jpeg")).toBe("jpg");
     expect(originalExtensionForContentType("image/png")).toBe("png");
+    expect(originalExtensionForContentType("video/mp4")).toBe("mp4");
+    expect(originalExtensionForContentType("video/webm")).toBe("webm");
+    expect(originalExtensionForContentType("video/quicktime")).toBe("mov");
     expect(originalExtensionForContentType("text/html")).toBeNull();
   });
 
@@ -21,6 +24,7 @@ describe("link originals", () => {
       const bytes = new Uint8Array([1, 2, 3]);
 
       await writeLinkOriginal("safe-id", bytes, "png", dir);
+      await writeLinkOriginal("safe-video", bytes, "mp4", dir);
       await expect(
         writeLinkOriginal("../secret", bytes, "png", dir),
       ).rejects.toThrow(/outside the originals directory/);
@@ -28,6 +32,9 @@ describe("link originals", () => {
       expect(Array.from(await readLinkOriginal("safe-id", "png", dir))).toEqual(
         [1, 2, 3],
       );
+      expect(
+        Array.from(await readLinkOriginal("safe-video", "mp4", dir)),
+      ).toEqual([1, 2, 3]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

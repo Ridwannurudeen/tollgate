@@ -43,7 +43,7 @@ export function SiteNavLinks({ basePath, ownerName }: SiteNavLinksProps) {
           className={linkActive ? "active primaryLink" : "primaryLink"}
           href="/link"
         >
-          Sell your photos
+          Sell media
         </Link>
       </div>
       <div className="navlinks navAuth">

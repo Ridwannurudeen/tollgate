@@ -28,6 +28,8 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
   if (!photographer) notFound();
   const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
   const price = link.priceAtomicUsdc || APERTURE_LICENSE_FEE_ATOMIC_USDC;
+  const isVideo = link.mediaKind === "video";
+  const mediaLabel = isVideo ? "video" : "photo";
 
   return (
     <>
@@ -35,13 +37,14 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
         <SiteNav />
 
         <section className="pageHeader">
-          <p className="eyebrow">Aperture gated photo</p>
+          <p className="eyebrow">Aperture gated {mediaLabel}</p>
           <h1>{link.title}</h1>
           {link.description && (
             <p className="linkDescription">{link.description}</p>
           )}
           <p>
-            Photo by {photographer.displayName}. Unlock this photo for{" "}
+            {isVideo ? "Video" : "Photo"} by {photographer.displayName}. Unlock
+            this {mediaLabel} for{" "}
             {formatUsdc(price)} digital dollars (USDC); the photographer is paid
             instantly and the download receipt lands in the proof ledger.
           </p>
@@ -54,13 +57,17 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
           </div>
           {link.hasPreview && (
             <figure className="previewFrame">
-              <img
-                alt={`Watermarked preview of ${link.title}`}
-                src={`${basePath}/link/${link.id}/preview`}
-              />
+              <div className="mediaPreview">
+                <img
+                  alt={`Watermarked preview of ${link.title}`}
+                  src={`${basePath}/link/${link.id}/preview`}
+                />
+                {isVideo && <span className="mediaBadge">video</span>}
+              </div>
               <figcaption>
-                Watermarked preview - unlock to download the full-resolution
-                original.
+                {isVideo
+                  ? "Watermarked thumbnail preview - unlock to download the full video."
+                  : "Watermarked preview - unlock to download the full-resolution original."}
               </figcaption>
             </figure>
           )}

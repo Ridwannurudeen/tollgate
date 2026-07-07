@@ -90,7 +90,7 @@ export default async function DashboardPage() {
   const receipts = ledger.receipts.filter(
     (receipt) => receipt.ownerId === owner.ownerId,
   );
-  const photoEarned = receipts.reduce(
+  const mediaEarned = receipts.reduce(
     (sum, receipt) => sum + receipt.amountAtomicUsdc,
     0,
   );
@@ -101,7 +101,7 @@ export default async function DashboardPage() {
     (summary) => summary === null,
   );
   const citations = aggregateCitations(citationSummaries);
-  const totalEarned = photoEarned + citations.earnedAtomicUsdc;
+  const totalEarned = mediaEarned + citations.earnedAtomicUsdc;
 
   return (
     <>
@@ -113,8 +113,9 @@ export default async function DashboardPage() {
             <p className="eyebrow">Tollgate creator account</p>
             <h1>Your Tollgate creator dashboard</h1>
             <p className="lede dashboardLede">
-              {owner.displayName} can track Aperture photo licenses, Citations
-              cite-to-earn receipts, and the video proof rail from one login.
+              {owner.displayName} can track Aperture photo and video licenses,
+              Citations cite-to-earn receipts, and the video proof rail from one
+              login.
             </p>
           </div>
         </section>
@@ -122,7 +123,7 @@ export default async function DashboardPage() {
         <section className="statStrip">
           <div>
             <span>{works.length}</span>
-            <small>Aperture photos</small>
+            <small>Aperture works</small>
           </div>
           <div>
             <span>{receipts.length}</span>
@@ -134,7 +135,7 @@ export default async function DashboardPage() {
           </div>
           <div>
             <span>{formatUsdc(totalEarned)}</span>
-            <small>Photos + Citations USDC</small>
+            <small>Aperture + Citations USDC</small>
           </div>
           <div>
             <span>{trackedWallets.length}</span>
@@ -181,7 +182,7 @@ export default async function DashboardPage() {
 
         <section className="tableSurface">
           <div className="sectionTitle">
-            <h2>Photos (Aperture)</h2>
+            <h2>Media (Aperture)</h2>
             <Link href="/link">Register another</Link>
           </div>
           <div className="workGrid">
@@ -190,19 +191,24 @@ export default async function DashboardPage() {
             ) : (
               works.map((work) => {
                 const sharePath = `${basePath}/link/${work.id}`;
+                const isVideo = work.mediaKind === "video";
                 return (
                   <article className="workCard" key={work.id}>
-                    {work.hasPreview ? (
-                      <img
-                        alt={`Watermarked preview of ${work.title}`}
-                        src={`${basePath}/link/${work.id}/preview`}
-                      />
-                    ) : (
-                      <div className="previewPlaceholder">Preview pending</div>
-                    )}
+                    <div className="mediaPreview">
+                      {work.hasPreview ? (
+                        <img
+                          alt={`Watermarked preview of ${work.title}`}
+                          src={`${basePath}/link/${work.id}/preview`}
+                        />
+                      ) : (
+                        <div className="previewPlaceholder">Preview pending</div>
+                      )}
+                      {isVideo && <span className="mediaBadge">video</span>}
+                    </div>
                     <div>
                       <h3>{work.title}</h3>
                       <small>
+                        {isVideo ? "video" : "photo"} /{" "}
                         {work.hasPreview ? "preview ready" : "no preview"}
                       </small>
                     </div>
@@ -243,7 +249,7 @@ export default async function DashboardPage() {
           {citationsUnavailable ? (
             <div className="empty">
               Couldn&apos;t load citations earnings right now. Aperture photos
-              are still available.
+              and videos are still available.
             </div>
           ) : citations.sources.length === 0 ? (
             <div className="empty">

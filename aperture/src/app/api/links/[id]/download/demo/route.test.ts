@@ -129,4 +129,33 @@ describe("POST /api/links/[id]/download/demo", () => {
     );
     expect(mocks.recordDemoUnlock).toHaveBeenCalledWith("198.51.100.9");
   });
+
+  it("passes through video response headers after a successful unlock", async () => {
+    mocks.paidFetch.mockResolvedValueOnce(
+      new Response(new Uint8Array([9, 8, 7]), {
+        status: 200,
+        headers: {
+          "content-type": "video/mp4",
+          "content-disposition": 'attachment; filename="clip.mp4"',
+          "x-aperture-receipt-hash": `0x${"2".repeat(64)}`,
+        },
+      }),
+    );
+
+    const response = await POST(request({ "x-real-ip": "198.51.100.10" }), {
+      params: Promise.resolve({ id: "video-1" }),
+    });
+    const bytes = new Uint8Array(await response.arrayBuffer());
+
+    expect(response.status).toBe(200);
+    expect(Array.from(bytes)).toEqual([9, 8, 7]);
+    expect(response.headers.get("content-type")).toBe("video/mp4");
+    expect(response.headers.get("content-disposition")).toBe(
+      'attachment; filename="clip.mp4"',
+    );
+    expect(response.headers.get("x-aperture-receipt-hash")).toBe(
+      `0x${"2".repeat(64)}`,
+    );
+    expect(mocks.recordDemoUnlock).toHaveBeenCalledWith("198.51.100.10");
+  });
 });

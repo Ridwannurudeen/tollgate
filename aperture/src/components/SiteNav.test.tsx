@@ -30,7 +30,7 @@ describe("SiteNav", () => {
     const markup = renderToStaticMarkup(nav as ReactElement);
 
     expect(markup).toContain("Browse");
-    expect(markup).toContain("Sell your photos");
+    expect(markup).toContain("Sell media");
     expect(markup).toContain("Sign in");
     expect(markup).not.toContain("Dashboard");
     expect(markup).not.toContain("Log out");

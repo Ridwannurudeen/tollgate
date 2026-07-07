@@ -7,7 +7,7 @@ export function SiteFooter() {
     <footer className="siteFooter">
       <div>
         <strong>Aperture</strong>
-        <span>photo licensing receipts on Arc</span>
+        <span>media licensing receipts on Arc</span>
       </div>
       <nav aria-label="Operator links">
         <Link href="/proof">Proof</Link>

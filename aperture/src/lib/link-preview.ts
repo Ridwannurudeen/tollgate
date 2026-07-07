@@ -19,7 +19,7 @@ function previewPath(linkId: string, dir = PREVIEW_DIR): string {
   return fullPath;
 }
 
-function watermarkSvg(width: number, height: number): Buffer {
+export function watermarkSvg(width: number, height: number): Buffer {
   const label = "TOLLGATE - PAY TO UNLOCK";
   const fontSize = Math.max(18, Math.round(Math.min(width, height) / 13));
   const bandHeight = Math.max(54, Math.round(fontSize * 1.8));

@@ -36,6 +36,7 @@ function registeredLink(input: RegisterLinkInput, id: string): LinkRecord {
     title: input.title,
     ...(input.description ? { description: input.description } : {}),
     ownerId: input.ownerId,
+    ...(input.mediaKind ? { mediaKind: input.mediaKind } : {}),
     ...(input.sourceKind ? { sourceKind: input.sourceKind } : {}),
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
     contentType: input.contentType,
@@ -478,6 +479,81 @@ describe("handleLinkUploadRegistration", () => {
       "https://tollgate.gudman.xyz/aperture/link/upload-1",
     );
     expect(result.accountKey).toBe("aptr_upload-key");
+    expect(json).not.toContain("sourceUrl");
+    expect(json).not.toContain("sourceContentHash");
+  });
+
+  it("stores a video thumbnail and original bytes before registering a video upload link", async () => {
+    const fileBytes = new Uint8Array([1, 2, 3, 4]);
+    const previewBytes = new Uint8Array([9, 8, 7]);
+    const registerCreator = vi.fn(async () => photographer);
+    const registerLink = vi.fn(async (input: RegisterLinkInput) =>
+      registeredLink(input, "video-1"),
+    );
+    const probeVideo = vi.fn(async () => ({
+      contentType: "video/mp4" as const,
+      ext: "mp4" as const,
+      durationSeconds: 2,
+      width: 320,
+      height: 240,
+    }));
+    const buildVideoThumbnail = vi.fn(async () => ({
+      bytes: previewBytes,
+      contentType: "image/webp" as const,
+    }));
+    const buildWatermarkedPreview = vi.fn();
+    const writeLinkPreview = vi.fn(async () => {});
+    const writeLinkOriginal = vi.fn(async () => {});
+
+    const result = await handleLinkUploadRegistration(
+      {
+        fileBytes,
+        mediaKind: "video",
+        title: " Uploaded Clip ",
+        description: "  A short buyer-ready clip.  ",
+        displayName: "Jane Lens",
+        wallet: photographer.wallet,
+      },
+      {
+        origin: "https://tollgate.gudman.xyz",
+        basePath: "/aperture",
+        ownerId: () => "link-owner",
+        linkId: () => "video-1",
+        registerCreator,
+        registerLink,
+        generateAccountKey: () => "aptr_video-key",
+        probeVideo,
+        buildVideoThumbnail,
+        buildWatermarkedPreview,
+        writeLinkPreview,
+        writeLinkOriginal,
+      },
+    );
+    const json = JSON.stringify(result);
+
+    expect(probeVideo).toHaveBeenCalledWith(fileBytes);
+    expect(buildVideoThumbnail).toHaveBeenCalledWith(fileBytes);
+    expect(buildWatermarkedPreview).not.toHaveBeenCalled();
+    expect(writeLinkPreview).toHaveBeenCalledWith("video-1", previewBytes);
+    expect(writeLinkOriginal).toHaveBeenCalledWith(
+      "video-1",
+      fileBytes,
+      "mp4",
+    );
+    expect(registerLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "video-1",
+        title: "Uploaded Clip",
+        description: "A short buyer-ready clip.",
+        ownerId: "link-owner",
+        mediaKind: "video",
+        sourceKind: "upload",
+        originalContentType: "video/mp4",
+        hasPreview: true,
+      }),
+    );
+    expect(result.link.mediaKind).toBe("video");
+    expect(result.accountKey).toBe("aptr_video-key");
     expect(json).not.toContain("sourceUrl");
     expect(json).not.toContain("sourceContentHash");
   });

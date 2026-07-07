@@ -114,7 +114,7 @@ export default async function ProofPage() {
                     <strong>{receipt.photographer}</strong>
                     <small>
                       {receipt.paymentResource.startsWith("aperture-link:")
-                        ? `pasted-link photo ${receipt.assetId}`
+                        ? `Aperture media ${receipt.assetId}`
                         : receipt.assetId}
                     </small>
                     {receipt.exifArtist ? (

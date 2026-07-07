@@ -109,6 +109,18 @@ describe("dashboard page", () => {
         priceAtomicUsdc: 2500,
         createdAt: "2026-07-06T00:00:00.000Z",
       },
+      {
+        id: "video-1",
+        title: "Private Source Clip",
+        ownerId: "owner-1",
+        mediaKind: "video",
+        sourceKind: "upload",
+        originalContentType: "video/mp4",
+        sourceContentHash: `0x${"d".repeat(64)}`,
+        priceAtomicUsdc: 2500,
+        createdAt: "2026-07-07T00:00:00.000Z",
+        hasPreview: true,
+      },
     ]);
     mocks.readLicenseLedger.mockResolvedValue({
       receipts: [
@@ -168,6 +180,9 @@ describe("dashboard page", () => {
 
     expect(payload).toContain("Your Tollgate creator dashboard");
     expect(payload).toContain("Private Source Photo");
+    expect(payload).toContain("Private Source Clip");
+    expect(payload).toContain("video / preview ready");
+    expect(payload).toContain("/aperture/link/video-1/preview");
     expect(payload).toContain("Citation Source");
     expect(payload).toContain(
       "Video payouts settle through the PeerTube plugin",
@@ -188,6 +203,7 @@ describe("dashboard page", () => {
       "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     );
     expect(payload).not.toContain("secret.example.com");
+    expect(payload).not.toContain("video/mp4");
     expect(payload).not.toContain("sourceContentHash");
     expect(payload).not.toContain("accountKeyHash");
     expect(payload).not.toContain("jane@example.com");

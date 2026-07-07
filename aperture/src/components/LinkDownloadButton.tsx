@@ -11,6 +11,44 @@ type LinkDownloadButtonProps = {
   priceText: string;
 };
 
+function extensionForContentType(contentType: string | null): string {
+  const mediaType = contentType?.split(";")[0]?.trim().toLowerCase();
+  switch (mediaType) {
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    case "image/avif":
+      return "avif";
+    case "image/tiff":
+      return "tiff";
+    case "video/mp4":
+      return "mp4";
+    case "video/webm":
+      return "webm";
+    case "video/quicktime":
+      return "mov";
+    default:
+      return "jpg";
+  }
+}
+
+function safeDownloadName(response: Response, title: string): string {
+  const disposition = response.headers.get("content-disposition");
+  const filename = disposition?.match(/filename="([^"]+)"/i)?.[1];
+  if (filename) return filename.replace(/[\\/]/g, "-");
+  const base =
+    title
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "aperture-download";
+  return `${base}.${extensionForContentType(response.headers.get("content-type"))}`;
+}
+
 export function LinkDownloadButton({
   id,
   title,
@@ -27,7 +65,7 @@ export function LinkDownloadButton({
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${title || "aperture-photo"}.jpg`;
+    anchor.download = safeDownloadName(response, title);
     anchor.click();
     URL.revokeObjectURL(url);
     setReceiptHash(response.headers.get("x-aperture-receipt-hash"));
