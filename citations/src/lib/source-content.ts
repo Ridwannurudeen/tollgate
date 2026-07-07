@@ -24,9 +24,11 @@ function canonicalizeUrl(value: string): string {
 function sourceKindLabel(source: CreatorSource): string {
   if (source.sourceKind === "seed") return "Seed/demo content";
   if (source.sourceKind === "internal-test") return "Internal test content";
-  return source.verifiedCreator
-    ? "Externally registered verified content"
-    : "Externally registered unverified content";
+  if (source.verifiedCreator) return "Externally registered verified content";
+  if (source.creatorClaimed) {
+    return "Externally registered creator-claimed content";
+  }
+  return "Externally registered unverified content";
 }
 
 export function buildSourceContent(

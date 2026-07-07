@@ -37,6 +37,49 @@ describe("escrow source policy", () => {
     }
   });
 
+  it("does not escrow creator-claimed external sources after probation clears", () => {
+    const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
+    delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
+
+    try {
+      expect(
+        shouldEscrowSource({
+          ...externalUnverifiedSource,
+          creatorClaimed: true,
+          probation: false,
+          ownershipProof: {
+            method: "creator-claimed",
+            verifiedAt: "2026-07-07T00:00:00.000Z",
+          },
+        }),
+      ).toBe(false);
+    } finally {
+      restoreEnv(previous);
+    }
+  });
+
+  it("still escrows wallet-signature-only sources on probation", () => {
+    const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
+    delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
+
+    try {
+      expect(
+        shouldEscrowSource({
+          ...externalUnverifiedSource,
+          probation: true,
+          ownershipProof: {
+            method: "wallet-signature",
+            signer: externalUnverifiedSource.wallet,
+            signatureHash: `0x${"ab".repeat(32)}`,
+            verifiedAt: "2026-07-07T00:00:00.000Z",
+          },
+        }),
+      ).toBe(true);
+    } finally {
+      restoreEnv(previous);
+    }
+  });
+
   it("allows direct payment only when escrow is explicitly disabled", () => {
     const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
     process.env.TOLLGATE_ESCROW_UNVERIFIED = "0";

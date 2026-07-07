@@ -22,7 +22,8 @@ export type SourceOwnershipProof = {
     | "seed-demo"
     | "operator-approved"
     | "meta-tag"
-    | "dns-txt";
+    | "dns-txt"
+    | "creator-claimed";
   signer?: `0x${string}`;
   signatureHash?: string;
   verifiedAt: string;
@@ -46,6 +47,7 @@ export type CreatorSource = {
   sourceKind: SourceKind;
   creatorKind: CreatorKind;
   verifiedCreator: boolean;
+  creatorClaimed?: boolean;
   ownershipProof?: SourceOwnershipProof;
   custody?: "self" | "circle-w3s";
   walletId?: string;
@@ -96,6 +98,7 @@ export type Citation = {
   sourceKind?: SourceKind;
   creatorKind?: CreatorKind;
   verifiedCreator?: boolean;
+  creatorClaimed?: boolean;
   ownershipProof?: SourceOwnershipProof;
   payoutPolicy?: PayoutPolicy;
   contributors?: SourceContributor[];
@@ -256,6 +259,7 @@ export type CreatorEarnings = {
   sourceKind?: SourceKind;
   creatorKind?: CreatorKind;
   verifiedCreator?: boolean;
+  creatorClaimed?: boolean;
 };
 
 export type SourceEarnings = {

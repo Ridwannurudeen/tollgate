@@ -173,6 +173,9 @@ export function sourcesForAgent(
   return sources
     .map((source) => {
       if (source.sourceKind !== "external") return source;
+      if (source.probation === false || source.creatorClaimed === true) {
+        return { ...source, probation: false };
+      }
       const paidQueryCount = sourcePaidQueryCount(ledger, source.id);
       const probation = !(
         source.verifiedCreator && paidQueryCount >= matureAfter

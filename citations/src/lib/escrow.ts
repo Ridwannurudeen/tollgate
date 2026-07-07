@@ -28,8 +28,14 @@ export function shouldEscrowSource(source: CreatorSource): boolean {
   return (
     process.env.TOLLGATE_ESCROW_UNVERIFIED !== "0" &&
     source.sourceKind === "external" &&
-    source.verifiedCreator !== true
+    source.verifiedCreator !== true &&
+    source.probation !== false
   );
+}
+
+function canReleaseEscrowForSource(source: CreatorSource): boolean {
+  if (source.sourceKind !== "external") return false;
+  return source.verifiedCreator === true || source.probation === false;
 }
 
 function releasedEscrowHashes(receipts: PaymentReceipt[]): Set<string> {
@@ -82,12 +88,18 @@ function releaseQueryRecord(
     sourceKind: source.sourceKind,
     creatorKind: source.creatorKind,
     verifiedCreator: source.verifiedCreator,
+    creatorClaimed: source.creatorClaimed,
     ownershipProof: source.ownershipProof,
     payoutPolicy: "escrow-release",
     contributors: source.contributors,
   };
   const question = `Escrow release: ${source.title}`;
-  const answer = `Tollgate verified ${source.creator} and released ${releasedReceiptHashes.length} escrowed source payment${releasedReceiptHashes.length === 1 ? "" : "s"} for "${source.title}".`;
+  const releaseReason = source.verifiedCreator
+    ? `verified ${source.creator}`
+    : source.creatorClaimed
+      ? `recorded ${source.creator}'s self-attested creator claim`
+      : `cleared probation for ${source.creator}`;
+  const answer = `Tollgate ${releaseReason} and released ${releasedReceiptHashes.length} escrowed source payment${releasedReceiptHashes.length === 1 ? "" : "s"} for "${source.title}".`;
   const queryHash = sha256Hex({
     question,
     sourceId: source.id,
@@ -141,6 +153,13 @@ async function releaseEscrowForSourceUnlocked(
   source: CreatorSource,
   options: EscrowReleaseOptions = {},
 ): Promise<EscrowReleaseResult> {
+  if (!canReleaseEscrowForSource(source)) {
+    return {
+      released: false,
+      amountAtomicUsdc: 0,
+      releasedReceiptHashes: [],
+    };
+  }
   const ledger = await readLedger(options.ledgerPath);
   const pending = pendingEscrowReceipts(ledger.receipts, source.id);
   if (pending.length === 0) {

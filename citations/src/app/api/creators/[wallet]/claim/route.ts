@@ -16,7 +16,8 @@ type Context = {
 // require a wallet signature. The abuse surface is bounded instead:
 // claim() always pays the creator's own custodial wallet (never the
 // caller), no transaction is submitted when nothing is claimable, the
-// source must be ownership-verified, and calls are rate limited.
+// source must be verified or explicitly creator-claimed, and calls are rate
+// limited.
 export async function POST(request: NextRequest, context: Context) {
   const { wallet } = await context.params;
   if (!isAddress(wallet)) {
@@ -37,21 +38,26 @@ export async function POST(request: NextRequest, context: Context) {
     );
   }
   const sources = await readSources();
-  const source = sources.find(
+  const custodialSources = sources.filter(
     (candidate) =>
       candidate.wallet.toLowerCase() === normalizedWallet.toLowerCase() &&
       candidate.custody === "circle-w3s" &&
       candidate.walletId,
   );
-  if (!source?.walletId) {
+  if (custodialSources.length === 0) {
     return NextResponse.json(
       { error: "custodial claim is not configured for this wallet" },
       { status: 501 },
     );
   }
-  if (source.verifiedCreator !== true) {
+  const source = custodialSources.find(
+    (candidate) =>
+      candidate.verifiedCreator === true ||
+      (candidate.creatorClaimed === true && candidate.probation === false),
+  );
+  if (!source?.walletId) {
     return NextResponse.json(
-      { error: "verify source ownership before claiming" },
+      { error: "verify or claim source ownership before claiming" },
       { status: 403 },
     );
   }

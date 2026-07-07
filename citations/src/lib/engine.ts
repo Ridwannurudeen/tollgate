@@ -331,6 +331,7 @@ export function createQueryRecord(
       sourceKind: source.sourceKind,
       creatorKind: source.creatorKind,
       verifiedCreator: source.verifiedCreator,
+      creatorClaimed: source.creatorClaimed,
       ownershipProof: source.ownershipProof,
       contributors: source.contributors,
     };
@@ -410,6 +411,7 @@ export function createSourceAccessRecord(
     sourceKind: source.sourceKind,
     creatorKind: source.creatorKind,
     verifiedCreator: source.verifiedCreator,
+    creatorClaimed: source.creatorClaimed,
     ownershipProof: source.ownershipProof,
     contributors: source.contributors,
   };

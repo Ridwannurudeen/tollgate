@@ -6,10 +6,18 @@ type Props = {
   sourceId: string;
   token: string | null;
   verified: boolean;
+  claimed: boolean;
 };
 
-export function SourceVerifyPanel({ sourceId, token, verified }: Props) {
+export function SourceVerifyPanel({
+  sourceId,
+  token,
+  verified,
+  claimed,
+}: Props) {
   const [status, setStatus] = useState("");
+  const [claimChecked, setClaimChecked] = useState(false);
+  const [claimedStatus, setClaimedStatus] = useState(claimed);
 
   async function check(method: "meta-tag" | "dns-txt") {
     setStatus("Checking ownership...");
@@ -27,6 +35,28 @@ export function SourceVerifyPanel({ sourceId, token, verified }: Props) {
       setStatus(
         error instanceof Error ? error.message : "Verification failed.",
       );
+    }
+  }
+
+  async function claim() {
+    if (!claimChecked) {
+      setStatus("Confirm the creator attestation before claiming.");
+      return;
+    }
+    setStatus("Recording creator claim...");
+    try {
+      const response = await fetch(`/api/sources/${sourceId}/verify`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method: "creator-claimed", attest: true }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+      setClaimedStatus(true);
+      setStatus("Claimed - self-attested.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Claim failed.");
     }
   }
 
@@ -70,8 +100,36 @@ export function SourceVerifyPanel({ sourceId, token, verified }: Props) {
       ) : (
         <p className="hero-text">Verification tokens are not configured.</p>
       )}
+      <div className="claim-box">
+        <p>
+          Third-party-hosted work can be claimed without a wallet or domain
+          edit. This releases escrowed payouts, but it is only a
+          self-declaration. Domain or ORCID proof is still the stronger
+          Verified path.
+        </p>
+        <label>
+          <input
+            checked={claimChecked}
+            disabled={claimedStatus}
+            onChange={(event) => setClaimChecked(event.target.checked)}
+            type="checkbox"
+          />
+          <span>I certify I am the creator/owner of this work.</span>
+        </label>
+        <button
+          type="button"
+          className="source-register-button claim-button"
+          disabled={claimedStatus}
+          onClick={claim}
+        >
+          {claimedStatus ? "Creator-claimed" : "Claim as creator"}
+        </button>
+      </div>
       <p className="status-line" aria-live="polite">
-        {status || "Verification releases escrowed payouts for this source."}
+        {status ||
+          (claimedStatus
+            ? "Claimed - self-attested, not independently verified."
+            : "Verification or creator claim releases escrowed payouts for this source.")}
       </p>
     </section>
   );

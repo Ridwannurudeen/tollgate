@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDollars, shortWallet } from "@/lib/format";
+import { sourceStatusBadgeClassName } from "@/lib/source-status";
 import type { CreatorEarnings, CreatorSource } from "@/lib/types";
 
 type Props = {
@@ -14,6 +15,7 @@ type CreatorDisplay = CreatorEarnings & {
   displaySourceKind?: CreatorSource["sourceKind"];
   displayCreatorKind?: CreatorSource["creatorKind"];
   displayVerifiedCreator?: boolean;
+  displayCreatorClaimed?: boolean;
 };
 
 function withSourceProfile(
@@ -34,6 +36,9 @@ function withSourceProfile(
     displayVerifiedCreator:
       creator.verifiedCreator === true ||
       ownedSources.some((source) => source.verifiedCreator),
+    displayCreatorClaimed:
+      creator.creatorClaimed === true ||
+      ownedSources.some((source) => source.creatorClaimed),
   };
 }
 
@@ -59,25 +64,56 @@ function creatorRank(creator: CreatorDisplay): number {
   return 3;
 }
 
-function creatorBadge(creator: CreatorDisplay): string | null {
+function creatorBadge(
+  creator: CreatorDisplay,
+): { label: string; className: string; title: string } | null {
   if (
     creator.displaySourceKind === "seed" ||
     creator.displayCreatorKind === "seed"
   ) {
-    return "Seed/demo";
+    return {
+      label: "Seed/demo",
+      className: "source-badge muted",
+      title: "Seed demo content used for public proof flows.",
+    };
   }
   if (
     creator.displaySourceKind === "internal-test" ||
     creator.displayCreatorKind === "internal-test"
   ) {
-    return "Internal test";
+    return {
+      label: "Internal test",
+      className: "source-badge muted",
+      title: "Internal test content, not a public creator claim.",
+    };
   }
-  if (creator.displayVerifiedCreator) return "Verified external";
+  if (creator.displayVerifiedCreator) {
+    return {
+      label: "Verified",
+      className: "source-badge",
+      title: "Domain ownership was independently verified.",
+    };
+  }
+  if (creator.displayCreatorClaimed) {
+    return {
+      label: "Creator-claimed",
+      className: sourceStatusBadgeClassName({
+        label: "Creator-claimed",
+        detail: "Self-attested by the registrant, not independently verified.",
+        tone: "claimed",
+      }),
+      title: "Self-attested by the registrant, not independently verified.",
+    };
+  }
   if (
     creator.displaySourceKind === "external" ||
     creator.displayCreatorKind === "external"
   ) {
-    return "External";
+    return {
+      label: "External",
+      className: "source-badge muted",
+      title: "External creator source.",
+    };
   }
   return null;
 }
@@ -112,7 +148,11 @@ export function EarningsBoard({
           const badge = creatorBadge(creator);
           return (
             <div className="creator-row" key={creator.wallet}>
-              {badge && <span className="source-badge muted">{badge}</span>}
+              {badge && (
+                <span className={badge.className} title={badge.title}>
+                  {badge.label}
+                </span>
+              )}
               <span className="creator-chip" aria-hidden="true">
                 {creator.creator
                   .split(/\s+/)

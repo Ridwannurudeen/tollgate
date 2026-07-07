@@ -500,7 +500,8 @@ function shouldEscrowCitation(citation: Citation): boolean {
   return (
     escrowUnverifiedEnabled() &&
     citation.sourceKind === "external" &&
-    citation.verifiedCreator !== true
+    citation.verifiedCreator !== true &&
+    citation.creatorClaimed !== true
   );
 }
 

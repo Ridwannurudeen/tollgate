@@ -899,6 +899,47 @@ export async function updateSourceVerification(
   });
 }
 
+export async function claimSourceAsCreator(
+  sourceId: string,
+  input: unknown,
+  filePath: string = SOURCE_REGISTRY_PATH,
+): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
+  if (!isRecord(input) || input.attest !== true) {
+    throw new SourceRegistryError(
+      "creator claim requires an explicit attestation.",
+    );
+  }
+
+  return withRegistryLock(async () => {
+    const customSources = await readCustomSources(filePath);
+    const index = customSources.findIndex((source) => source.id === sourceId);
+    if (index < 0) {
+      throw new SourceRegistryError("source not found.", 404);
+    }
+    const source: CreatorSource = {
+      ...customSources[index],
+      creatorClaimed: true,
+      probation: false,
+      ownershipProof: {
+        method: "creator-claimed",
+        verifiedAt: new Date().toISOString(),
+      },
+    };
+    const nextCustomSources = customSources.slice();
+    nextCustomSources[index] = source;
+    await writeCustomSources(nextCustomSources, filePath);
+    const liveSources = await readRsshubSources();
+    return {
+      source,
+      sources: [
+        ...liveSources,
+        ...DEFAULT_CREATOR_SOURCES,
+        ...nextCustomSources,
+      ],
+    };
+  });
+}
+
 export async function verifySourceOwnership(
   sourceId: string,
   input: unknown,

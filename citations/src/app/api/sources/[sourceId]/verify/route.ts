@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   SourceRegistryError,
+  claimSourceAsCreator,
   findSource,
   verifySourceOwnership,
 } from "@/lib/catalog";
@@ -58,7 +59,9 @@ export async function PATCH(request: NextRequest, context: Context) {
     const result =
       method === "meta-tag" || method === "dns-txt"
         ? await verifySourceByWebProof(source, method)
-        : await verifySourceOwnership(sourceId, body);
+        : method === "creator-claimed"
+          ? await claimSourceAsCreator(sourceId, body)
+          : await verifySourceOwnership(sourceId, body);
     const escrowRelease = await releaseEscrowForSource(result.source);
     return NextResponse.json({
       ...result,

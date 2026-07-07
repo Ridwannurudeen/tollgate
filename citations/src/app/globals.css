@@ -1487,6 +1487,12 @@ textarea:focus {
   color: var(--ink-3);
 }
 
+.source-badge.claimed {
+  border-color: rgba(134, 99, 36, 0.46);
+  background: rgba(168, 124, 46, 0.14);
+  color: var(--gold);
+}
+
 .source-action {
   display: grid;
   gap: 8px;
@@ -1548,6 +1554,40 @@ textarea:focus {
   transform: translateY(-1px);
   border-color: var(--gold);
   background: rgba(168, 124, 46, 0.22);
+}
+
+.claim-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px dashed rgba(134, 99, 36, 0.48);
+  border-radius: var(--radius-md);
+  background: rgba(168, 124, 46, 0.08);
+}
+
+.claim-box p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.claim-box label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--ink-1);
+  font-size: 13px;
+}
+
+.claim-box input {
+  margin-top: 4px;
+  accent-color: var(--gold);
+}
+
+.claim-button {
+  justify-self: start;
 }
 
 .empty-state {

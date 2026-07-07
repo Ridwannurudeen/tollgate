@@ -15,6 +15,9 @@ export default async function SourcesPage() {
   const verifiedCount = sources.filter(
     (source) => source.verifiedCreator,
   ).length;
+  const claimedCount = sources.filter(
+    (source) => source.creatorClaimed && !source.verifiedCreator,
+  ).length;
 
   return (
     <>
@@ -25,9 +28,9 @@ export default async function SourcesPage() {
             <p className="eyebrow">source catalog</p>
             <h1>Browse every registered work Tollgate can pay.</h1>
             <p className="hero-text">
-              Public sources include seed demos, verified creators, and
-              probationary self-registered work waiting for domain ownership
-              proof.
+              Public sources include seed demos, Verified creators,
+              Creator-claimed work, and unverified self-registered work waiting
+              for ownership proof.
             </p>
           </div>
           <div className="signature-stat">
@@ -35,7 +38,8 @@ export default async function SourcesPage() {
             <span className="stat-label">registered sources</span>
             <strong>{sources.length}</strong>
             <span className="stat-unit">
-              {verifiedCount} verified / {externalCount} external
+              {verifiedCount} verified / {claimedCount} claimed /{" "}
+              {externalCount} external
             </span>
           </div>
         </section>

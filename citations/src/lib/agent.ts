@@ -120,6 +120,7 @@ function sourceSnapshot(source: CreatorSource) {
     previewExcerpt: content.previewExcerpt,
     sourceKind: source.sourceKind,
     verifiedCreator: source.verifiedCreator,
+    creatorClaimed: source.creatorClaimed,
     tags: source.tags,
     priceAtomicUsdc: source.priceAtomicUsdc,
   };
@@ -134,6 +135,7 @@ function purchasedSourceSnapshot(source: CreatorSource) {
     canonicalUrl: content.canonicalUrl,
     sourceKind: source.sourceKind,
     verifiedCreator: source.verifiedCreator,
+    creatorClaimed: source.creatorClaimed,
     paidExcerpt: content.paidExcerpt,
   };
 }
@@ -750,6 +752,7 @@ function buildLlmQueryRecord(
       sourceKind: source.sourceKind,
       creatorKind: source.creatorKind,
       verifiedCreator: source.verifiedCreator,
+      creatorClaimed: source.creatorClaimed,
       ownershipProof: source.ownershipProof,
       contributors: source.contributors,
       ...(refunded ? { payoutPolicy: "refund-unused" as const } : {}),

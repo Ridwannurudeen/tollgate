@@ -20,6 +20,7 @@ import {
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
 import { agentTraceLabel, displayAgentRationale } from "@/lib/query-display";
+import { sourceStatus } from "@/lib/source-status";
 import { readCachedSlashBondStatus } from "@/lib/slash-bond";
 
 export const dynamic = "force-dynamic";
@@ -478,6 +479,12 @@ export default async function AnswerPage({ params }: Props) {
             {query.citations.length > 0 ? (
               query.citations.map((citation) => {
                 const receipt = receiptBySourceId.get(citation.sourceId);
+                const status = sourceStatus({
+                  sourceKind: citation.sourceKind,
+                  creatorKind: citation.creatorKind,
+                  verifiedCreator: citation.verifiedCreator,
+                  creatorClaimed: citation.creatorClaimed,
+                });
                 return (
                   <article
                     className="citation-card receipt-citation"
@@ -490,12 +497,7 @@ export default async function AnswerPage({ params }: Props) {
                         {formatUsdc(citation.amountAtomicUsdc)} USDC
                       </span>
                       <small>
-                        {citation.verifiedCreator
-                          ? "Verified owner"
-                          : citation.sourceKind === "seed"
-                            ? "Seed/demo source"
-                            : "Unverified external source"}{" "}
-                        / excerpt{" "}
+                        {status.label} / {status.detail} / excerpt{" "}
                         {citation.sourceExcerptHash
                           ? shortHash(citation.sourceExcerptHash)
                           : "not recorded"}

@@ -11,6 +11,7 @@ import {
   readLedger,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
+import { sourceStatus, sourceStatusBadgeClassName } from "@/lib/source-status";
 import { verificationToken } from "@/lib/source-verification";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function SourcePage({ params }: Props) {
   const earnedAtomicUsdc = evidence?.earnedAtomicUsdc ?? 0;
   const latestReceipt = receipts[0];
   const sourceYield = groundingYield(ledger, sourceId);
+  const status = sourceStatus(source);
   const token = (() => {
     try {
       return verificationToken(source.id);
@@ -69,13 +71,14 @@ export default async function SourcePage({ params }: Props) {
             <p className="eyebrow">{source.creator}</p>
             <h2>{source.handle}</h2>
             <p className="hero-text">{source.summary}</p>
-            <p className="eyebrow">
-              {source.verifiedCreator
-                ? "verified owner"
-                : source.sourceKind === "seed"
-                  ? "seed/demo source"
-                  : "unverified external source"}
-            </p>
+            <div className="source-badge-row">
+              <span
+                className={sourceStatusBadgeClassName(status)}
+                title={status.detail}
+              >
+                {status.label}
+              </span>
+            </div>
           </div>
         </section>
 
@@ -129,6 +132,10 @@ export default async function SourcePage({ params }: Props) {
             <strong>{source.ownershipProof?.method ?? "not verified"}</strong>
           </div>
           <div className="evidence-row">
+            <span>creator status</span>
+            <strong>{status.detail}</strong>
+          </div>
+          <div className="evidence-row">
             <span>probation</span>
             <strong>{source.probation ? "active" : "cleared"}</strong>
           </div>
@@ -168,6 +175,7 @@ export default async function SourcePage({ params }: Props) {
           sourceId={source.id}
           token={token}
           verified={source.verifiedCreator}
+          claimed={source.creatorClaimed === true}
         />
 
         <section className="receipt-ledger">

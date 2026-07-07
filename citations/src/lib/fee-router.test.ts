@@ -183,6 +183,34 @@ describe("assertValidFeeRouterSplit", () => {
     }
   });
 
+  it("does not escrow creator-claimed external citations", async () => {
+    const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
+    delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      sourceKind: "external",
+      verifiedCreator: false,
+      creatorClaimed: true,
+      ownershipProof: {
+        method: "creator-claimed",
+        verifiedAt: "2026-07-07T00:00:00.000Z",
+      },
+    }));
+
+    try {
+      const evidence = await routeCitationPayments(query, { enabled: false });
+
+      expect(evidence[query.citations[0].sourceId]).toBeUndefined();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
+      } else {
+        process.env.TOLLGATE_ESCROW_UNVERIFIED = previous;
+      }
+    }
+  });
+
   it("allows direct FeeRouter routing when unverified escrow is explicitly disabled", async () => {
     const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
     process.env.TOLLGATE_ESCROW_UNVERIFIED = "0";

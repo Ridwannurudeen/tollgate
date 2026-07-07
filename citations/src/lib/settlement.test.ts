@@ -676,6 +676,144 @@ describe("LeptonWeb settlement engine", () => {
     }
   });
 
+  it("releases escrow for creator-claimed sources without setting verified", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-claim-escrow-"));
+    const filePath = path.join(dir, "ledger.json");
+    const source: CreatorSource = {
+      id: "claimed-research",
+      title: "Claimed Research",
+      creator: "Claim Lab",
+      handle: "@claim",
+      wallet: "0x7777777777777777777777777777777777777777",
+      url: "https://example.com/claimed-research",
+      summary: "Research claimed by the registrant for escrow release.",
+      tags: ["claim", "payments"],
+      priceAtomicUsdc: 1_300,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: false,
+    };
+
+    try {
+      const query = createQueryRecord(
+        "How should creator claims release escrow?",
+        "2026-07-07T12:00:00.000Z",
+        [source],
+      );
+      const escrowSettlement = await appendSettlement(
+        query,
+        {
+          [source.id]: {
+            settlementMode: "escrowed",
+            paymentResource: "tollgate-escrow:unverified-source",
+            payoutPolicy: "escrow-unverified",
+          },
+        },
+        filePath,
+      );
+      const claimedSource: CreatorSource = {
+        ...source,
+        creatorClaimed: true,
+        probation: false,
+        ownershipProof: {
+          method: "creator-claimed",
+          verifiedAt: "2026-07-07T12:01:00.000Z",
+        },
+      };
+
+      const release = await releaseEscrowForSource(claimedSource, {
+        ledgerPath: filePath,
+        enabled: false,
+      });
+      const releasedLedger = await readLedger(filePath);
+      const releaseReceipt = releasedLedger.receipts.at(-1);
+
+      expect(claimedSource.verifiedCreator).toBe(false);
+      expect(release.released).toBe(true);
+      expect(release.amountAtomicUsdc).toBe(source.priceAtomicUsdc);
+      expect(releaseReceipt?.payoutPolicy).toBe("escrow-release");
+      expect(releaseReceipt?.ownershipProof?.method).toBe("creator-claimed");
+      expect(releaseReceipt?.releasedReceiptHashes).toEqual([
+        escrowSettlement.receipts[0]?.receiptHash,
+      ]);
+      expect(release.settlement?.query.answer).toContain(
+        "self-attested creator claim",
+      );
+      expect(verifyLedgerIntegrity(releasedLedger).ok).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not release escrow for wallet-signature-only sources", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-wallet-escrow-"));
+    const filePath = path.join(dir, "ledger.json");
+    const previousEscrow = process.env.TOLLGATE_ESCROW_UNVERIFIED;
+    process.env.TOLLGATE_ESCROW_UNVERIFIED = "0";
+    const source: CreatorSource = {
+      id: "wallet-signed-research",
+      title: "Wallet Signed Research",
+      creator: "Wallet Lab",
+      handle: "@wallet",
+      wallet: "0x9999999999999999999999999999999999999999",
+      url: "https://example.com/wallet-signed-research",
+      summary: "Research with only a payout-wallet signature.",
+      tags: ["wallet", "payments"],
+      priceAtomicUsdc: 1_200,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: false,
+      probation: true,
+      ownershipProof: {
+        method: "wallet-signature",
+        signer: "0x9999999999999999999999999999999999999999",
+        signatureHash: `0x${"cd".repeat(32)}`,
+        verifiedAt: "2026-07-07T12:01:00.000Z",
+      },
+    };
+
+    try {
+      const query = createQueryRecord(
+        "How should wallet-signature escrow stay held?",
+        "2026-07-07T12:00:00.000Z",
+        [source],
+      );
+      await appendSettlement(
+        query,
+        {
+          [source.id]: {
+            settlementMode: "escrowed",
+            paymentResource: "tollgate-escrow:unverified-source",
+            payoutPolicy: "escrow-unverified",
+          },
+        },
+        filePath,
+      );
+
+      const release = await releaseEscrowForSource(source, {
+        ledgerPath: filePath,
+        enabled: false,
+      });
+      const ledger = await readLedger(filePath);
+
+      expect(release.released).toBe(false);
+      expect(release.amountAtomicUsdc).toBe(0);
+      expect(
+        ledger.receipts.some(
+          (receipt) => receipt.payoutPolicy === "escrow-release",
+        ),
+      ).toBe(false);
+      expect(verifyLedgerIntegrity(ledger).ok).toBe(true);
+    } finally {
+      if (previousEscrow === undefined) {
+        delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
+      } else {
+        process.env.TOLLGATE_ESCROW_UNVERIFIED = previousEscrow;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("releases escrow exactly once under concurrent verify calls", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-escrow-race-"));
     const filePath = path.join(dir, "ledger.json");

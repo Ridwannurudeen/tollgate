@@ -6,6 +6,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   appendSource,
   buildSourceOwnershipMessage,
+  claimSourceAsCreator,
   fetchSourceContentExcerpt,
   htmlToText,
   refetchCustomSourceContent,
@@ -387,6 +388,52 @@ describe("source ownership trust gates", () => {
       expect(result.source.probation).toBe(true);
       expect(result.source.ownershipProof?.method).toBe("wallet-signature");
       expect(result.source.ownershipProof?.signer).toBe(account.address);
+    });
+  });
+
+  it("records a creator claim without granting verified creator status", async () => {
+    await withTempRegistry(async (filePath) => {
+      const registered = await withRegistrationFetchDisabled(() =>
+        appendSource(
+          {
+            ...sourceInput,
+            title: "Claimed Creator Source",
+            url: "https://example.com/claimed-creator",
+          },
+          filePath,
+        ),
+      );
+
+      const result = await claimSourceAsCreator(
+        registered.source.id,
+        { attest: true },
+        filePath,
+      );
+
+      expect(result.source.creatorClaimed).toBe(true);
+      expect(result.source.verifiedCreator).toBe(false);
+      expect(result.source.probation).toBe(false);
+      expect(result.source.ownershipProof?.method).toBe("creator-claimed");
+      expect(result.source.ownershipProof?.verifiedAt).toBeTruthy();
+    });
+  });
+
+  it("rejects a creator claim without explicit attestation", async () => {
+    await withTempRegistry(async (filePath) => {
+      const registered = await withRegistrationFetchDisabled(() =>
+        appendSource(
+          {
+            ...sourceInput,
+            title: "Unattested Claim Source",
+            url: "https://example.com/unattested-claim",
+          },
+          filePath,
+        ),
+      );
+
+      await expect(
+        claimSourceAsCreator(registered.source.id, {}, filePath),
+      ).rejects.toThrow("explicit attestation");
     });
   });
 

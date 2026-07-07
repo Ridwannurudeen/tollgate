@@ -616,6 +616,7 @@ export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {
       sourceKind: citation?.sourceKind,
       creatorKind: citation?.creatorKind,
       verifiedCreator: citation?.verifiedCreator,
+      creatorClaimed: citation?.creatorClaimed,
     };
     current.sourceKind = preferredSourceKind(
       current.sourceKind,
@@ -627,6 +628,8 @@ export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {
     );
     current.verifiedCreator =
       current.verifiedCreator === true || citation?.verifiedCreator === true;
+    current.creatorClaimed =
+      current.creatorClaimed === true || citation?.creatorClaimed === true;
     current.citationCount += 1;
     current.earnedAtomicUsdc += receipt.amountAtomicUsdc;
     byWallet.set(receipt.wallet, current);
