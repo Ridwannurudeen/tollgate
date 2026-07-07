@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  findNearDuplicateLink,
   markLinkPreviewGenerated,
   listPublicLinks,
   publicLink,
@@ -25,6 +26,7 @@ describe("link registry", () => {
           sourceUrl: "https://EXAMPLE.com/photo.jpg#tracking",
           contentType: "image/jpeg",
           sourceContentHash: `0x${"1".repeat(64)}`,
+          perceptualHash: "0000000000000000",
           hasPreview: true,
           createdAt: "2026-07-06T00:00:00.000Z",
         },
@@ -39,12 +41,14 @@ describe("link registry", () => {
         "A rainy evening street scene in Lagos.",
       );
       expect(registry.links[0].hasPreview).toBe(true);
+      expect(registry.links[0].perceptualHash).toBe("0000000000000000");
       expect(projected.description).toBe(
         "A rainy evening street scene in Lagos.",
       );
       expect(projected.hasPreview).toBe(true);
       expect(projected.sourceUrl).toBeUndefined();
       expect(projected.sourceContentHash).toBeUndefined();
+      expect(projected.perceptualHash).toBeUndefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -193,6 +197,47 @@ describe("link registry", () => {
           filePath,
         ),
       ).rejects.toMatchObject({ status: 409 });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("finds near duplicates by perceptual hash without exposing the hash publicly", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
+    const filePath = path.join(dir, "links.json");
+    try {
+      await registerLink(
+        {
+          id: "hashless",
+          title: "No Hash",
+          ownerId: "owner-0",
+          sourceUrl: "https://example.com/no-hash.jpg",
+          createdAt: "2026-07-04T00:00:00.000Z",
+        },
+        filePath,
+      );
+      await registerLink(
+        {
+          id: "original",
+          title: "Original",
+          ownerId: "owner-1",
+          sourceUrl: "https://example.com/original.jpg",
+          perceptualHash: "0000000000000000",
+          createdAt: "2026-07-05T00:00:00.000Z",
+        },
+        filePath,
+      );
+
+      const near = await findNearDuplicateLink("0000000000000001", filePath);
+      const far = await findNearDuplicateLink("ffffffffffffffff", filePath);
+      const publicLinks = (await listPublicLinks(filePath)) as Array<
+        Record<string, unknown>
+      >;
+
+      expect(near?.id).toBe("original");
+      expect(far).toBeNull();
+      expect(publicLinks[0].perceptualHash).toBeUndefined();
+      expect(publicLinks[1].perceptualHash).toBeUndefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

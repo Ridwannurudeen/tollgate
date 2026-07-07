@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APERTURE_LICENSE_FEE_ATOMIC_USDC } from "./config";
+import {
+  NEAR_DUPLICATE_THRESHOLD,
+  hammingDistance,
+} from "./perceptual-hash";
 
 const LINKS_PATH = path.join(process.cwd(), "data", "links.json");
 const EMPTY_LINKS: LinkRegistry = { links: [] };
@@ -21,6 +25,7 @@ export type LinkRecord = {
   contentType?: string;
   originalContentType?: string;
   sourceContentHash?: `0x${string}`;
+  perceptualHash?: string;
   priceAtomicUsdc: number;
   createdAt: string;
   hasPreview?: boolean;
@@ -28,7 +33,7 @@ export type LinkRecord = {
 
 export type PublicLinkRecord = Omit<
   LinkRecord,
-  "sourceUrl" | "sourceContentHash"
+  "sourceUrl" | "sourceContentHash" | "perceptualHash"
 >;
 
 export type LinkRegistry = {
@@ -46,6 +51,7 @@ export type RegisterLinkInput = {
   contentType?: string;
   originalContentType?: string;
   sourceContentHash?: `0x${string}`;
+  perceptualHash?: string;
   hasPreview?: boolean;
   priceAtomicUsdc?: number;
   createdAt?: string;
@@ -62,6 +68,10 @@ export class LinkRegistryError extends Error {
 
 function isHexHash(value: unknown): value is `0x${string}` {
   return typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+function isPerceptualHash(value: unknown): value is string {
+  return typeof value === "string" && /^[a-fA-F0-9]{16}$/.test(value);
 }
 
 function isLinkRecord(value: unknown): value is LinkRecord {
@@ -89,6 +99,8 @@ function isLinkRecord(value: unknown): value is LinkRecord {
       typeof record.originalContentType === "string") &&
     (record.sourceContentHash === undefined ||
       isHexHash(record.sourceContentHash)) &&
+    (record.perceptualHash === undefined ||
+      isPerceptualHash(record.perceptualHash)) &&
     (record.hasPreview === undefined || typeof record.hasPreview === "boolean")
   );
 }
@@ -186,6 +198,21 @@ export async function findLinkBySourceUrl(
   );
 }
 
+export async function findNearDuplicateLink(
+  perceptualHash: string,
+  filePath: string = LINKS_PATH,
+): Promise<LinkRecord | null> {
+  const registry = await readLinks(filePath);
+  return (
+    registry.links.find(
+      (link) =>
+        link.perceptualHash &&
+        hammingDistance(perceptualHash, link.perceptualHash) <=
+          NEAR_DUPLICATE_THRESHOLD,
+    ) ?? null
+  );
+}
+
 export async function readLinksByOwner(
   ownerId: string,
   filePath: string = LINKS_PATH,
@@ -260,6 +287,7 @@ export async function registerLink(
       ...(input.sourceContentHash
         ? { sourceContentHash: input.sourceContentHash }
         : {}),
+      ...(input.perceptualHash ? { perceptualHash: input.perceptualHash } : {}),
       ...(input.hasPreview ? { hasPreview: true } : {}),
       priceAtomicUsdc:
         input.priceAtomicUsdc ?? APERTURE_LICENSE_FEE_ATOMIC_USDC,

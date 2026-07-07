@@ -9,17 +9,14 @@ import {
 import {
   LinkRegistryError,
   findLinkBySourceUrl,
+  findNearDuplicateLink,
   markLinkPreviewGenerated,
   publicLink,
   registerLink,
   type LinkMediaKind,
   type PublicLinkRecord,
 } from "./link-registry";
-import {
-  LINK_DOWNLOAD_MAX_BYTES,
-  fetchImageBytes,
-  probeImageSource,
-} from "./link-content";
+import { LINK_DOWNLOAD_MAX_BYTES, fetchImageBytes } from "./link-content";
 import {
   originalExtensionForContentType,
   writeLinkOriginal,
@@ -28,7 +25,12 @@ import { buildWatermarkedPreview, writeLinkPreview } from "./link-preview";
 import { registerCreator } from "./onboarding";
 import { readWalletForOwner } from "./registry";
 import { sha256Hex } from "./hash";
-import { buildVideoThumbnail, probeVideo } from "./video-content";
+import { computeDHash } from "./perceptual-hash";
+import {
+  buildVideoThumbnail,
+  extractRepresentativeFrame,
+  probeVideo,
+} from "./video-content";
 
 const MAX_URL_LENGTH = 2048;
 const MAX_TITLE_LENGTH = 120;
@@ -73,10 +75,12 @@ export type LinkRegistrationDeps = {
   registerLink?: typeof registerLink;
   markLinkPreviewGenerated?: typeof markLinkPreviewGenerated;
   findLinkBySourceUrl?: typeof findLinkBySourceUrl;
-  probeImageSource?: typeof probeImageSource;
+  findNearDuplicateLink?: typeof findNearDuplicateLink;
   fetchImageBytes?: typeof fetchImageBytes;
+  computeDHash?: typeof computeDHash;
   buildWatermarkedPreview?: typeof buildWatermarkedPreview;
   buildVideoThumbnail?: typeof buildVideoThumbnail;
+  extractRepresentativeFrame?: typeof extractRepresentativeFrame;
   writeLinkPreview?: typeof writeLinkPreview;
   writeLinkOriginal?: typeof writeLinkOriginal;
   probeVideo?: typeof probeVideo;
@@ -316,6 +320,21 @@ function sourceUrl(value: unknown): string {
   return parsed.toString();
 }
 
+async function rejectNearDuplicate(
+  perceptualHash: string,
+  deps: LinkRegistrationDeps,
+): Promise<void> {
+  const duplicate = await (
+    deps.findNearDuplicateLink ?? findNearDuplicateLink
+  )(perceptualHash);
+  if (duplicate) {
+    throw new LinkRegistryError(
+      "this looks like content that's already registered on Tollgate.",
+      409,
+    );
+  }
+}
+
 export async function handleLinkRegistration(
   input: LinkRegistrationInput,
   deps: LinkRegistrationDeps,
@@ -328,7 +347,9 @@ export async function handleLinkRegistration(
     throw new LinkRegistryError("photo URL already registered.", 409);
   }
 
-  const evidence = await (deps.probeImageSource ?? probeImageSource)(url);
+  const image = await (deps.fetchImageBytes ?? fetchImageBytes)(url);
+  const perceptualHash = await (deps.computeDHash ?? computeDHash)(image.bytes);
+  await rejectNearDuplicate(perceptualHash, deps);
   const { accountKey, ownerId, photographer } =
     await photographerForRegistration(input, deps);
   const link = await (deps.registerLink ?? registerLink)({
@@ -336,12 +357,12 @@ export async function handleLinkRegistration(
     ...(description ? { description } : {}),
     ownerId,
     sourceUrl: url,
-    contentType: evidence.contentType,
-    sourceContentHash: evidence.sourceContentHash,
+    contentType: image.contentType,
+    sourceContentHash: image.sourceContentHash,
+    perceptualHash,
   });
   let resultLink = link;
   try {
-    const image = await (deps.fetchImageBytes ?? fetchImageBytes)(url);
     const preview = await (
       deps.buildWatermarkedPreview ?? buildWatermarkedPreview
     )(image.bytes);
@@ -381,6 +402,16 @@ export async function handleLinkUploadRegistration(
     kind === "video"
       ? await uploadedVideoEvidence(input.fileBytes, deps.probeVideo ?? probeVideo)
       : await uploadedImageEvidence(input.fileBytes);
+  const representativeBytes =
+    kind === "video"
+      ? await (deps.extractRepresentativeFrame ?? extractRepresentativeFrame)(
+          input.fileBytes,
+        )
+      : input.fileBytes;
+  const perceptualHash = await (deps.computeDHash ?? computeDHash)(
+    representativeBytes,
+  );
+  await rejectNearDuplicate(perceptualHash, deps);
   const { accountKey, ownerId, photographer } =
     await photographerForRegistration(input, deps);
   const id = deps.linkId?.() ?? randomUUID();
@@ -405,6 +436,7 @@ export async function handleLinkUploadRegistration(
     sourceKind: "upload",
     originalContentType: evidence.contentType,
     sourceContentHash: evidence.sourceContentHash,
+    perceptualHash,
     hasPreview: true,
   });
 

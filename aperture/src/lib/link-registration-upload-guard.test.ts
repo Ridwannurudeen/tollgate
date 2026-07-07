@@ -78,6 +78,7 @@ describe("handleLinkUploadRegistration upload guards", () => {
       bytes: new Uint8Array([7]),
       contentType: "image/webp" as const,
     }));
+    const extractRepresentativeFrame = vi.fn(async () => new Uint8Array([8]));
 
     await handleLinkUploadRegistration(
       {
@@ -94,6 +95,9 @@ describe("handleLinkUploadRegistration upload guards", () => {
         registerLink,
         generateAccountKey: () => "aptr_key",
         probeVideo,
+        extractRepresentativeFrame,
+        computeDHash: async () => "1111111111111111",
+        findNearDuplicateLink: async () => null,
         buildVideoThumbnail,
         writeLinkPreview: async () => {},
         writeLinkOriginal: async () => {},

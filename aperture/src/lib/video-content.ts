@@ -182,9 +182,9 @@ async function extractFrame(
   return new Uint8Array(await readFile(outputPath));
 }
 
-export async function buildVideoThumbnail(
+export async function extractRepresentativeFrame(
   bytes: Uint8Array,
-): Promise<LinkPreview> {
+): Promise<Uint8Array> {
   assertVideoUploadSize(bytes);
   const inputPath = tempVideoPath(".bin");
   const outputPath = tempVideoPath(".webp");
@@ -203,17 +203,24 @@ export async function buildVideoThumbnail(
         );
       }
     }
-    try {
-      return await buildWatermarkedPreview(frame);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "thumbnail frame failed.";
-      throw new LinkRegistryError(`video thumbnail generation failed: ${message}`);
-    }
+    return frame;
   } finally {
     await Promise.allSettled([
       rm(inputPath, { force: true }),
       rm(outputPath, { force: true }),
     ]);
+  }
+}
+
+export async function buildVideoThumbnail(
+  bytes: Uint8Array,
+): Promise<LinkPreview> {
+  const frame = await extractRepresentativeFrame(bytes);
+  try {
+    return await buildWatermarkedPreview(frame);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "thumbnail frame failed.";
+    throw new LinkRegistryError(`video thumbnail generation failed: ${message}`);
   }
 }

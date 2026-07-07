@@ -42,6 +42,7 @@ function registeredLink(input: RegisterLinkInput, id: string): LinkRecord {
     contentType: input.contentType,
     originalContentType: input.originalContentType,
     sourceContentHash: input.sourceContentHash,
+    ...(input.perceptualHash ? { perceptualHash: input.perceptualHash } : {}),
     priceAtomicUsdc: 2500,
     createdAt: "2026-07-06T00:00:00.000Z",
   };
@@ -55,6 +56,8 @@ function previewDeps(linkId: string, description?: string) {
       contentType: "image/jpeg" as const,
       sourceContentHash: hash("f"),
     })),
+    computeDHash: vi.fn(async (_bytes: Uint8Array) => "1111111111111111"),
+    findNearDuplicateLink: vi.fn(async (_perceptualHash: string) => null),
     buildWatermarkedPreview: vi.fn(async (_bytes: Uint8Array) => ({
       bytes: previewBytes,
       contentType: "image/webp" as const,
@@ -95,7 +98,7 @@ describe("handleLinkRegistration", () => {
     vi.restoreAllMocks();
   });
 
-  it("probes, registers the photographer, and returns only public link data", async () => {
+  it("fetches, hashes, registers the photographer, and returns only public link data", async () => {
     const registerCreator = vi.fn(async () => photographer);
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
       registeredLink(input, "link-1"),
@@ -118,14 +121,12 @@ describe("handleLinkRegistration", () => {
         basePath: "/aperture",
         ownerId: () => "link-owner",
         findLinkBySourceUrl: async () => null,
-        probeImageSource: async () => ({
-          contentType: "image/jpeg",
-          sourceContentHash: hash("1"),
-        }),
+        findNearDuplicateLink: preview.findNearDuplicateLink,
         registerCreator,
         registerLink,
         generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
+        computeDHash: preview.computeDHash,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
         markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
@@ -147,6 +148,7 @@ describe("handleLinkRegistration", () => {
     expect(registerLink).toHaveBeenCalledWith(
       expect.objectContaining({
         description: "A rainy evening street scene in Lagos.",
+        perceptualHash: "1111111111111111",
       }),
     );
     expect(result.link.description).toBe(
@@ -154,6 +156,10 @@ describe("handleLinkRegistration", () => {
     );
     expect(preview.fetchImageBytes).toHaveBeenCalledWith(
       "https://photos.example.com/photo.jpg",
+    );
+    expect(preview.computeDHash).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+    expect(preview.findNearDuplicateLink).toHaveBeenCalledWith(
+      "1111111111111111",
     );
     expect(preview.buildWatermarkedPreview).toHaveBeenCalledWith(
       new Uint8Array([1, 2, 3]),
@@ -168,8 +174,7 @@ describe("handleLinkRegistration", () => {
     expect(json).not.toContain("sourceUrl");
   });
 
-  it("rejects duplicate URLs before probing or minting a wallet", async () => {
-    const probeImageSource = vi.fn();
+  it("rejects duplicate URLs before fetching or minting a wallet", async () => {
     const registerCreator = vi.fn();
     const fetchImageBytes = vi.fn();
     await expect(
@@ -190,15 +195,56 @@ describe("handleLinkRegistration", () => {
             priceAtomicUsdc: 2500,
             createdAt: "2026-07-06T00:00:00.000Z",
           }),
-          probeImageSource,
           registerCreator,
           fetchImageBytes,
         },
       ),
     ).rejects.toMatchObject({ status: 409 });
-    expect(probeImageSource).not.toHaveBeenCalled();
     expect(registerCreator).not.toHaveBeenCalled();
     expect(fetchImageBytes).not.toHaveBeenCalled();
+  });
+
+  it("rejects near-duplicate URL photos before minting a wallet or registering the link", async () => {
+    const registerCreator = vi.fn();
+    const registerLink = vi.fn();
+    const preview = previewDeps("link-duplicate");
+
+    await expect(
+      handleLinkRegistration(
+        {
+          sourceUrl: "https://photos.example.com/photo.jpg",
+          title: "Photo",
+          displayName: "Jane Lens",
+        },
+        {
+          origin: "https://tollgate.gudman.xyz",
+          basePath: "/aperture",
+          findLinkBySourceUrl: async () => null,
+          findNearDuplicateLink: async () => ({
+            id: "existing",
+            title: "Existing",
+            ownerId: "owner",
+            sourceUrl: "https://photos.example.com/existing.jpg",
+            perceptualHash: "1111111111111111",
+            priceAtomicUsdc: 2500,
+            createdAt: "2026-07-06T00:00:00.000Z",
+          }),
+          fetchImageBytes: preview.fetchImageBytes,
+          computeDHash: preview.computeDHash,
+          registerCreator,
+          registerLink,
+          buildWatermarkedPreview: preview.buildWatermarkedPreview,
+          writeLinkPreview: preview.writeLinkPreview,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+
+    expect(preview.fetchImageBytes).toHaveBeenCalled();
+    expect(preview.computeDHash).toHaveBeenCalled();
+    expect(registerCreator).not.toHaveBeenCalled();
+    expect(registerLink).not.toHaveBeenCalled();
+    expect(preview.buildWatermarkedPreview).not.toHaveBeenCalled();
+    expect(preview.writeLinkPreview).not.toHaveBeenCalled();
   });
 
   it("still registers the gated link when preview generation fails", async () => {
@@ -229,14 +275,12 @@ describe("handleLinkRegistration", () => {
           basePath: "/aperture",
           ownerId: () => "link-owner",
           findLinkBySourceUrl: async () => null,
-          probeImageSource: async () => ({
-            contentType: "image/jpeg",
-            sourceContentHash: hash("6"),
-          }),
+          findNearDuplicateLink: async () => null,
           registerCreator: async () => photographer,
           registerLink,
           generateAccountKey: () => "aptr_known-key",
           fetchImageBytes,
+          computeDHash: async () => "2222222222222222",
           buildWatermarkedPreview,
           writeLinkPreview,
           markLinkPreviewGenerated,
@@ -280,14 +324,12 @@ describe("handleLinkRegistration", () => {
         basePath: "/aperture",
         ownerId: () => "link-owner",
         findLinkBySourceUrl: async () => null,
-        probeImageSource: async () => ({
-          contentType: "image/jpeg",
-          sourceContentHash: hash("8"),
-        }),
+        findNearDuplicateLink: preview.findNearDuplicateLink,
         registerCreator,
         registerLink,
         generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
+        computeDHash: preview.computeDHash,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
         markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
@@ -312,10 +354,13 @@ describe("handleLinkRegistration", () => {
           origin: "https://tollgate.gudman.xyz",
           basePath: "/aperture",
           findLinkBySourceUrl: async () => null,
-          probeImageSource: async () => ({
+          findNearDuplicateLink: async () => null,
+          fetchImageBytes: async () => ({
+            bytes: new Uint8Array([1, 2, 3]),
             contentType: "image/jpeg",
             sourceContentHash: hash("9"),
           }),
+          computeDHash: async () => "9999999999999999",
         },
       ),
     ).rejects.toThrow("email must be a valid address.");
@@ -377,15 +422,13 @@ describe("handleLinkRegistration", () => {
         basePath: "/aperture",
         sessionOwnerId: "existing-owner",
         findLinkBySourceUrl: async () => null,
-        probeImageSource: async () => ({
-          contentType: "image/jpeg",
-          sourceContentHash: hash("7"),
-        }),
+        findNearDuplicateLink: preview.findNearDuplicateLink,
         registerCreator,
         registerLink,
         readWalletForOwner,
         generateAccountKey: () => "aptr_should-not-return",
         fetchImageBytes: preview.fetchImageBytes,
+        computeDHash: preview.computeDHash,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
         markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
@@ -424,6 +467,8 @@ describe("handleLinkUploadRegistration", () => {
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
       registeredLink(input, "upload-1"),
     );
+    const computeDHash = vi.fn(async () => "2222222222222222");
+    const findNearDuplicateLink = vi.fn(async () => null);
     const buildWatermarkedPreview = vi.fn(async () => ({
       bytes: previewBytes,
       contentType: "image/webp" as const,
@@ -447,6 +492,8 @@ describe("handleLinkUploadRegistration", () => {
         registerCreator,
         registerLink,
         generateAccountKey: () => "aptr_upload-key",
+        computeDHash,
+        findNearDuplicateLink,
         buildWatermarkedPreview,
         writeLinkPreview,
         writeLinkOriginal,
@@ -454,6 +501,8 @@ describe("handleLinkUploadRegistration", () => {
     );
     const json = JSON.stringify(result);
 
+    expect(computeDHash).toHaveBeenCalledWith(fileBytes);
+    expect(findNearDuplicateLink).toHaveBeenCalledWith("2222222222222222");
     expect(buildWatermarkedPreview).toHaveBeenCalledWith(fileBytes);
     expect(writeLinkPreview).toHaveBeenCalledWith("upload-1", previewBytes);
     expect(writeLinkOriginal).toHaveBeenCalledWith(
@@ -469,6 +518,7 @@ describe("handleLinkUploadRegistration", () => {
         ownerId: "link-owner",
         sourceKind: "upload",
         originalContentType: "image/png",
+        perceptualHash: "2222222222222222",
         hasPreview: true,
       }),
     );
@@ -490,6 +540,10 @@ describe("handleLinkUploadRegistration", () => {
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
       registeredLink(input, "video-1"),
     );
+    const representativeFrame = new Uint8Array([5, 6, 7]);
+    const extractRepresentativeFrame = vi.fn(async () => representativeFrame);
+    const computeDHash = vi.fn(async () => "3333333333333333");
+    const findNearDuplicateLink = vi.fn(async () => null);
     const probeVideo = vi.fn(async () => ({
       contentType: "video/mp4" as const,
       ext: "mp4" as const,
@@ -523,6 +577,9 @@ describe("handleLinkUploadRegistration", () => {
         registerLink,
         generateAccountKey: () => "aptr_video-key",
         probeVideo,
+        extractRepresentativeFrame,
+        computeDHash,
+        findNearDuplicateLink,
         buildVideoThumbnail,
         buildWatermarkedPreview,
         writeLinkPreview,
@@ -532,6 +589,9 @@ describe("handleLinkUploadRegistration", () => {
     const json = JSON.stringify(result);
 
     expect(probeVideo).toHaveBeenCalledWith(fileBytes);
+    expect(extractRepresentativeFrame).toHaveBeenCalledWith(fileBytes);
+    expect(computeDHash).toHaveBeenCalledWith(representativeFrame);
+    expect(findNearDuplicateLink).toHaveBeenCalledWith("3333333333333333");
     expect(buildVideoThumbnail).toHaveBeenCalledWith(fileBytes);
     expect(buildWatermarkedPreview).not.toHaveBeenCalled();
     expect(writeLinkPreview).toHaveBeenCalledWith("video-1", previewBytes);
@@ -549,6 +609,7 @@ describe("handleLinkUploadRegistration", () => {
         mediaKind: "video",
         sourceKind: "upload",
         originalContentType: "video/mp4",
+        perceptualHash: "3333333333333333",
         hasPreview: true,
       }),
     );
@@ -579,6 +640,51 @@ describe("handleLinkUploadRegistration", () => {
     ).rejects.toThrow("file is not a supported image.");
     expect(registerCreator).not.toHaveBeenCalled();
     expect(registerLink).not.toHaveBeenCalled();
+  });
+
+  it("rejects near-duplicate uploads before creating an account or writing files", async () => {
+    const fileBytes = await pngBytes();
+    const registerCreator = vi.fn();
+    const registerLink = vi.fn();
+    const buildWatermarkedPreview = vi.fn();
+    const writeLinkPreview = vi.fn();
+    const writeLinkOriginal = vi.fn();
+
+    await expect(
+      handleLinkUploadRegistration(
+        {
+          fileBytes,
+          title: "Copied Upload",
+          displayName: "Jane Lens",
+        },
+        {
+          origin: "https://tollgate.gudman.xyz",
+          basePath: "/aperture",
+          computeDHash: async () => "4444444444444444",
+          findNearDuplicateLink: async () => ({
+            id: "existing",
+            title: "Existing",
+            ownerId: "owner",
+            sourceKind: "upload",
+            sourceContentHash: hash("a"),
+            perceptualHash: "4444444444444444",
+            priceAtomicUsdc: 2500,
+            createdAt: "2026-07-06T00:00:00.000Z",
+          }),
+          registerCreator,
+          registerLink,
+          buildWatermarkedPreview,
+          writeLinkPreview,
+          writeLinkOriginal,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+
+    expect(registerCreator).not.toHaveBeenCalled();
+    expect(registerLink).not.toHaveBeenCalled();
+    expect(buildWatermarkedPreview).not.toHaveBeenCalled();
+    expect(writeLinkPreview).not.toHaveBeenCalled();
+    expect(writeLinkOriginal).not.toHaveBeenCalled();
   });
 
   it("rejects oversized upload bytes before image decoding", async () => {
@@ -621,6 +727,8 @@ describe("handleLinkUploadRegistration", () => {
         readWalletForOwner,
         registerCreator,
         registerLink,
+        computeDHash: async () => "5555555555555555",
+        findNearDuplicateLink: async () => null,
         buildWatermarkedPreview: async () => ({
           bytes: new Uint8Array([1]),
           contentType: "image/webp" as const,
@@ -648,10 +756,6 @@ describe("handleLinkRegistration URL normalization", () => {
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
       registeredLink(input, "link-gh"),
     );
-    const probeImageSource = vi.fn(async () => ({
-      contentType: "image/png" as const,
-      sourceContentHash: hash("2"),
-    }));
     const preview = previewDeps("link-gh");
 
     await handleLinkRegistration(
@@ -665,18 +769,19 @@ describe("handleLinkRegistration URL normalization", () => {
         basePath: "/aperture",
         ownerId: () => "link-owner",
         findLinkBySourceUrl: async () => null,
-        probeImageSource,
+        findNearDuplicateLink: preview.findNearDuplicateLink,
         registerCreator: async () => photographer,
         registerLink,
         generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
+        computeDHash: preview.computeDHash,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
         markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
       },
     );
 
-    expect(probeImageSource).toHaveBeenCalledWith(
+    expect(preview.fetchImageBytes).toHaveBeenCalledWith(
       "https://raw.githubusercontent.com/owner/repo/main/photo.png",
     );
     expect(registerLink).toHaveBeenCalledWith(
@@ -691,10 +796,6 @@ describe("handleLinkRegistration URL normalization", () => {
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
       registeredLink(input, "link-drive"),
     );
-    const probeImageSource = vi.fn(async () => ({
-      contentType: "image/jpeg" as const,
-      sourceContentHash: hash("3"),
-    }));
     const preview = previewDeps("link-drive");
 
     await handleLinkRegistration(
@@ -709,11 +810,12 @@ describe("handleLinkRegistration URL normalization", () => {
         basePath: "/aperture",
         ownerId: () => "link-owner",
         findLinkBySourceUrl: async () => null,
-        probeImageSource,
+        findNearDuplicateLink: preview.findNearDuplicateLink,
         registerCreator: async () => photographer,
         registerLink,
         generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
+        computeDHash: preview.computeDHash,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
         markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
@@ -722,17 +824,13 @@ describe("handleLinkRegistration URL normalization", () => {
 
     const expected =
       "https://drive.google.com/uc?export=view&id=1o7nT274PZHxOhcLtxpEsYrQ0LNZW6df-";
-    expect(probeImageSource).toHaveBeenCalledWith(expected);
+    expect(preview.fetchImageBytes).toHaveBeenCalledWith(expected);
     expect(registerLink).toHaveBeenCalledWith(
       expect.objectContaining({ sourceUrl: expected }),
     );
   });
 
   it("leaves ordinary photo URLs unchanged", async () => {
-    const probeImageSource = vi.fn(async () => ({
-      contentType: "image/webp" as const,
-      sourceContentHash: hash("4"),
-    }));
     const preview = previewDeps("link-plain");
 
     await handleLinkRegistration(
@@ -746,19 +844,20 @@ describe("handleLinkRegistration URL normalization", () => {
         basePath: "/aperture",
         ownerId: () => "link-owner",
         findLinkBySourceUrl: async () => null,
-        probeImageSource,
+        findNearDuplicateLink: preview.findNearDuplicateLink,
         registerCreator: async () => photographer,
         registerLink: async (input: RegisterLinkInput) =>
           registeredLink(input, "link-plain"),
         generateAccountKey: () => "aptr_known-key",
         fetchImageBytes: preview.fetchImageBytes,
+        computeDHash: preview.computeDHash,
         buildWatermarkedPreview: preview.buildWatermarkedPreview,
         writeLinkPreview: preview.writeLinkPreview,
         markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
       },
     );
 
-    expect(probeImageSource).toHaveBeenCalledWith(
+    expect(preview.fetchImageBytes).toHaveBeenCalledWith(
       "https://photos.example.com/photo.webp",
     );
   });

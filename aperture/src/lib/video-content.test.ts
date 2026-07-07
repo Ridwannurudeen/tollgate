@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   VIDEO_UPLOAD_MAX_BYTES,
   buildVideoThumbnail,
+  extractRepresentativeFrame,
   probeVideo,
 } from "./video-content";
 
@@ -132,6 +133,32 @@ describe("video content", () => {
     await expect(probeVideo(new Uint8Array([1]))).rejects.toThrow(
       "ffprobe is not available.",
     );
+  });
+
+  it("extracts a representative frame without watermarking it", async () => {
+    mocks.execFile
+      .mockImplementationOnce(failExec(new Error("short clip")))
+      .mockImplementationOnce(completeExec(""));
+
+    const frame = await extractRepresentativeFrame(new Uint8Array([1, 2, 3]));
+
+    expect(mocks.execFile).toHaveBeenNthCalledWith(
+      1,
+      "ffmpeg",
+      expect.arrayContaining(["-ss", "00:00:01"]),
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(mocks.execFile).toHaveBeenNthCalledWith(
+      2,
+      "ffmpeg",
+      expect.arrayContaining(["-ss", "00:00:00"]),
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(frame).toEqual(new Uint8Array([4, 5, 6]));
+    expect(mocks.buildWatermarkedPreview).not.toHaveBeenCalled();
+    expect(mocks.rm).toHaveBeenCalledTimes(2);
   });
 
   it("extracts a thumbnail with ffmpeg fallback and watermarks the frame", async () => {
