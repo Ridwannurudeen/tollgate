@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 import type { WalletRegistryEntry } from "./types";
 import {
   accountKeyHash,
@@ -13,18 +14,38 @@ import {
   registerLink,
   type PublicLinkRecord,
 } from "./link-registry";
-import { fetchImageBytes, probeImageSource } from "./link-content";
+import {
+  LINK_DOWNLOAD_MAX_BYTES,
+  fetchImageBytes,
+  probeImageSource,
+} from "./link-content";
+import {
+  originalExtensionForContentType,
+  writeLinkOriginal,
+} from "./link-originals";
 import { buildWatermarkedPreview, writeLinkPreview } from "./link-preview";
 import { registerCreator } from "./onboarding";
 import { readWalletForOwner } from "./registry";
+import { sha256Hex } from "./hash";
 
 const MAX_URL_LENGTH = 2048;
 const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 600;
 const MAX_NAME_LENGTH = 80;
+const MAX_UPLOAD_PIXELS = 50_000_000;
+const MAX_UPLOAD_DIMENSION = 12_000;
 
 export type LinkRegistrationInput = {
   sourceUrl?: unknown;
+  title?: unknown;
+  description?: unknown;
+  displayName?: unknown;
+  wallet?: unknown;
+  email?: unknown;
+};
+
+export type LinkUploadRegistrationInput = {
+  fileBytes: Uint8Array;
   title?: unknown;
   description?: unknown;
   displayName?: unknown;
@@ -53,9 +74,11 @@ export type LinkRegistrationDeps = {
   fetchImageBytes?: typeof fetchImageBytes;
   buildWatermarkedPreview?: typeof buildWatermarkedPreview;
   writeLinkPreview?: typeof writeLinkPreview;
+  writeLinkOriginal?: typeof writeLinkOriginal;
   readWalletForOwner?: typeof readWalletForOwner;
   generateAccountKey?: typeof generateAccountKey;
   ownerId?: () => string;
+  linkId?: () => string;
   sessionOwnerId?: string;
 };
 
@@ -104,6 +127,109 @@ function optionalDescription(value: unknown): string | undefined {
     throw new LinkRegistryError("description is too long.");
   }
   return trimmed;
+}
+
+async function photographerForRegistration(
+  input: Pick<LinkRegistrationInput, "displayName" | "wallet" | "email">,
+  deps: LinkRegistrationDeps,
+): Promise<{
+  accountKey?: string;
+  ownerId: string;
+  photographer: WalletRegistryEntry;
+}> {
+  const sessionOwnerId = deps.sessionOwnerId?.trim();
+  if (sessionOwnerId) {
+    const existing = await (deps.readWalletForOwner ?? readWalletForOwner)(
+      sessionOwnerId,
+    );
+    if (!existing) {
+      throw new LinkRegistryError("creator session is no longer valid.", 401);
+    }
+    return { ownerId: existing.ownerId, photographer: existing };
+  }
+
+  const displayName = stringField(
+    input.displayName,
+    "photographer name",
+    MAX_NAME_LENGTH,
+  );
+  const wallet = optionalWallet(input.wallet);
+  const email = optionalEmail(input.email);
+  const accountKey = (deps.generateAccountKey ?? generateAccountKey)();
+  const ownerId = deps.ownerId?.() ?? `link-${randomUUID()}`;
+  const photographer = await (deps.registerCreator ?? registerCreator)({
+    ownerId,
+    displayName,
+    wallet,
+    accountKeyHash: accountKeyHash(accountKey),
+    ...(email ? { email } : {}),
+  });
+  return { accountKey, ownerId, photographer };
+}
+
+function uploadImageType(format: string | undefined): {
+  contentType: string;
+  ext: NonNullable<ReturnType<typeof originalExtensionForContentType>>;
+} | null {
+  switch (format) {
+    case "jpeg":
+      return { contentType: "image/jpeg", ext: "jpg" };
+    case "png":
+      return { contentType: "image/png", ext: "png" };
+    case "webp":
+      return { contentType: "image/webp", ext: "webp" };
+    case "gif":
+      return { contentType: "image/gif", ext: "gif" };
+    case "avif":
+      return { contentType: "image/avif", ext: "avif" };
+    case "tiff":
+      return { contentType: "image/tiff", ext: "tiff" };
+    default:
+      return null;
+  }
+}
+
+async function uploadedImageEvidence(bytes: Uint8Array): Promise<{
+  contentType: string;
+  ext: NonNullable<ReturnType<typeof originalExtensionForContentType>>;
+  sourceContentHash: `0x${string}`;
+}> {
+  if (bytes.byteLength > LINK_DOWNLOAD_MAX_BYTES) {
+    throw new LinkRegistryError(
+      "photo is larger than the 25 MB upload cap.",
+      413,
+    );
+  }
+
+  let metadata: sharp.Metadata;
+  try {
+    metadata = await sharp(bytes).metadata();
+  } catch {
+    throw new LinkRegistryError("file is not a supported image.");
+  }
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  if (
+    width <= 0 ||
+    height <= 0 ||
+    width > MAX_UPLOAD_DIMENSION ||
+    height > MAX_UPLOAD_DIMENSION ||
+    width * height > MAX_UPLOAD_PIXELS
+  ) {
+    throw new LinkRegistryError("photo dimensions are too large.", 413);
+  }
+  const type = uploadImageType(metadata.format);
+  if (!type) {
+    throw new LinkRegistryError("file is not a supported image.");
+  }
+
+  return {
+    ...type,
+    sourceContentHash: sha256Hex({
+      type: "aperture-upload-original",
+      body: Buffer.from(bytes).toString("base64"),
+    }),
+  };
 }
 
 // github.com/<owner>/<repo>/blob/<ref>/<path> is GitHub's HTML file-viewer page
@@ -165,43 +291,14 @@ export async function handleLinkRegistration(
   const url = sourceUrl(input.sourceUrl);
   const title = stringField(input.title, "title", MAX_TITLE_LENGTH);
   const description = optionalDescription(input.description);
-  const sessionOwnerId = deps.sessionOwnerId?.trim();
   const findExisting = deps.findLinkBySourceUrl ?? findLinkBySourceUrl;
   if (await findExisting(url)) {
     throw new LinkRegistryError("photo URL already registered.", 409);
   }
 
   const evidence = await (deps.probeImageSource ?? probeImageSource)(url);
-  let accountKey: string | undefined;
-  let ownerId: string;
-  let photographer: WalletRegistryEntry;
-  if (sessionOwnerId) {
-    const existing = await (deps.readWalletForOwner ?? readWalletForOwner)(
-      sessionOwnerId,
-    );
-    if (!existing) {
-      throw new LinkRegistryError("creator session is no longer valid.", 401);
-    }
-    ownerId = existing.ownerId;
-    photographer = existing;
-  } else {
-    const displayName = stringField(
-      input.displayName,
-      "photographer name",
-      MAX_NAME_LENGTH,
-    );
-    const wallet = optionalWallet(input.wallet);
-    const email = optionalEmail(input.email);
-    accountKey = (deps.generateAccountKey ?? generateAccountKey)();
-    ownerId = deps.ownerId?.() ?? `link-${randomUUID()}`;
-    photographer = await (deps.registerCreator ?? registerCreator)({
-      ownerId,
-      displayName,
-      wallet,
-      accountKeyHash: accountKeyHash(accountKey),
-      ...(email ? { email } : {}),
-    });
-  }
+  const { accountKey, ownerId, photographer } =
+    await photographerForRegistration(input, deps);
   const link = await (deps.registerLink ?? registerLink)({
     title,
     ...(description ? { description } : {}),
@@ -229,6 +326,50 @@ export async function handleLinkRegistration(
   }
   return {
     link: publicLink(resultLink),
+    registered: {
+      ownerId: photographer.ownerId,
+      displayName: photographer.displayName,
+      wallet: photographer.wallet,
+      approvalStatus: photographer.approvalStatus,
+      custody: photographer.custody,
+    },
+    shareUrl: `${deps.origin}${deps.basePath}/link/${link.id}`,
+    ...(accountKey ? { accountKey } : {}),
+  };
+}
+
+export async function handleLinkUploadRegistration(
+  input: LinkUploadRegistrationInput,
+  deps: LinkRegistrationDeps,
+): Promise<LinkRegistrationResult> {
+  const title = stringField(input.title, "title", MAX_TITLE_LENGTH);
+  const description = optionalDescription(input.description);
+  const evidence = await uploadedImageEvidence(input.fileBytes);
+  const { accountKey, ownerId, photographer } =
+    await photographerForRegistration(input, deps);
+  const id = deps.linkId?.() ?? randomUUID();
+  const preview = await (
+    deps.buildWatermarkedPreview ?? buildWatermarkedPreview
+  )(input.fileBytes);
+  await (deps.writeLinkPreview ?? writeLinkPreview)(id, preview.bytes);
+  await (deps.writeLinkOriginal ?? writeLinkOriginal)(
+    id,
+    input.fileBytes,
+    evidence.ext,
+  );
+  const link = await (deps.registerLink ?? registerLink)({
+    id,
+    title,
+    ...(description ? { description } : {}),
+    ownerId,
+    sourceKind: "upload",
+    originalContentType: evidence.contentType,
+    sourceContentHash: evidence.sourceContentHash,
+    hasPreview: true,
+  });
+
+  return {
+    link: publicLink(link),
     registered: {
       ownerId: photographer.ownerId,
       displayName: photographer.displayName,

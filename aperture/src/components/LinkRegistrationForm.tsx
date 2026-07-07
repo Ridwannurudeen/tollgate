@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+type RegistrationMode = "upload" | "link";
+
 type LinkRegistrationResult = {
   shareUrl: string;
   accountKey?: string;
@@ -22,7 +24,9 @@ type LinkRegistrationResult = {
 };
 
 export function LinkRegistrationForm({ basePath }: { basePath: string }) {
+  const [mode, setMode] = useState<RegistrationMode>("upload");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -38,18 +42,37 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
     setStatus("");
     setResult(null);
     try {
-      const response = await fetch(`${basePath}/api/links`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sourceUrl: sourceUrl.trim(),
-          title: title.trim(),
-          description: description.trim() || undefined,
-          displayName: displayName.trim(),
-          wallet: wallet.trim() || undefined,
-          email: email.trim() || undefined,
-        }),
-      });
+      let response: Response;
+      if (mode === "upload") {
+        if (!file) {
+          setStatus("Choose an image file to upload.");
+          return;
+        }
+        const body = new FormData();
+        body.set("file", file);
+        body.set("title", title.trim());
+        body.set("displayName", displayName.trim());
+        if (description.trim()) body.set("description", description.trim());
+        if (wallet.trim()) body.set("wallet", wallet.trim());
+        if (email.trim()) body.set("email", email.trim());
+        response = await fetch(`${basePath}/api/links/upload`, {
+          method: "POST",
+          body,
+        });
+      } else {
+        response = await fetch(`${basePath}/api/links`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sourceUrl: sourceUrl.trim(),
+            title: title.trim(),
+            description: description.trim() || undefined,
+            displayName: displayName.trim(),
+            wallet: wallet.trim() || undefined,
+            email: email.trim() || undefined,
+          }),
+        });
+      }
       const body = await response.json();
       if (!response.ok) {
         setStatus(body.error ?? "Photo link registration failed.");
@@ -77,16 +100,44 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
 
   return (
     <form className="registerForm" onSubmit={submit}>
-      <label>
-        Photo URL
-        <input
-          value={sourceUrl}
-          onChange={(event) => setSourceUrl(event.target.value)}
-          placeholder="https://example.com/photo.jpg"
-          required
-          type="url"
-        />
-      </label>
+      <div className="modeToggle" aria-label="Photo source">
+        <button
+          aria-pressed={mode === "upload"}
+          type="button"
+          onClick={() => setMode("upload")}
+        >
+          Upload a file
+        </button>
+        <button
+          aria-pressed={mode === "link"}
+          type="button"
+          onClick={() => setMode("link")}
+        >
+          Paste a link
+        </button>
+      </div>
+      {mode === "upload" ? (
+        <label>
+          Photo file
+          <input
+            accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/tiff"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            required
+            type="file"
+          />
+        </label>
+      ) : (
+        <label>
+          Photo URL
+          <input
+            value={sourceUrl}
+            onChange={(event) => setSourceUrl(event.target.value)}
+            placeholder="https://example.com/photo.jpg"
+            required
+            type="url"
+          />
+        </label>
+      )}
       <label>
         Title
         <input
@@ -141,7 +192,11 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
         />
       </label>
       <button type="submit" disabled={submitting}>
-        {submitting ? "Checking photo..." : "Create gated link"}
+        {submitting
+          ? mode === "upload"
+            ? "Uploading photo..."
+            : "Checking photo..."
+          : "Create gated link"}
       </button>
       {status && <p className="formStatus">{status}</p>}
       {result && (

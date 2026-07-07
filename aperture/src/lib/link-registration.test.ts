@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 import type { LinkRecord, RegisterLinkInput } from "./link-registry";
-import { handleLinkRegistration } from "./link-registration";
+import {
+  handleLinkRegistration,
+  handleLinkUploadRegistration,
+} from "./link-registration";
+import { LINK_DOWNLOAD_MAX_BYTES } from "./link-content";
 import type { WalletRegistryEntry } from "./types";
 
 const photographer: WalletRegistryEntry = {
@@ -31,8 +36,10 @@ function registeredLink(input: RegisterLinkInput, id: string): LinkRecord {
     title: input.title,
     ...(input.description ? { description: input.description } : {}),
     ownerId: input.ownerId,
-    sourceUrl: input.sourceUrl,
+    ...(input.sourceKind ? { sourceKind: input.sourceKind } : {}),
+    ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
     contentType: input.contentType,
+    originalContentType: input.originalContentType,
     sourceContentHash: input.sourceContentHash,
     priceAtomicUsdc: 2500,
     createdAt: "2026-07-06T00:00:00.000Z",
@@ -66,6 +73,20 @@ function previewDeps(linkId: string, description?: string) {
     })),
     previewBytes,
   };
+}
+
+async function pngBytes(): Promise<Uint8Array> {
+  const bytes = await sharp({
+    create: {
+      width: 12,
+      height: 8,
+      channels: 3,
+      background: { r: 120, g: 170, b: 210 },
+    },
+  })
+    .png()
+    .toBuffer();
+  return new Uint8Array(bytes);
 }
 
 describe("handleLinkRegistration", () => {
@@ -387,6 +408,162 @@ describe("handleLinkRegistration", () => {
       approvalStatus: "operator-approved",
       custody: "circle-w3s",
     });
+  });
+});
+
+describe("handleLinkUploadRegistration", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("stores preview and original bytes before registering an upload link", async () => {
+    const fileBytes = await pngBytes();
+    const previewBytes = new Uint8Array([9, 8, 7]);
+    const registerCreator = vi.fn(async () => photographer);
+    const registerLink = vi.fn(async (input: RegisterLinkInput) =>
+      registeredLink(input, "upload-1"),
+    );
+    const buildWatermarkedPreview = vi.fn(async () => ({
+      bytes: previewBytes,
+      contentType: "image/webp" as const,
+    }));
+    const writeLinkPreview = vi.fn(async () => {});
+    const writeLinkOriginal = vi.fn(async () => {});
+
+    const result = await handleLinkUploadRegistration(
+      {
+        fileBytes,
+        title: " Uploaded Photo ",
+        description: "  Buyers see where this was shot.  ",
+        displayName: "Jane Lens",
+        wallet: photographer.wallet,
+      },
+      {
+        origin: "https://tollgate.gudman.xyz",
+        basePath: "/aperture",
+        ownerId: () => "link-owner",
+        linkId: () => "upload-1",
+        registerCreator,
+        registerLink,
+        generateAccountKey: () => "aptr_upload-key",
+        buildWatermarkedPreview,
+        writeLinkPreview,
+        writeLinkOriginal,
+      },
+    );
+    const json = JSON.stringify(result);
+
+    expect(buildWatermarkedPreview).toHaveBeenCalledWith(fileBytes);
+    expect(writeLinkPreview).toHaveBeenCalledWith("upload-1", previewBytes);
+    expect(writeLinkOriginal).toHaveBeenCalledWith(
+      "upload-1",
+      fileBytes,
+      "png",
+    );
+    expect(registerLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "upload-1",
+        title: "Uploaded Photo",
+        description: "Buyers see where this was shot.",
+        ownerId: "link-owner",
+        sourceKind: "upload",
+        originalContentType: "image/png",
+        hasPreview: true,
+      }),
+    );
+    expect(
+      (registerLink.mock.calls[0][0] as RegisterLinkInput).sourceContentHash,
+    ).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(result.shareUrl).toBe(
+      "https://tollgate.gudman.xyz/aperture/link/upload-1",
+    );
+    expect(result.accountKey).toBe("aptr_upload-key");
+    expect(json).not.toContain("sourceUrl");
+    expect(json).not.toContain("sourceContentHash");
+  });
+
+  it("rejects non-image upload bytes before creating an account", async () => {
+    const registerCreator = vi.fn();
+    const registerLink = vi.fn();
+
+    await expect(
+      handleLinkUploadRegistration(
+        {
+          fileBytes: new Uint8Array([1, 2, 3, 4]),
+          title: "Bad Upload",
+          displayName: "Jane Lens",
+        },
+        {
+          origin: "https://tollgate.gudman.xyz",
+          basePath: "/aperture",
+          registerCreator,
+          registerLink,
+        },
+      ),
+    ).rejects.toThrow("file is not a supported image.");
+    expect(registerCreator).not.toHaveBeenCalled();
+    expect(registerLink).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized upload bytes before image decoding", async () => {
+    await expect(
+      handleLinkUploadRegistration(
+        {
+          fileBytes: new Uint8Array(LINK_DOWNLOAD_MAX_BYTES + 1),
+          title: "Huge Upload",
+          displayName: "Jane Lens",
+        },
+        {
+          origin: "https://tollgate.gudman.xyz",
+          basePath: "/aperture",
+        },
+      ),
+    ).rejects.toMatchObject({ status: 413 });
+  });
+
+  it("adds uploads to the logged-in owner without minting a new wallet or key", async () => {
+    const fileBytes = await pngBytes();
+    const registerCreator = vi.fn();
+    const registerLink = vi.fn(async (input: RegisterLinkInput) =>
+      registeredLink(input, "upload-existing"),
+    );
+    const readWalletForOwner = vi.fn(async () => loggedInPhotographer);
+
+    const result = await handleLinkUploadRegistration(
+      {
+        fileBytes,
+        title: "Logged In Upload",
+        displayName: "Ignored Name",
+        wallet: "0x0000000000000000000000000000000000000001",
+        email: "ignored@example.com",
+      },
+      {
+        origin: "https://tollgate.gudman.xyz",
+        basePath: "/aperture",
+        sessionOwnerId: "existing-owner",
+        linkId: () => "upload-existing",
+        readWalletForOwner,
+        registerCreator,
+        registerLink,
+        buildWatermarkedPreview: async () => ({
+          bytes: new Uint8Array([1]),
+          contentType: "image/webp" as const,
+        }),
+        writeLinkPreview: async () => {},
+        writeLinkOriginal: async () => {},
+      },
+    );
+
+    expect(readWalletForOwner).toHaveBeenCalledWith("existing-owner");
+    expect(registerCreator).not.toHaveBeenCalled();
+    expect(registerLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerId: "existing-owner",
+        sourceKind: "upload",
+      }),
+    );
+    expect(result.accountKey).toBeUndefined();
+    expect(result.registered.ownerId).toBe("existing-owner");
   });
 });
 

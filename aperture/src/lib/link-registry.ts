@@ -7,13 +7,17 @@ const LINKS_PATH = path.join(process.cwd(), "data", "links.json");
 const EMPTY_LINKS: LinkRegistry = { links: [] };
 let linkWriteLock: Promise<void> = Promise.resolve();
 
+export type LinkSourceKind = "url" | "upload";
+
 export type LinkRecord = {
   id: string;
   title: string;
   description?: string;
   ownerId: string;
-  sourceUrl: string;
+  sourceKind?: LinkSourceKind;
+  sourceUrl?: string;
   contentType?: string;
+  originalContentType?: string;
   sourceContentHash?: `0x${string}`;
   priceAtomicUsdc: number;
   createdAt: string;
@@ -34,8 +38,10 @@ export type RegisterLinkInput = {
   title: string;
   description?: string;
   ownerId: string;
-  sourceUrl: string;
+  sourceKind?: LinkSourceKind;
+  sourceUrl?: string;
   contentType?: string;
+  originalContentType?: string;
   sourceContentHash?: `0x${string}`;
   hasPreview?: boolean;
   priceAtomicUsdc?: number;
@@ -58,18 +64,24 @@ function isHexHash(value: unknown): value is `0x${string}` {
 function isLinkRecord(value: unknown): value is LinkRecord {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
+  const sourceKind = record.sourceKind ?? "url";
   return (
     typeof record.id === "string" &&
     typeof record.title === "string" &&
     (record.description === undefined ||
       typeof record.description === "string") &&
     typeof record.ownerId === "string" &&
-    typeof record.sourceUrl === "string" &&
+    (sourceKind === "url" || sourceKind === "upload") &&
+    (sourceKind === "upload"
+      ? record.sourceUrl === undefined || typeof record.sourceUrl === "string"
+      : typeof record.sourceUrl === "string") &&
     typeof record.priceAtomicUsdc === "number" &&
     Number.isFinite(record.priceAtomicUsdc) &&
     typeof record.createdAt === "string" &&
     (record.contentType === undefined ||
       typeof record.contentType === "string") &&
+    (record.originalContentType === undefined ||
+      typeof record.originalContentType === "string") &&
     (record.sourceContentHash === undefined ||
       isHexHash(record.sourceContentHash)) &&
     (record.hasPreview === undefined || typeof record.hasPreview === "boolean")
@@ -160,7 +172,10 @@ export async function findLinkBySourceUrl(
   const registry = await readLinks(filePath);
   return (
     registry.links.find(
-      (link) => normalizedSourceUrlKey(link.sourceUrl) === key,
+      (link) =>
+        (link.sourceKind ?? "url") === "url" &&
+        typeof link.sourceUrl === "string" &&
+        normalizedSourceUrlKey(link.sourceUrl) === key,
     ) ?? null
   );
 }
@@ -193,12 +208,26 @@ export async function registerLink(
   if (!title || !ownerId) {
     throw new LinkRegistryError("title and ownerId are required.");
   }
-  const sourceUrl = normalizedSourceUrlKey(input.sourceUrl);
+  const sourceKind = input.sourceKind ?? "url";
+  if (sourceKind !== "url" && sourceKind !== "upload") {
+    throw new LinkRegistryError("sourceKind must be url or upload.");
+  }
+  const sourceUrl =
+    sourceKind === "url" && input.sourceUrl
+      ? normalizedSourceUrlKey(input.sourceUrl)
+      : undefined;
+  if (sourceKind === "url" && !sourceUrl) {
+    throw new LinkRegistryError("photo URL is required.");
+  }
   return withLinkWriteLock(async () => {
     const registry = await readLinks(filePath);
     if (
+      sourceUrl &&
       registry.links.some(
-        (link) => normalizedSourceUrlKey(link.sourceUrl) === sourceUrl,
+        (link) =>
+          (link.sourceKind ?? "url") === "url" &&
+          typeof link.sourceUrl === "string" &&
+          normalizedSourceUrlKey(link.sourceUrl) === sourceUrl,
       )
     ) {
       throw new LinkRegistryError("photo URL already registered.", 409);
@@ -208,8 +237,12 @@ export async function registerLink(
       title,
       ...(description ? { description } : {}),
       ownerId,
-      sourceUrl,
+      ...(sourceKind === "upload" ? { sourceKind } : {}),
+      ...(sourceUrl ? { sourceUrl } : {}),
       ...(input.contentType ? { contentType: input.contentType } : {}),
+      ...(input.originalContentType
+        ? { originalContentType: input.originalContentType }
+        : {}),
       ...(input.sourceContentHash
         ? { sourceContentHash: input.sourceContentHash }
         : {}),

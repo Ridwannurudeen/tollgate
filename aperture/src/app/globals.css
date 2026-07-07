@@ -862,6 +862,30 @@ small {
   text-transform: none;
 }
 
+.modeToggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.modeToggle button {
+  min-height: 38px;
+  margin: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-3);
+}
+
+.modeToggle button[aria-pressed="true"] {
+  border-color: var(--green);
+  background: rgba(30, 106, 71, 0.1);
+  color: var(--green-ink);
+}
+
 .registerForm input,
 .registerForm textarea {
   min-height: 42px;

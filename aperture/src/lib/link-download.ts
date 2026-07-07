@@ -3,6 +3,12 @@ import type { Address, Hex } from "viem";
 import { sha256Hex } from "./hash";
 import { appendLicenseReceipt, type LicenseReceiptInput } from "./ledger";
 import { fetchImageBytes, probeImageSource } from "./link-content";
+import {
+  assertLinkOriginalReadable,
+  type LinkOriginalExtension,
+  originalExtensionForContentType,
+  readLinkOriginal,
+} from "./link-originals";
 import { findLink, type LinkRecord } from "./link-registry";
 import { readWalletForOwner } from "./registry";
 import { routeLicensePayment } from "./fee-router";
@@ -35,6 +41,8 @@ export type LinkDownloadDeps = {
   readWalletForOwner?: typeof readWalletForOwner;
   probeImageSource?: typeof probeImageSource;
   fetchImageBytes?: typeof fetchImageBytes;
+  assertLinkOriginalReadable?: typeof assertLinkOriginalReadable;
+  readLinkOriginal?: typeof readLinkOriginal;
   routeLicensePayment?: typeof routeLicensePayment;
   appendReceipt?: (
     input: LicenseReceiptInput,
@@ -91,7 +99,7 @@ function downloadEvent(
   };
 }
 
-function safeFilename(title: string, id: string): string {
+function safeFilename(title: string, id: string, ext = "jpg"): string {
   const base =
     title
       .trim()
@@ -99,7 +107,7 @@ function safeFilename(title: string, id: string): string {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 80) || `aperture-${id}`;
-  return `${base}.jpg`;
+  return `${base}.${ext}`;
 }
 
 async function payoutEvidence(
@@ -141,21 +149,6 @@ export async function handleLinkDownload(
     };
   }
 
-  try {
-    await (deps.probeImageSource ?? probeImageSource)(link.sourceUrl);
-  } catch (error) {
-    return {
-      status: 502,
-      headers: {},
-      body: {
-        error:
-          error instanceof Error
-            ? error.message
-            : "photo source could not be verified",
-      },
-    };
-  }
-
   const requirements = buildPaymentRequirements(
     deps.collectorAddress ?? photographer.wallet,
     link.priceAtomicUsdc,
@@ -163,6 +156,60 @@ export async function handleLinkDownload(
   const resourceUrl = `${deps.origin}${deps.basePath}/api/links/${link.id}/download`;
   const paymentResource = `aperture-link:${link.id}`;
   const signatureHeader = deps.headers.get(PAYMENT_SIGNATURE_HEADER);
+  const uploadExt =
+    link.sourceKind === "upload" && link.originalContentType
+      ? originalExtensionForContentType(link.originalContentType)
+      : null;
+  let uploadExtension: LinkOriginalExtension | null = null;
+  let uploadContentType: string | null = null;
+  let urlSource: string | null = null;
+
+  if (link.sourceKind === "upload") {
+    if (!uploadExt || !link.originalContentType) {
+      return {
+        status: 502,
+        headers: {},
+        body: { error: "uploaded photo metadata is missing." },
+      };
+    }
+    uploadExtension = uploadExt;
+    uploadContentType = link.originalContentType;
+    try {
+      await (deps.assertLinkOriginalReadable ?? assertLinkOriginalReadable)(
+        link.id,
+        uploadExtension,
+      );
+    } catch {
+      return {
+        status: 410,
+        headers: {},
+        body: { error: "uploaded original is no longer available." },
+      };
+    }
+  } else {
+    urlSource = link.sourceUrl ?? null;
+    if (!urlSource) {
+      return {
+        status: 502,
+        headers: {},
+        body: { error: "photo source is missing." },
+      };
+    }
+    try {
+      await (deps.probeImageSource ?? probeImageSource)(urlSource);
+    } catch (error) {
+      return {
+        status: 502,
+        headers: {},
+        body: {
+          error:
+            error instanceof Error
+              ? error.message
+              : "photo source could not be verified",
+        },
+      };
+    }
+  }
 
   if (!signatureHeader) {
     const body = paymentRequiredBody(
@@ -222,22 +269,62 @@ export async function handleLinkDownload(
     evidence,
   });
 
-  let image;
-  try {
-    image = await (deps.fetchImageBytes ?? fetchImageBytes)(link.sourceUrl);
-  } catch {
-    return {
-      status: 502,
-      headers:
-        settlement.responseHeader !== undefined
-          ? { [PAYMENT_RESPONSE_HEADER]: settlement.responseHeader }
-          : {},
-      body: {
-        error:
-          "Payment settled and receipt was recorded, but the photo stream failed. Retry this link shortly.",
-        receiptHash: receipt.receiptHash,
-      },
-    };
+  let image: { bytes: Uint8Array; contentType: string; ext?: string };
+  if (link.sourceKind === "upload") {
+    if (!uploadExtension || !uploadContentType) {
+      return {
+        status: 502,
+        headers: {},
+        body: { error: "uploaded photo metadata is missing." },
+      };
+    }
+    try {
+      image = {
+        bytes: await (deps.readLinkOriginal ?? readLinkOriginal)(
+          link.id,
+          uploadExtension,
+        ),
+        contentType: uploadContentType,
+        ext: uploadExtension,
+      };
+    } catch {
+      return {
+        status: 502,
+        headers:
+          settlement.responseHeader !== undefined
+            ? { [PAYMENT_RESPONSE_HEADER]: settlement.responseHeader }
+            : {},
+        body: {
+          error:
+            "Payment settled and receipt was recorded, but the uploaded photo stream failed. Retry this link shortly.",
+          receiptHash: receipt.receiptHash,
+        },
+      };
+    }
+  } else {
+    if (!urlSource) {
+      return {
+        status: 502,
+        headers: {},
+        body: { error: "photo source is missing." },
+      };
+    }
+    try {
+      image = await (deps.fetchImageBytes ?? fetchImageBytes)(urlSource);
+    } catch {
+      return {
+        status: 502,
+        headers:
+          settlement.responseHeader !== undefined
+            ? { [PAYMENT_RESPONSE_HEADER]: settlement.responseHeader }
+            : {},
+        body: {
+          error:
+            "Payment settled and receipt was recorded, but the photo stream failed. Retry this link shortly.",
+          receiptHash: receipt.receiptHash,
+        },
+      };
+    }
   }
 
   return {
@@ -248,6 +335,7 @@ export async function handleLinkDownload(
       "content-disposition": `attachment; filename="${safeFilename(
         link.title,
         link.id,
+        image.ext,
       )}"`,
       "cache-control": "no-store",
       "x-aperture-receipt-hash": receipt.receiptHash,

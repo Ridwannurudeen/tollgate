@@ -12,37 +12,39 @@ export default function LinkRegistrationPage() {
       <main className="shell compact">
         <SiteNav />
 
-      <section className="pageHeader">
-        <p className="eyebrow">Bring your own photo link</p>
-        <h1>Gate a photo you already host.</h1>
-        <p>
-          Paste a public image URL, name the photographer, and share the
-          Aperture link instead of the original. Buyers pay the license fee
-          through x402; the image is streamed through Aperture after payment.
-        </p>
-      </section>
-
-      <section className="twoColumn">
-        <div className="surface">
-          <h2>Create a gated link</h2>
+        <section className="pageHeader">
+          <p className="eyebrow">Sell a photo license</p>
+          <h1>Gate a photo file or a hosted image.</h1>
           <p>
-            The source image must be a public http(s) image under 25 MB. The
-            original URL stays private; the share page shows only the title,
-            photographer, and payment route.
+            Upload an original or paste a public image URL, name the
+            photographer, and share the Aperture link instead of the source.
+            Buyers pay the license fee through x402; the image is streamed
+            through Aperture after payment.
           </p>
-          <LinkRegistrationForm basePath={basePath} />
-        </div>
+        </section>
 
-        <div className="surface">
-          <h2>What buyers see</h2>
-          <div className="steps">
-            <code>01 / open your Aperture share link</code>
-            <code>02 / receive an x402 payment requirement</code>
-            <code>03 / pay USDC on Arc</code>
-            <code>04 / download the proxied image + receipt</code>
+        <section className="twoColumn">
+          <div className="surface">
+            <h2>Create a gated link</h2>
+            <p>
+              Uploaded originals are stored by Aperture; hosted URLs stay
+              private and are proxied after payment. Either way, the image must
+              be under 25 MB and buyers only see the watermarked preview before
+              unlocking.
+            </p>
+            <LinkRegistrationForm basePath={basePath} />
           </div>
-        </div>
-      </section>
+
+          <div className="surface">
+            <h2>What buyers see</h2>
+            <div className="steps">
+              <code>01 / open your Aperture share link</code>
+              <code>02 / receive an x402 payment requirement</code>
+              <code>03 / pay USDC on Arc</code>
+              <code>04 / download the proxied image + receipt</code>
+            </div>
+          </div>
+        </section>
       </main>
       <SiteFooter />
     </>

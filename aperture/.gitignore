@@ -9,3 +9,4 @@ next-env.d.ts
 *.bak
 *.log
 data/previews/
+data/originals/

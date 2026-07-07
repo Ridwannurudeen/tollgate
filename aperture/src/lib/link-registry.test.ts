@@ -50,6 +50,35 @@ describe("link registry", () => {
     }
   });
 
+  it("registers an uploaded original without a source URL", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
+    const filePath = path.join(dir, "links.json");
+    try {
+      const link = await registerLink(
+        {
+          id: "upload-1",
+          title: "Uploaded Photo",
+          ownerId: "link-owner",
+          sourceKind: "upload",
+          originalContentType: "image/png",
+          sourceContentHash: `0x${"4".repeat(64)}`,
+          hasPreview: true,
+          createdAt: "2026-07-06T00:00:00.000Z",
+        },
+        filePath,
+      );
+      const projected = publicLink(link) as Record<string, unknown>;
+
+      expect(link.sourceKind).toBe("upload");
+      expect(link.sourceUrl).toBeUndefined();
+      expect(link.originalContentType).toBe("image/png");
+      expect(projected.sourceUrl).toBeUndefined();
+      expect(projected.sourceContentHash).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("filters corrupt links with non-string descriptions", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
     const filePath = path.join(dir, "links.json");

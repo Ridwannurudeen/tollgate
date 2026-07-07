@@ -210,4 +210,105 @@ describe("handleLinkDownload", () => {
     );
     expect(appendReceipt).toHaveBeenCalledTimes(1);
   });
+
+  it("settles and streams stored original bytes for upload links", async () => {
+    const fetchImageBytes = vi.fn();
+    const probeImageSource = vi.fn();
+    const readLinkOriginal = vi.fn(async () => new Uint8Array([7, 8, 9]));
+    const result = await handleLinkDownload("upload-1", {
+      ...baseDeps(new Headers({ [PAYMENT_SIGNATURE_HEADER]: "paid" })),
+      findLink: async () => ({
+        id: "upload-1",
+        title: "Uploaded Origin",
+        ownerId: "link-owner",
+        sourceKind: "upload",
+        originalContentType: "image/png",
+        sourceContentHash: `0x${"5".repeat(64)}` as Hex,
+        priceAtomicUsdc: 2500,
+        createdAt: "2026-07-06T00:00:00.000Z",
+      }),
+      probeImageSource,
+      fetchImageBytes,
+      assertLinkOriginalReadable: async () => {},
+      readLinkOriginal,
+      settlePayment: async () => ({
+        ok: true,
+        mode: "x402-verified",
+        responseHeader: "settled",
+      }),
+      routeLicensePayment: async () => null,
+      appendReceipt: async (input) => ({
+        receipt: fakeReceipt({
+          eventId: input.eventId,
+          settlementMode: input.evidence.settlementMode,
+          paymentResource: input.evidence.paymentResource,
+        }),
+        created: true,
+      }),
+    });
+
+    expect(result.status).toBe(200);
+    expect("bytes" in result && Array.from(result.bytes)).toEqual([7, 8, 9]);
+    expect(result.headers["content-type"]).toBe("image/png");
+    expect(result.headers["content-disposition"]).toContain(
+      "uploaded-origin.png",
+    );
+    expect(readLinkOriginal).toHaveBeenCalledWith("upload-1", "png");
+    expect(probeImageSource).not.toHaveBeenCalled();
+    expect(fetchImageBytes).not.toHaveBeenCalled();
+  });
+
+  it("does not read full upload bytes when payment settlement fails", async () => {
+    const readLinkOriginal = vi.fn();
+    const result = await handleLinkDownload("upload-1", {
+      ...baseDeps(new Headers({ [PAYMENT_SIGNATURE_HEADER]: "bad-payment" })),
+      findLink: async () => ({
+        id: "upload-1",
+        title: "Uploaded Origin",
+        ownerId: "link-owner",
+        sourceKind: "upload",
+        originalContentType: "image/png",
+        sourceContentHash: `0x${"5".repeat(64)}` as Hex,
+        priceAtomicUsdc: 2500,
+        createdAt: "2026-07-06T00:00:00.000Z",
+      }),
+      assertLinkOriginalReadable: async () => {},
+      readLinkOriginal,
+      settlePayment: async () => ({
+        ok: false,
+        status: 402,
+        reason: "invalid payment",
+      }),
+    });
+
+    expect(result.status).toBe(402);
+    expect(readLinkOriginal).not.toHaveBeenCalled();
+  });
+
+  it("does not settle upload links when the stored original is missing", async () => {
+    const settlePayment = vi.fn();
+    const result = await handleLinkDownload("upload-1", {
+      ...baseDeps(new Headers({ [PAYMENT_SIGNATURE_HEADER]: "paid" })),
+      findLink: async () => ({
+        id: "upload-1",
+        title: "Uploaded Origin",
+        ownerId: "link-owner",
+        sourceKind: "upload",
+        originalContentType: "image/png",
+        sourceContentHash: `0x${"5".repeat(64)}` as Hex,
+        priceAtomicUsdc: 2500,
+        createdAt: "2026-07-06T00:00:00.000Z",
+      }),
+      readLinkOriginal: async () => {
+        throw new Error("missing");
+      },
+      settlePayment,
+    });
+
+    expect(result.status).toBe(410);
+    expect("body" in result && JSON.stringify(result.body)).toContain(
+      "uploaded original is no longer available",
+    );
+    expect(settlePayment).not.toHaveBeenCalled();
+  });
 });
