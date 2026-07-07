@@ -31,6 +31,8 @@ describe("SiteNav", () => {
 
     expect(markup).toContain("Browse");
     expect(markup).toContain("Sell media");
+    expect(markup).toContain("Tollgate home");
+    expect(markup).toContain('href="/"');
     expect(markup).toContain("Sign in");
     expect(markup).not.toContain("Dashboard");
     expect(markup).not.toContain("Log out");

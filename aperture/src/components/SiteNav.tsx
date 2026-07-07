@@ -9,9 +9,14 @@ export async function SiteNav() {
 
   return (
     <nav className="topbar">
-      <Link className="brand" href="/">
-        Aperture
-      </Link>
+      <div className="brandCluster">
+        <Link className="brand" href="/">
+          Aperture
+        </Link>
+        <a className="tollgateHomeLink" href="/">
+          Tollgate home
+        </a>
+      </div>
       <SiteNavLinks basePath={basePath} ownerName={owner?.displayName} />
     </nav>
   );

@@ -235,6 +235,12 @@ small {
   text-decoration: none;
 }
 
+.brandCluster {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .brand::after {
   content: "media proof";
   display: block;
@@ -246,6 +252,33 @@ small {
   letter-spacing: 0.1em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.tollgateHomeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(30, 106, 71, 0.22);
+  border-radius: 999px;
+  background: rgba(30, 106, 71, 0.06);
+  color: var(--green-deep);
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition:
+    transform var(--dur-1) ease-out,
+    border-color var(--dur-1) ease-out,
+    background var(--dur-1) ease-out;
+}
+
+.tollgateHomeLink:hover {
+  transform: translateY(-1px);
+  border-color: rgba(30, 106, 71, 0.42);
+  background: rgba(30, 106, 71, 0.1);
 }
 
 .navlinks {
