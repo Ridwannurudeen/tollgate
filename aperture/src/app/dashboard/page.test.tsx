@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   readLinksByOwner: vi.fn(),
   readLicenseLedger: vi.fn(),
   fetchCitationsSummary: vi.fn(),
+  readCustodialUsdcBalance: vi.fn(),
   redirect: vi.fn(),
 }));
 
@@ -40,6 +41,22 @@ vi.mock("../../components/LinkedWalletsForm", () => ({
   ),
 }));
 
+vi.mock("../../components/DashboardMessages", () => ({
+  DashboardMessages: ({ ownerId }: { ownerId: string }) => (
+    <div>messages:{ownerId}</div>
+  ),
+}));
+
+vi.mock("../../components/WithdrawForm", () => ({
+  WithdrawForm: ({
+    initialBalanceAtomicUsdc,
+    wallet,
+  }: {
+    initialBalanceAtomicUsdc: string | null;
+    wallet: string;
+  }) => <div>withdraw:{wallet}:{initialBalanceAtomicUsdc}</div>,
+}));
+
 vi.mock("../../lib/citations-summary", () => ({
   fetchCitationsSummary: mocks.fetchCitationsSummary,
 }));
@@ -58,12 +75,17 @@ vi.mock("../../lib/link-registry", async () => {
   };
 });
 
+vi.mock("../../lib/withdraw", () => ({
+  readCustodialUsdcBalance: mocks.readCustodialUsdcBalance,
+}));
+
 describe("dashboard page", () => {
   beforeEach(() => {
     mocks.getSessionOwner.mockReset();
     mocks.readLinksByOwner.mockReset();
     mocks.readLicenseLedger.mockReset();
     mocks.fetchCitationsSummary.mockReset();
+    mocks.readCustodialUsdcBalance.mockReset();
     mocks.redirect.mockReset();
     mocks.redirect.mockImplementation((path: string) => {
       throw new Error(`redirect:${path}`);
@@ -77,6 +99,7 @@ describe("dashboard page", () => {
       },
       sources: [],
     });
+    mocks.readCustodialUsdcBalance.mockResolvedValue(2500n);
   });
 
   it("redirects to login without a session", async () => {
@@ -93,6 +116,7 @@ describe("dashboard page", () => {
       wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
       approvalStatus: "operator-approved",
       custody: "circle-w3s",
+      walletId: "circle-wallet-id",
       accountKeyHash: `0x${"a".repeat(64)}`,
       email: "jane@example.com",
       loginTokenHash: `0x${"c".repeat(64)}`,
@@ -192,6 +216,11 @@ describe("dashboard page", () => {
       "linked:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     );
     expect(payload).toContain("j***@example.com");
+    expect(payload).toContain("Withdraw custodial balance");
+    expect(payload).toContain(
+      "withdraw:0x12F25B721Cc21c38495e33A4c8524dd0B647ba03:2500",
+    );
+    expect(payload).toContain("messages:owner-1");
     expect(payload).not.toContain("add-email:");
     expect(payload).toContain("0.0025");
     expect(payload).toContain("0.0030");

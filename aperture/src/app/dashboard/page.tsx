@@ -3,9 +3,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AddEmailForm } from "../../components/AddEmailForm";
 import { CopyButton } from "../../components/DashboardActions";
+import { DashboardMessages } from "../../components/DashboardMessages";
 import { LinkedWalletsForm } from "../../components/LinkedWalletsForm";
 import { SiteFooter } from "../../components/SiteFooter";
 import { SiteNav } from "../../components/SiteNav";
+import { WithdrawForm } from "../../components/WithdrawForm";
 import { getSessionOwner, maskAccountEmail } from "../../lib/account";
 import {
   fetchCitationsSummary,
@@ -14,6 +16,7 @@ import {
 } from "../../lib/citations-summary";
 import { readLicenseLedger } from "../../lib/ledger";
 import { publicLink, readLinksByOwner } from "../../lib/link-registry";
+import { readCustodialUsdcBalance } from "../../lib/withdraw";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +105,10 @@ export default async function DashboardPage() {
   );
   const citations = aggregateCitations(citationSummaries);
   const totalEarned = mediaEarned + citations.earnedAtomicUsdc;
+  const custodialBalance =
+    owner.custody === "circle-w3s" && owner.walletId
+      ? await readCustodialUsdcBalance(owner.wallet).catch(() => null)
+      : null;
 
   return (
     <>
@@ -180,6 +187,27 @@ export default async function DashboardPage() {
           </div>
         </section>
 
+        {owner.custody === "circle-w3s" && owner.walletId && (
+          <section className="surface">
+            <div className="sectionTitle inlineTitle">
+              <h2>Withdraw custodial balance</h2>
+              <span>Circle W3S</span>
+            </div>
+            <p>
+              Move USDC from the wallet Aperture created for you to an external
+              wallet you control. The transfer is irreversible once Circle
+              submits it on Arc.
+            </p>
+            <WithdrawForm
+              basePath={basePath}
+              initialBalanceAtomicUsdc={
+                custodialBalance === null ? null : custodialBalance.toString()
+              }
+              wallet={owner.wallet}
+            />
+          </section>
+        )}
+
         <section className="tableSurface">
           <div className="sectionTitle">
             <h2>Media (Aperture)</h2>
@@ -226,6 +254,8 @@ export default async function DashboardPage() {
             )}
           </div>
         </section>
+
+        <DashboardMessages basePath={basePath} ownerId={owner.ownerId} />
 
         <section className="tableSurface">
           <div className="sectionTitle">

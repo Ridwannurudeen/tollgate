@@ -1,8 +1,10 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import { LinkDownloadButton } from "../../../components/LinkDownloadButton";
+import { LinkMessagePanel } from "../../../components/LinkMessagePanel";
 import { SiteFooter } from "../../../components/SiteFooter";
 import { SiteNav } from "../../../components/SiteNav";
+import { getSessionOwner } from "../../../lib/account";
 import { APERTURE_LICENSE_FEE_ATOMIC_USDC } from "../../../lib/config";
 import { findLink } from "../../../lib/link-registry";
 import { readWalletForOwner } from "../../../lib/registry";
@@ -26,6 +28,7 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
   if (!link) notFound();
   const photographer = await readWalletForOwner(link.ownerId);
   if (!photographer) notFound();
+  const sessionOwner = await getSessionOwner();
   const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
   const price = link.priceAtomicUsdc || APERTURE_LICENSE_FEE_ATOMIC_USDC;
   const isVideo = link.mediaKind === "video";
@@ -82,6 +85,15 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
             title={link.title}
           />
         </section>
+
+        {sessionOwner && sessionOwner.ownerId !== link.ownerId && (
+          <LinkMessagePanel
+            basePath={basePath}
+            currentOwnerId={sessionOwner.ownerId}
+            linkId={link.id}
+            sellerName={photographer.displayName}
+          />
+        )}
       </main>
       <SiteFooter />
     </>

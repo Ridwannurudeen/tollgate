@@ -12,10 +12,16 @@ const SESSION_LOGIN_WINDOW_MS = 60 * 1000;
 const SESSION_LOGIN_LIMIT = 10;
 const LOGIN_LINK_WINDOW_MS = 60 * 1000;
 const LOGIN_LINK_LIMIT = 5;
+const WITHDRAW_WINDOW_MS = 60 * 60 * 1000;
+const WITHDRAW_LIMIT = 5;
+const MESSAGE_WINDOW_MS = 60 * 1000;
+const MESSAGE_LIMIT = 20;
 const linkRegistrationBuckets = new Map<string, RateLimitBucket>();
 const demoUnlockIpBuckets = new Map<string, RateLimitBucket>();
 const sessionLoginBuckets = new Map<string, RateLimitBucket>();
 const loginLinkBuckets = new Map<string, RateLimitBucket>();
+const withdrawBuckets = new Map<string, RateLimitBucket>();
+const messageBuckets = new Map<string, RateLimitBucket>();
 let demoUnlockGlobalBucket: RateLimitBucket | null = null;
 
 function pruneBuckets(
@@ -145,6 +151,34 @@ export function assertLoginLinkRateLimit(key: string, now = Date.now()): void {
   }
   if (current.count >= LOGIN_LINK_LIMIT) {
     throw new Error("Too many login-link requests. Wait a minute and retry.");
+  }
+  current.count += 1;
+}
+
+export function assertWithdrawRateLimit(key: string, now = Date.now()): void {
+  const bucketKey = key || "anonymous";
+  pruneBuckets(withdrawBuckets, now, WITHDRAW_WINDOW_MS);
+  const current = withdrawBuckets.get(bucketKey);
+  if (!current || now - current.windowStart >= WITHDRAW_WINDOW_MS) {
+    withdrawBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= WITHDRAW_LIMIT) {
+    throw new Error("Too many withdraw attempts. Wait an hour and retry.");
+  }
+  current.count += 1;
+}
+
+export function assertMessageRateLimit(key: string, now = Date.now()): void {
+  const bucketKey = key || "anonymous";
+  pruneBuckets(messageBuckets, now, MESSAGE_WINDOW_MS);
+  const current = messageBuckets.get(bucketKey);
+  if (!current || now - current.windowStart >= MESSAGE_WINDOW_MS) {
+    messageBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= MESSAGE_LIMIT) {
+    throw new Error("Too many messages. Wait a minute and retry.");
   }
   current.count += 1;
 }

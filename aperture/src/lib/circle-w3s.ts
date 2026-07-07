@@ -14,10 +14,13 @@ import {
   createPublicKey,
   randomUUID,
 } from "node:crypto";
-import { type Address, type Hex } from "viem";
+import { encodeFunctionData, type Abi, type Address, type Hex } from "viem";
 
 const W3S_BASE = "https://api.circle.com/v1/w3s";
 const KEY_TTL_MS = 5 * 60 * 1000;
+const BLOCKCHAIN = "ARC-TESTNET";
+const POLL_ATTEMPTS = 20;
+const POLL_INTERVAL_MS = 1_500;
 
 let entityKeyPem: string | null = null;
 let entityKeyFetchedAt = 0;
@@ -121,6 +124,34 @@ export async function w3sMintWallet(args: {
   return resp.data.wallet;
 }
 
+type W3STransaction = {
+  id: string;
+  txHash?: Hex;
+  transactionHash?: Hex;
+  state?: string;
+};
+
+async function transactionHash(transactionId: string): Promise<Hex> {
+  for (let index = 0; index < POLL_ATTEMPTS; index += 1) {
+    const response = await request<{ data?: { transaction?: W3STransaction } }>(
+      "GET",
+      `/transactions/${transactionId}`,
+    );
+    const transaction = response.data?.transaction;
+    const hash = transaction?.txHash ?? transaction?.transactionHash;
+    if (hash) return hash;
+    if (transaction?.state === "FAILED" || transaction?.state === "CANCELLED") {
+      throw new Error(
+        `Circle W3S transaction ${transactionId} ${transaction.state}.`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+  throw new Error(
+    `Circle W3S transaction ${transactionId} did not produce a tx hash.`,
+  );
+}
+
 export type Eip712Message = {
   domain: Record<string, unknown>;
   types: Record<string, unknown>;
@@ -174,4 +205,34 @@ export function payerWalletId(): string {
 
 export function payerAddress(): Address {
   return requireEnv("CIRCLE_PAYER_ADDRESS") as Address;
+}
+
+export async function w3sExecuteContract(args: {
+  walletId: string;
+  walletAddress: Address;
+  contractAddress: Address;
+  abi: Abi;
+  functionName: string;
+  functionArgs?: readonly unknown[];
+}): Promise<Hex> {
+  const callData = encodeFunctionData({
+    abi: args.abi,
+    functionName: args.functionName,
+    args: args.functionArgs,
+  });
+  const response = await request<{ data: { id: string } }>(
+    "POST",
+    "/developer/transactions/contractExecution",
+    {
+      idempotencyKey: randomUUID(),
+      entitySecretCiphertext: await sealEntitySecret(),
+      walletId: args.walletId,
+      walletAddress: args.walletAddress,
+      blockchain: BLOCKCHAIN,
+      contractAddress: args.contractAddress,
+      callData,
+      feeLevel: "MEDIUM",
+    },
+  );
+  return transactionHash(response.data.id);
 }

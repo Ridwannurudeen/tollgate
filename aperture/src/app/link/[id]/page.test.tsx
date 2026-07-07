@@ -6,6 +6,7 @@ import GatedLinkPage from "./page";
 const mocks = vi.hoisted(() => ({
   findLink: vi.fn(),
   readWalletForOwner: vi.fn(),
+  getSessionOwner: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -22,6 +23,10 @@ vi.mock("../../../lib/registry", () => ({
   readWalletForOwner: mocks.readWalletForOwner,
 }));
 
+vi.mock("../../../lib/account", () => ({
+  getSessionOwner: mocks.getSessionOwner,
+}));
+
 vi.mock("../../../components/SiteNav", () => ({
   SiteNav: () => "nav",
 }));
@@ -34,10 +39,16 @@ vi.mock("../../../components/LinkDownloadButton", () => ({
   LinkDownloadButton: () => "download button",
 }));
 
+vi.mock("../../../components/LinkMessagePanel", () => ({
+  LinkMessagePanel: ({ linkId }: { linkId: string }) => `message panel:${linkId}`,
+}));
+
 describe("gated link page", () => {
   beforeEach(() => {
     mocks.findLink.mockReset();
     mocks.readWalletForOwner.mockReset();
+    mocks.getSessionOwner.mockReset();
+    mocks.getSessionOwner.mockResolvedValue(null);
   });
 
   it("renders the public photo description without exposing the source URL", async () => {
@@ -70,6 +81,7 @@ describe("gated link page", () => {
     expect(payload).toContain("/aperture/link/link-1/preview");
     expect(payload).not.toContain("secret.example.com");
     expect(payload).not.toContain("sourceUrl");
+    expect(payload).not.toContain("message panel:");
   });
 
   it("renders video-specific preview copy without exposing original metadata", async () => {
@@ -107,5 +119,34 @@ describe("gated link page", () => {
     expect(payload).toContain("mediaBadge");
     expect(payload).not.toContain("video/mp4");
     expect(payload).not.toContain("sourceContentHash");
+  });
+
+  it("shows the message panel only to logged-in non-sellers", async () => {
+    mocks.findLink.mockResolvedValue({
+      id: "link-1",
+      title: "Rainy Lagos",
+      ownerId: "owner-1",
+      sourceUrl: "https://secret.example.com/original.jpg",
+      priceAtomicUsdc: 2500,
+      createdAt: "2026-07-06T00:00:00.000Z",
+    });
+    mocks.readWalletForOwner.mockResolvedValue({
+      ownerId: "owner-1",
+      displayName: "Jane Lens",
+      wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      createdAt: "2026-07-06T00:00:00.000Z",
+      approvalStatus: "operator-approved",
+    });
+    mocks.getSessionOwner.mockResolvedValue({
+      ownerId: "buyer-1",
+      displayName: "Buyer",
+    });
+
+    const page = await GatedLinkPage({
+      params: Promise.resolve({ id: "link-1" }),
+    });
+    const payload = renderToStaticMarkup(page as ReactElement);
+
+    expect(payload).toContain("message panel:link-1");
   });
 });
