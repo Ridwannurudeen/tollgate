@@ -1,0 +1,14 @@
+{
+  "name": "wordpress-plugin-tollgate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/static.test.mjs",
+    "wp:server": "node tests/playground-server.mjs",
+    "wp:smoke": "node tests/playground-smoke.mjs"
+  },
+  "devDependencies": {
+    "@wp-playground/cli": "^3.1.44"
+  }
+}

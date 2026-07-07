@@ -13,6 +13,10 @@ const RSS_IMPORT_WINDOW_MS = 60 * 60 * 1000;
 const RSS_IMPORT_LIMIT = 10;
 const DISCOVERY_WINDOW_MS = 60 * 60 * 1000;
 const DISCOVERY_LIMIT = 10;
+const WORDPRESS_REGISTRATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+const WORDPRESS_REGISTRATION_LIMIT = 20;
+const WORDPRESS_PAY_WINDOW_MS = 60 * 1000;
+const WORDPRESS_PAY_LIMIT = 30;
 // Custodial demo pays real (testnet) USDC from a shared wallet per click, so it
 // is capped both per-IP and globally. Limits are check-then-record: a failed
 // settlement must not burn a judge's quota.
@@ -24,6 +28,8 @@ const registrationBuckets = new Map<string, RateLimitBucket>();
 const claimBuckets = new Map<string, RateLimitBucket>();
 const rssImportBuckets = new Map<string, RateLimitBucket>();
 const discoveryBuckets = new Map<string, RateLimitBucket>();
+const wordpressRegistrationBuckets = new Map<string, RateLimitBucket>();
+const wordpressPayBuckets = new Map<string, RateLimitBucket>();
 const demoPaidQueryBuckets = new Map<string, RateLimitBucket>();
 let demoPaidQueryGlobal: RateLimitBucket = { windowStart: 0, count: 0 };
 
@@ -120,6 +126,55 @@ export function assertDiscoveryRateLimit(key: string, now = Date.now()): void {
   if (current.count >= DISCOVERY_LIMIT) {
     throw new Error(
       "Too many site discovery attempts. Wait an hour and retry.",
+    );
+  }
+  current.count += 1;
+}
+
+export function assertWordPressRegistrationRateLimit(
+  key: string,
+  now = Date.now(),
+): void {
+  const bucketKey = key || "anonymous";
+  for (const [existingKey, bucket] of wordpressRegistrationBuckets) {
+    if (now - bucket.windowStart >= WORDPRESS_REGISTRATION_WINDOW_MS) {
+      wordpressRegistrationBuckets.delete(existingKey);
+    }
+  }
+  const current = wordpressRegistrationBuckets.get(bucketKey);
+  if (
+    !current ||
+    now - current.windowStart >= WORDPRESS_REGISTRATION_WINDOW_MS
+  ) {
+    wordpressRegistrationBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= WORDPRESS_REGISTRATION_LIMIT) {
+    throw new Error(
+      "Too many WordPress site registrations. Wait a day and retry.",
+    );
+  }
+  current.count += 1;
+}
+
+export function assertWordPressPayRateLimit(
+  key: string,
+  now = Date.now(),
+): void {
+  const bucketKey = key || "anonymous";
+  for (const [existingKey, bucket] of wordpressPayBuckets) {
+    if (now - bucket.windowStart >= WORDPRESS_PAY_WINDOW_MS) {
+      wordpressPayBuckets.delete(existingKey);
+    }
+  }
+  const current = wordpressPayBuckets.get(bucketKey);
+  if (!current || now - current.windowStart >= WORDPRESS_PAY_WINDOW_MS) {
+    wordpressPayBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= WORDPRESS_PAY_LIMIT) {
+    throw new Error(
+      "Too many WordPress payment attempts. Wait a minute and retry.",
     );
   }
   current.count += 1;

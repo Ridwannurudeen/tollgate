@@ -1,0 +1,15 @@
+{
+  "steps": [
+    {
+      "step": "activatePlugin",
+      "pluginPath": "wordpress-plugin-tollgate/tollgate.php"
+    },
+    {
+      "step": "runPHP",
+      "code": {
+        "filename": "seed-tollgate-post.php",
+        "content": "<?php\nrequire_once '/wordpress/wp-load.php';\n\nupdate_option('tollgate_options', array(\n    'api_base' => 'http://127.0.0.1:3091',\n    'site_key' => 'test-site-key',\n    'creator_wallet' => '0x7777777777777777777777777777777777777777',\n    'default_price_atomic_usdc' => 2500,\n));\nupdate_option('permalink_structure', '/%postname%/');\n\n$existing = get_page_by_path('hello-tollgate', OBJECT, 'post');\nif ($existing) {\n    $post_id = $existing->ID;\n} else {\n    $post_id = wp_insert_post(array(\n        'post_title' => 'Hello Tollgate',\n        'post_name' => 'hello-tollgate',\n        'post_status' => 'publish',\n        'post_type' => 'post',\n        'post_content' => 'This content must stay behind the Tollgate paywall.',\n    ));\n}\nif (is_wp_error($post_id)) {\n    throw new Exception($post_id->get_error_message());\n}\nupdate_post_meta($post_id, '_tollgate_gated', '1');\nupdate_post_meta($post_id, '_tollgate_price_atomic_usdc', '2500');\nflush_rewrite_rules(false);\n"
+      }
+    }
+  ]
+}

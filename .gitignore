@@ -11,6 +11,7 @@ out/
 /*.pid
 /*.tsbuildinfo
 /next-env.d.ts
+/wordpress-plugin-tollgate/.playground-server.*.log
 
 # Env
 .env
