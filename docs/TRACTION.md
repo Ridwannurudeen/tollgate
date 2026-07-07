@@ -19,16 +19,39 @@ Representative on-chain payout tx (FeeRouter → creator split), verify on `http
 
 Each creator can withdraw with `FeeRouter.claim()`; CitePay and qdee have already claimed real balances on-chain.
 
-## Ledger totals (live, verified 2026-07-05)
+## ⭐ First cold-stranger organic signup — Aperture (2026-07-07)
+
+The single most important data point: **an unsolicited external user we do not know completed the entire creator flow end-to-end**, with zero hand-holding, using the low-friction onboarding shipped 2026-07-06/07.
+
+- Account `abinsupa` (`abinsupa@gmail.com`), custodial Circle W3S wallet `0x6c09…39c6` — **signed up with just an email, no wallet.**
+- Registered **2026-07-06 22:36:49 UTC**; **returned ~3 hours later** and, at **2026-07-07 01:40:40 UTC**, listed a photo.
+- Listing "praying" / "A traditional prayer" via **direct file upload** (`sourceKind: upload`) — real 1.6 MB original stored server-side, 29 KB watermarked preview generated, **live on `/aperture/browse` now** (link id `4b4dccde…`).
+
+Honest framing (n=1): this is proof the acquisition **funnel works cold** — email-only signup → return visit → upload → described, previewed, live listing — not evidence of demand at scale. But it crosses the threshold the project had been stuck at: **zero → one *organic* external user**. The prior traction (below) was reciprocal partners and self-generated volume; this is the first person with no relationship to us choosing to use it. The usability work (email signup, direct upload, per-photo descriptions) is what let a non-technical stranger through where the old wallet/URL friction would have bounced them.
+
+## Ledger totals — Citations (live, verified 2026-07-07, `/api/proof`)
 
 | Metric | Value |
 | --- | --- |
-| Answered queries | 83 |
-| Payout receipts | 230 |
-| Priced sources in registry | 21 (15 external, 6 seed fixtures) |
-| Verified external creators | 3 of 21 sources (the rest are probationary/unverified) |
-| Total USDC routed to creators | ~0.37 |
-| Ledger integrity (`verify:ledger`) | `ok: true`, 0 issues |
+| Total queries (hash-chained) | 160 |
+| Paid queries | 25 |
+| Payout receipts | 443 |
+| Total USDC routed to creators | ~0.7348 |
+| Unique payer wallets | 13 |
+| Unique creator wallets | 14 |
+| Registered external sources / seed fixtures | 17 / 11 |
+| Verified external creators | 3 (domain-proof; rest probationary/unverified) |
+| Ledger integrity (`/api/proof` → `ledger.verification`) | `ok: true`, 0 issues |
+
+Caveat kept honest: most of the 443 receipts are self-generated demand-engine volume, not independent readers — raw volume is up (~2× since 2026-07-05) but the cold-user count is still low single digits. The `abinsupa` signup above is the first that breaks that pattern.
+
+## Aperture usage (live, verified 2026-07-07)
+
+| Metric | Value |
+| --- | --- |
+| Creator accounts | 5 (incl. 1 cold stranger `abinsupa`, 1 external `MARC EMMANUEL`) |
+| Registered photos | 6 (mix of BYO-link and direct upload) |
+| Onboarding | email magic-link signup (no wallet), watermarked-preview pay-gating on Arc |
 
 ## External paying readers (2026-07-04, on-chain, all three settled)
 
