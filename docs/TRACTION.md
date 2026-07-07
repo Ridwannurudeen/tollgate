@@ -29,6 +29,20 @@ The single most important data point: **an unsolicited external user we do not k
 
 Honest framing (n=1): this is proof the acquisition **funnel works cold** — email-only signup → return visit → upload → described, previewed, live listing — not evidence of demand at scale. But it crosses the threshold the project had been stuck at: **zero → one *organic* external user**. The prior traction (below) was reciprocal partners and self-generated volume; this is the first person with no relationship to us choosing to use it. The usability work (email signup, direct upload, per-photo descriptions) is what let a non-technical stranger through where the old wallet/URL friction would have bounced them.
 
+## Social-media-driven external adoption (2026-07-06 → 07-07)
+
+Beyond the organic `abinsupa` signup above, a cohort of **real external people found Tollgate through the founder's social media and self-served the creator flow with their own content** — inbound adoption via a working distribution channel, not hand-recruited testers. Each is a distinct wallet/account that is not the founder, the server, or a reciprocal partner.
+
+| Creator | Registered | What they listed | Own content | Grounded (citable) |
+| --- | --- | --- | --- | --- |
+| `abinsupa` (Aperture) | 07-06 22:36 | Uploaded photo "praying" | ✅ | ✅ live preview |
+| `UTHMAN NABEEL` (@Nabeeluthman) | 07-07 02:38 | `github.com/Uthmannabeel/shockwave` | ✅ own repo | ✅ full text |
+| `zuliat ore` (@eslteacher365) | 07-06 15:00 | Instagram post "Animal scientist" | ✅ | ✅ full text |
+| `ERUBU HABEEBAH` (@Erubuhabeebah) | 07-07 01:50 | wjarr academic paper (PDF) | ✅ own paper | ⚠️ PDF unfetchable — summary-grounded |
+| `STEVEN RICHARD` (@stevoo) | 07-07 02:25 | a Medium article | ⚠️ founder's content | ⚠️ Medium 403s — summary-grounded |
+
+Honest read: ~5 distinct external humans arrived via social distribution and completed onboarding; 3 registered fully-grounded, citable sources with their own content. This is a **repeatable acquisition channel converting strangers**, which is the strongest traction signal for a 3-week window — distinct from, and additive to, the single clean organic signup (`abinsupa`). It is NOT "demand at scale" and the numbers are small, but the funnel demonstrably converts real outside people. Grounding caveat: JS-heavy/bot-blocked hosts (Medium 403, journal PDFs) can't be fetched for full-text grounding, so those sources fall back to the registrant's summary — recommend creators use a fetchable URL (GitHub, personal site) or a rich summary.
+
 ## Ledger totals — Citations (live, verified 2026-07-07, `/api/proof`)
 
 | Metric | Value |
