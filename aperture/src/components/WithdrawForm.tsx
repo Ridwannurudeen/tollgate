@@ -9,11 +9,44 @@ type WithdrawFormProps = {
 };
 
 function formatUsdc(value: string | null): string {
-  if (!value) return "unavailable";
-  return (Number(value) / 1_000_000).toLocaleString("en-US", {
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 6,
-  });
+  if (!isAtomicAmount(value)) return "unavailable";
+  const atomic = BigInt(value);
+  const whole = atomic / 1_000_000n;
+  const fraction = (atomic % 1_000_000n)
+    .toString()
+    .padStart(6, "0")
+    .replace(/0+$/, "")
+    .padEnd(4, "0");
+  return `${whole.toLocaleString("en-US")}.${fraction}`;
+}
+
+function isAtomicAmount(value: string | null): value is string {
+  return typeof value === "string" && /^[0-9]+$/.test(value);
+}
+
+function portionAmount(
+  balanceAtomicUsdc: string | null,
+  percent: number,
+): string {
+  if (!isAtomicAmount(balanceAtomicUsdc)) return "";
+  const balance = BigInt(balanceAtomicUsdc);
+  if (balance <= 0n || percent <= 0) return "";
+  const amount = (balance * BigInt(percent)) / 100n;
+  return (amount > 0n ? amount : 1n).toString();
+}
+
+function selectedPercent(
+  amountAtomicUsdc: string,
+  balanceAtomicUsdc: string | null,
+) {
+  if (!isAtomicAmount(amountAtomicUsdc) || !isAtomicAmount(balanceAtomicUsdc)) {
+    return 0;
+  }
+  const amount = BigInt(amountAtomicUsdc);
+  const balance = BigInt(balanceAtomicUsdc);
+  if (amount <= 0n || balance <= 0n) return 0;
+  const percent = Number((amount * 100n) / balance);
+  return Math.max(0, Math.min(100, percent));
 }
 
 function arcscanTxUrl(tx: string): string {
@@ -36,6 +69,18 @@ export function WithdrawForm({
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState("");
   const [transaction, setTransaction] = useState("");
+  const balanceAvailable =
+    isAtomicAmount(balanceAtomicUsdc) && BigInt(balanceAtomicUsdc) > 0n;
+  const selectedShare = selectedPercent(amountAtomicUsdc, balanceAtomicUsdc);
+
+  function selectPortion(percent: number) {
+    if (percent <= 0) {
+      setAmountAtomicUsdc("");
+      return;
+    }
+    const nextAmount = portionAmount(balanceAtomicUsdc, percent);
+    if (nextAmount) setAmountAtomicUsdc(nextAmount);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +172,46 @@ export function WithdrawForm({
         <span className="hint">
           USDC uses 6 decimals; 2500 means 0.0025 USDC.
         </span>
+        <div className="amountControls">
+          <div className="quickAmountGrid" aria-label="Withdraw portion">
+            {[25, 50, 75].map((percent) => (
+              <button
+                aria-pressed={selectedShare === percent}
+                disabled={!balanceAvailable || pending}
+                key={percent}
+                onClick={() => selectPortion(percent)}
+                type="button"
+              >
+                {percent}%
+              </button>
+            ))}
+            <button
+              aria-pressed={selectedShare === 100}
+              disabled={!balanceAvailable || pending}
+              onClick={() => selectPortion(100)}
+              type="button"
+            >
+              Max
+            </button>
+          </div>
+          <input
+            aria-label="Select withdraw percentage"
+            className="amountSlider"
+            disabled={!balanceAvailable || pending}
+            max="100"
+            min="0"
+            onChange={(event) =>
+              selectPortion(Number.parseInt(event.target.value, 10))
+            }
+            step="1"
+            type="range"
+            value={selectedShare}
+          />
+          <span className="amountSummary">
+            {selectedShare}% of balance - {formatUsdc(amountAtomicUsdc || null)}{" "}
+            USDC
+          </span>
+        </div>
         <input
           inputMode="numeric"
           onChange={(event) => setAmountAtomicUsdc(event.target.value)}
@@ -154,7 +239,11 @@ export function WithdrawForm({
           {transaction && (
             <>
               {" "}
-              <a href={arcscanTxUrl(transaction)} rel="noreferrer" target="_blank">
+              <a
+                href={arcscanTxUrl(transaction)}
+                rel="noreferrer"
+                target="_blank"
+              >
                 View tx
               </a>
             </>
