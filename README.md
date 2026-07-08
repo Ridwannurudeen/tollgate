@@ -16,15 +16,15 @@ Tollgate turns reuse into revenue: one Arc settlement core, six integration surf
 
 ## Traction snapshot (live, refresh via `/api/proof` before submission)
 
-| Metric                  | Live source                          | Value (as of 2026-07-07)          |
+| Metric                  | Live source                          | Value (as of 2026-07-08)          |
 | ----------------------- | ------------------------------------- | ----------------------------------- |
 | External sources        | `/api/proof` (`traction`)             | 20                                  |
 | Seed/fixture sources     | `/api/proof` (`traction`)             | 11                                  |
 | Paid queries            | `/api/proof` (`traction`)             | 25                                  |
-| Payout receipts         | `/api/proof` (`traction`)             | 458                                 |
+| Payout receipts         | `/api/proof` (`traction`)             | 459                                 |
 | Unique payer wallets    | `/api/proof` (`traction`)             | 13                                  |
 | Unique creator wallets  | `/api/proof` (`traction`)             | 14                                  |
-| Total test USDC routed  | `/api/proof` (`traction`)             | ~0.758                              |
+| Total test USDC routed  | `/api/proof` (`traction`)             | ~0.7608                             |
 | Ledger integrity        | `/api/proof` (`ledger.verification`)  | `ok: true`, 0 issues                |
 | Aperture listings       | `/aperture/api/links`                 | 10 (photo + video, link + upload)   |
 
@@ -71,7 +71,7 @@ node scripts/export-proof-pack.mjs
 - Unverified external sources escrow by default; set `TOLLGATE_ESCROW_UNVERIFIED=0` only for trusted local demos.
 - Sources whose creator controls neither the content's hosting nor a domain (e.g. a paper on a third-party journal) can't clear meta-tag/DNS verification; a lighter, honestly-badged "creator-claimed" self-attestation tier exists for that case — see `docs/ROADMAP.md`'s verification-ladder section. It never sets the strong `verifiedCreator` flag.
 - Public traction numbers must be refreshed from live endpoints before submission; do not infer them from seed data.
-- Aperture's download gate returns real x402 requirements and supports verified/local-proof unlock tests locally; settled x402 and FeeRouter payout runs need the facilitator/Gateway and funded Aperture payer credentials.
+- Aperture's download gate returns real x402 requirements and supports verified/local-proof unlock tests locally. FeeRouter payout settlement is now live for the Aperture/Immich path (funded payer key configured); settled `x402` runs specifically still need the facilitator/Gateway credentials noted above.
 - The PeerTube plugin (`/video`) requires the operator to run their own PeerTube instance with the plugin installed; it is not a self-serve path for a typical creator — use Aperture's direct video upload instead.
 - Jellyfin live FeeRouter settlement is currently proven by a fixture PlaybackStart/PlaybackStop replay against the public sidecar endpoint; a real Jellyfin Webhook plugin event is still pending and is labeled as such in `/jellyfin/api/proof`.
 
