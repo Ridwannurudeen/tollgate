@@ -4,11 +4,10 @@ import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
 import { arcscanTxUrl } from "@/lib/format";
 import { readLedger, verifyLedgerIntegrity } from "@/lib/ledger";
+import { PEERTUBE_FEE_ROUTER_TX } from "@/lib/peertube-proof";
 
 export const dynamic = "force-dynamic";
 
-const PEERTUBE_PAYOUT_TX =
-  "0x1ed2e7caa90964100d843095acc4f3e5c5f5bf9203850e91d2cab8f838c1a49d";
 const FEE_ROUTER = "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59";
 
 type PluginPackage = {
@@ -89,9 +88,10 @@ export default async function VideoPage() {
             <p className="eyebrow">integration 03 / PeerTube</p>
             <h2>Gate a download, route USDC, write a receipt.</h2>
             <p className="hero-text">
-              {pluginPackage.description} The same settlement primitive behind
-              paid citations and photo licensing can attach to a self-hosted
-              video community without upstream changes.
+              {pluginPackage.description} Tollgate does not host a public
+              PeerTube instance today; this page mirrors the local Docker
+              validation and the shared Arc FeeRouter rail an operator can
+              attach to their own PeerTube server.
             </p>
           </div>
         </section>
@@ -114,8 +114,8 @@ export default async function VideoPage() {
             <strong>{pluginPackage.engines?.node ?? ">=20"}</strong>
           </div>
           <div className="metric wide">
-            <span>settlement</span>
-            <strong>USDC on Arc</strong>
+            <span>public instance</span>
+            <strong>not hosted</strong>
           </div>
         </section>
 
@@ -133,14 +133,14 @@ export default async function VideoPage() {
             </strong>
           </div>
           <div className="evidence-row">
-            <span>creator payout tx (plugin FeeRouter.pay)</span>
+            <span>shared FeeRouter rail tx</span>
             <strong>
               <a
-                href={arcscanTxUrl(PEERTUBE_PAYOUT_TX)}
+                href={arcscanTxUrl(PEERTUBE_FEE_ROUTER_TX)}
                 target="_blank"
                 rel="noreferrer"
               >
-                {PEERTUBE_PAYOUT_TX}
+                {PEERTUBE_FEE_ROUTER_TX}
               </a>
             </strong>
           </div>
@@ -161,17 +161,21 @@ export default async function VideoPage() {
             </strong>
           </div>
           <div className="evidence-row">
-            <span>proof endpoint</span>
-            <strong>/plugins/tollgate/router/proof</strong>
+            <span>proof mirror</span>
+            <strong>
+              <a href="/plugins/tollgate/router/proof">
+                /plugins/tollgate/router/proof
+              </a>
+            </strong>
           </div>
           <div className="evidence-row">
             <span>plugin validation</span>
             <strong>
-              Download gating, config, and /router/proof are validated against
-              a running PeerTube 8.2.2 instance (demo/VALIDATION.md); the
-              plugin's own payout routine settled the creator payout above on
-              Arc, routing USDC to the creator's FeeRouter split (claimable,
-              like every Tollgate lane).
+              Download gating, config, and /router/proof are validated against a
+              running local PeerTube demo instance (demo/VALIDATION.md). That
+              validation ran with payouts disabled and produced zero plugin
+              receipts. The tx above proves the shared FeeRouter rail through
+              plugin settlement code, not a public PeerTube-instance receipt.
             </strong>
           </div>
         </section>
@@ -210,8 +214,9 @@ export default async function VideoPage() {
               </span>
               <h3>Verify receipts</h3>
               <p>
-                The plugin proof router exposes hash-chained receipts, with
-                Arcscan links once operator settlement is enabled.
+                A live operator instance exposes hash-chained plugin receipts,
+                with Arcscan links once its own operator key and creator wallet
+                mapping are configured.
               </p>
             </article>
           </div>

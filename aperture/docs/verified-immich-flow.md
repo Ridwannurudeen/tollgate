@@ -49,3 +49,15 @@ That response includes the assets and each asset `ownerId`.
 `/etc/nginx/sites-available/immich.gudman.xyz.conf` exists, but the site was not enabled in `/etc/nginx/sites-enabled` during verification. Requests with host `immich.gudman.xyz` were handled by the default `agentbond` server block and returned `502`.
 
 Public HTTPS still needs DNS plus nginx enable/reload before judges can access Immich directly.
+
+## 2026-07-08 Public Surface Recheck
+
+`immich.gudman.xyz` no longer resolves in public DNS, so enabling the existing
+nginx vhost alone would not make the standalone Immich hostname reachable. The
+current public surface is Tollgate-hosted instead:
+
+- `https://tollgate.gudman.xyz/immich` explains the Immich sidecar status.
+- `https://tollgate.gudman.xyz/immich/api/server/config` reaches the live local
+  Immich API through nginx.
+- `https://tollgate.gudman.xyz/aperture/api/proof` remains the authoritative
+  Aperture/Immich proof pack for the shared-link download ledger.

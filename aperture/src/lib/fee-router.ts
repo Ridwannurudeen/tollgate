@@ -153,10 +153,11 @@ function feeRouterEnabled(options: FeeRouterRouteOptions): boolean {
 function feeRouterPrivateKey(options: FeeRouterRouteOptions): Hex {
   const privateKey =
     options.privateKey ??
-    (process.env.APERTURE_FEE_ROUTER_PRIVATE_KEY as Hex | undefined);
+    (process.env.APERTURE_FEE_ROUTER_PRIVATE_KEY as Hex | undefined) ??
+    (process.env.FACILITATOR_PRIVATE_KEY as Hex | undefined);
   if (!privateKey) {
     throw new Error(
-      "APERTURE_FEE_ROUTER_PRIVATE_KEY is required when FeeRouter settlement is enabled.",
+      "APERTURE_FEE_ROUTER_PRIVATE_KEY or FACILITATOR_PRIVATE_KEY is required when FeeRouter settlement is enabled.",
     );
   }
   return privateKey;

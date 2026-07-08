@@ -2,7 +2,7 @@
 
 **Creators do not get paid for how their work is actually used.** A writer earns nothing when an AI cites their article; a photographer earns nothing when someone downloads their photo. Per-use payments were always too small to clear, so the world defaulted to subscriptions or nothing. Nanopayments on Arc remove that floor.
 
-Tollgate turns reuse into revenue: one Arc settlement core, three integrations, and proof pages that bind each paid use to a hash-linked receipt.
+Tollgate turns reuse into revenue: one Arc settlement core, six integration surfaces, and proof pages that bind each paid use to a hash-linked receipt.
 
 ## Judge path: 5-minute review
 
@@ -12,6 +12,7 @@ Tollgate turns reuse into revenue: one Arc settlement core, three integrations, 
 4. Open `https://tollgate.gudman.xyz/aperture` — sign up with just an email (no wallet), list a photo or video (paste a link or upload a file directly), and see the watermarked preview + gated pay-to-unlock page it creates.
 5. Open the Aperture dashboard (`/aperture/dashboard`) — one login aggregates a creator's Aperture photo/video earnings and Citations citation earnings by wallet, with a withdraw flow for custodial (email-signup) creators to move funds to their own address, and simple buyer/seller messaging on each listing.
 6. Open `https://tollgate.gudman.xyz/video` for the PeerTube plugin proof surface — a separate, optional integration for operators already running their own PeerTube instance; most creators use Aperture's direct video upload instead (step 4), which needs no PeerTube install.
+7. Open `https://tollgate.gudman.xyz/immich`, `https://tollgate.gudman.xyz/jellyfin`, and `https://tollgate.gudman.xyz/wordpress/register` for the self-hosted photo, VOD, and publisher plugin proof surfaces.
 
 ## Traction snapshot (live, refresh via `/api/proof` before submission)
 
@@ -72,16 +73,20 @@ node scripts/export-proof-pack.mjs
 - Public traction numbers must be refreshed from live endpoints before submission; do not infer them from seed data.
 - Aperture's download gate returns real x402 requirements and supports verified/local-proof unlock tests locally; settled x402 and FeeRouter payout runs need the facilitator/Gateway and funded Aperture payer credentials.
 - The PeerTube plugin (`/video`) requires the operator to run their own PeerTube instance with the plugin installed; it is not a self-serve path for a typical creator — use Aperture's direct video upload instead.
+- Jellyfin live FeeRouter settlement is currently proven by a fixture PlaybackStart/PlaybackStop replay against the public sidecar endpoint; a real Jellyfin Webhook plugin event is still pending and is labeled as such in `/jellyfin/api/proof`.
 
 ## Apps
 
-Tollgate is one settlement core with three integrations on real open-source creator communities — feeds, photo/video, and video-via-PeerTube. This repo holds them as independent packages:
+Tollgate is one settlement core with six integration surfaces on real open-source creator communities — feeds, Aperture photo/video, Immich, PeerTube, Jellyfin, and WordPress. This repo holds them as independent packages:
 
 | Package | Community | What it does | Live / proof |
 | --- | --- | --- | --- |
 | [`citations/`](./citations) | AI answer engines (feeds/RSS) | An autonomous answer agent buys the sources it cites and pays each creator per citation. | `https://tollgate.gudman.xyz` |
 | [`aperture/`](./aperture) | Self-serve creators, plus self-hosted Immich | A self-serve photo/video licensing product (email signup, upload or link, watermarked preview, x402 pay-gate, unified dashboard, withdraw) that also runs as a permissionless sidecar for Immich shared-link downloads. | `https://tollgate.gudman.xyz/aperture` |
-| [`peertube-plugin-tollgate/`](./peertube-plugin-tollgate) | PeerTube (video) | A permissionless PeerTube plugin gates video downloads and exposes config/proof endpoints for per-download USDC routing; plugin-triggered creator payout proven on Arc (routes to the creator's claimable FeeRouter split). Published as `peertube-plugin-tollgate@0.1.0`; local-path install remains supported for self-hosted tests. Requires the operator to run their own PeerTube instance. | [`/video`](https://tollgate.gudman.xyz/video), plugin creator-payout tx `0x1ed2e7ca...c1a49d` (truncated; full hash in `peertube-plugin-tollgate`'s own docs) |
+| [`aperture/`](./aperture) | Immich (photo library) | The legacy Immich sidecar path watches shared-link archive downloads and maps asset owners to creator wallets. The `immich.gudman.xyz` DNS target is not configured today, so the public surface is Tollgate-hosted. | [`/immich`](https://tollgate.gudman.xyz/immich), `/immich/api/server/config`, `/aperture/api/proof` |
+| [`peertube-plugin-tollgate/`](./peertube-plugin-tollgate) | PeerTube (video) | A permissionless PeerTube plugin gates video downloads and exposes config/proof endpoints for per-download USDC routing. The plugin is published as `peertube-plugin-tollgate@0.1.0` and locally validated; the listed Arc tx is shared FeeRouter rail proof, not a completed plugin-triggered payout. Requires the operator to run their own PeerTube instance. | [`/video`](https://tollgate.gudman.xyz/video), FeeRouter routing tx `0x1ed2e7ca...c1a49d` |
+| [`jellyfin-sidecar/`](./jellyfin-sidecar) | Jellyfin (VOD) | A Webhook sidecar maps Jellyfin PlaybackStart/PlaybackStop events to watched minutes, hash-linked receipts, and FeeRouter payouts in live mode. The current public FeeRouter tx is labeled as a fixture webhook replay until a real Jellyfin plugin event is recorded. | [`/jellyfin`](https://tollgate.gudman.xyz/jellyfin), `/jellyfin/api/proof` |
+| [`wordpress-plugin-tollgate/`](./wordpress-plugin-tollgate) | WordPress (publishers) | A plugin gates selected posts, calls Tollgate's hosted settlement API, and records paid reads against publisher wallets. | [`/wordpress/register`](https://tollgate.gudman.xyz/wordpress/register), `/api/wordpress/proof` |
 
 **Unified overview + live proof:** `https://tollgate.gudman.xyz/core`
 

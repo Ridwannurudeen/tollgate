@@ -13,6 +13,12 @@ export const dynamic = "force-dynamic";
 const FEE_ROUTER = "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59";
 const ARC_EXPLORER = "https://testnet.arcscan.app";
 const APERTURE_PROOF_URL = "https://tollgate.gudman.xyz/aperture/api/proof";
+const PEERTUBE_PROOF_URL =
+  "https://tollgate.gudman.xyz/plugins/tollgate/router/proof";
+const JELLYFIN_PROOF_URL =
+  process.env.JELLYFIN_PROOF_URL ??
+  "https://tollgate.gudman.xyz/jellyfin/api/proof";
+const WORDPRESS_PROOF_URL = "https://tollgate.gudman.xyz/api/wordpress/proof";
 
 type ApertureProof = {
   verification: { ok: boolean; receiptCount: number; latestHash: string };
@@ -31,6 +37,54 @@ type ApertureProof = {
   }[];
 };
 
+type WordPressProof = {
+  ledger: { valid: boolean; wordpressReceiptCount: number };
+  receipts: { amountAtomicUsdc: number; settlementMode: string }[];
+  queries: { id: string }[];
+};
+
+type PeerTubeProof = {
+  status: string;
+  publicPeerTubeInstanceMounted: boolean;
+  publicInstanceStatus: string;
+  plugin: {
+    package: string;
+    version: string;
+    peerTube: string;
+  };
+  settlementRail: {
+    feeRouterTxVerified: boolean;
+  };
+  localValidation: {
+    routerProofValidated: boolean;
+    pluginReceiptCountDuringLocalValidation: number;
+  };
+};
+
+type JellyfinProof = {
+  status: string;
+  verification: { ok: boolean; receiptCount: number };
+  totals: {
+    receipts: number;
+    registeredVideos: number;
+    totalWatchedMinutes: number;
+    totalAtomicUsdc: number;
+  };
+  settlement: {
+    feeRouterMode: "dry-run" | "live";
+    hasForumRoutedReceipt: boolean;
+    hasForumRoutedFixtureReceipt?: boolean;
+    hasForumRoutedNonFixtureReceipt?: boolean;
+  };
+  receiptOrigins?: {
+    fixtureReplayReceipts: number;
+    nonFixtureReceipts: number;
+    forumRoutedFixtureReceipts: number;
+    forumRoutedNonFixtureReceipts: number;
+    note: string;
+  };
+};
+
 async function loadAperture(): Promise<ApertureProof | null> {
   try {
     const res = await fetch(APERTURE_PROOF_URL, {
@@ -44,12 +98,55 @@ async function loadAperture(): Promise<ApertureProof | null> {
   }
 }
 
+async function loadWordPress(): Promise<WordPressProof | null> {
+  try {
+    const res = await fetch(WORDPRESS_PROOF_URL, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as WordPressProof;
+  } catch {
+    return null;
+  }
+}
+
+async function loadPeerTube(): Promise<PeerTubeProof | null> {
+  try {
+    const res = await fetch(PEERTUBE_PROOF_URL, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as PeerTubeProof;
+  } catch {
+    return null;
+  }
+}
+
+async function loadJellyfin(): Promise<JellyfinProof | null> {
+  try {
+    const res = await fetch(JELLYFIN_PROOF_URL, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as JellyfinProof;
+  } catch {
+    return null;
+  }
+}
+
 export default async function CorePage() {
-  const [ledger, sources, aperture] = await Promise.all([
-    readLedger(),
-    readSources(),
-    loadAperture(),
-  ]);
+  const [ledger, sources, aperture, peertube, jellyfin, wordpress] =
+    await Promise.all([
+      readLedger(),
+      readSources(),
+      loadAperture(),
+      loadPeerTube(),
+      loadJellyfin(),
+      loadWordPress(),
+    ]);
   const creators = summarizeCreators(ledger);
   const verification = verifyLedgerIntegrity(ledger);
   const citationRouted = ledger.receipts.reduce(
@@ -65,6 +162,28 @@ export default async function CorePage() {
   const uniqueCreatorWallets = new Set(
     ledger.receipts.map((receipt) => receipt.wallet.toLowerCase()),
   );
+  const wordpressRouted =
+    wordpress?.receipts.reduce(
+      (sum, receipt) => sum + receipt.amountAtomicUsdc,
+      0,
+    ) ?? 0;
+  const wordpressSites = new Set(
+    wordpress?.queries
+      .map((query) => query.id.split(":")[1])
+      .filter((siteId): siteId is string => Boolean(siteId)) ?? [],
+  );
+  const wordpressForumRouted =
+    wordpress?.receipts.some(
+      (receipt) => receipt.settlementMode === "forum-routed",
+    ) ?? false;
+  const peertubeVersion = peertube?.plugin.version ?? "0.1.0";
+  const peertubePackage =
+    peertube?.plugin.package ?? "peertube-plugin-tollgate";
+  const jellyfinRouted = jellyfin?.totals.totalAtomicUsdc ?? 0;
+  const jellyfinLiveWebhookReceipt =
+    jellyfin?.settlement.hasForumRoutedNonFixtureReceipt ?? false;
+  const jellyfinFixtureReplay =
+    jellyfin?.settlement.hasForumRoutedFixtureReceipt ?? false;
 
   return (
     <>
@@ -73,7 +192,7 @@ export default async function CorePage() {
         <header className="receipt-header">
           <div>
             <p className="eyebrow">tollgate · settlement core</p>
-            <h1>One nanopayment rail. Three ways creators get paid.</h1>
+            <h1>One nanopayment rail. Open-source communities get paid.</h1>
           </div>
           <Link className="wallet-button receipt-back" href="/">
             Citations app
@@ -102,8 +221,9 @@ export default async function CorePage() {
                 {FEE_ROUTER}
               </a>{" "}
               — so a writer cited by an AI, a photographer whose photo is
-              downloaded, and a PeerTube creator whose video is unlocked are
-              paid by the exact same plumbing.
+              downloaded, an Immich or Jellyfin operator, a PeerTube creator
+              whose video is unlocked, and a WordPress publisher whose post is
+              opened can all attach to the same settlement plumbing.
             </p>
           </div>
         </section>
@@ -191,7 +311,7 @@ export default async function CorePage() {
                 <strong>{ledger.receipts.length}</strong>
               </div>
               <div className="metric">
-                <span>creators with receipts</span>
+                <span>paid creators</span>
                 <strong>{creators.length}</strong>
               </div>
               <div className="metric wide">
@@ -259,34 +379,185 @@ export default async function CorePage() {
 
           <article className="integration-card">
             <div className="panel-heading">
-              <p className="eyebrow">integration 03 · video</p>
+              <p className="eyebrow">integration 03 · immich</p>
+              <h3>Immich sidecar</h3>
+            </div>
+            <p className="hero-text">
+              The original Aperture path watches Immich shared-link downloads
+              and turns each archive download into a creator receipt.
+            </p>
+            {aperture ? (
+              <>
+                <div className="metrics-band profile-metrics">
+                  <div className="metric">
+                    <span>receipts</span>
+                    <strong>{aperture.totals.receipts}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>asset owners</span>
+                    <strong>{aperture.totals.registeredOwners}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>API path</span>
+                    <strong>/immich/api</strong>
+                  </div>
+                  <div className="metric wide">
+                    <span>payments recorded</span>
+                    <strong>
+                      {formatDollars(aperture.totals.totalEarnedAtomicUsdc)}{" "}
+                      USDC
+                    </strong>
+                  </div>
+                </div>
+                <p className="eyebrow">
+                  {aperture.settlement.feeRouterEnabled
+                    ? "settling on-chain"
+                    : "local-proof"}{" "}
+                  · Tollgate-hosted API path
+                </p>
+              </>
+            ) : (
+              <p className="hero-text">Immich/Aperture stats unavailable.</p>
+            )}
+            <Link className="receipt-link" href="/immich">
+              Open Immich proof →
+            </Link>
+          </article>
+
+          <article className="integration-card">
+            <div className="panel-heading">
+              <p className="eyebrow">integration 04 · video</p>
               <h3>PeerTube plugin</h3>
             </div>
             <p className="hero-text">
-              A permissionless PeerTube plugin gates video downloads and pays
-              the creator per unlock with the same Arc USDC rail.
+              A permissionless PeerTube plugin gates video downloads. This
+              public page is a proof mirror for the validated Docker run and
+              shared FeeRouter rail; no public PeerTube instance is mounted here
+              yet.
             </p>
             <div className="metrics-band profile-metrics">
               <div className="metric">
                 <span>package</span>
-                <strong>peertube-plugin-tollgate</strong>
+                <strong title={peertubePackage}>published</strong>
               </div>
               <div className="metric">
                 <span>version</span>
-                <strong>0.1.0</strong>
+                <strong>{peertubeVersion}</strong>
               </div>
               <div className="metric">
-                <span>settlement</span>
-                <strong>per download</strong>
+                <span>public host</span>
+                <strong>
+                  {peertube?.publicPeerTubeInstanceMounted
+                    ? "live"
+                    : "not hosted"}
+                </strong>
               </div>
               <div className="metric wide">
-                <span>proof</span>
-                <strong>hash-chained receipts</strong>
+                <span>rail tx</span>
+                <strong>
+                  {peertube?.settlementRail.feeRouterTxVerified
+                    ? "verified"
+                    : "pending"}
+                </strong>
               </div>
             </div>
-            <p className="eyebrow">self-hosted PeerTube / Arc testnet</p>
+            <p className="eyebrow">
+              self-hosted PeerTube · published package · proof mirror
+            </p>
             <Link className="receipt-link" href="/video">
               Open video licensing →
+            </Link>
+          </article>
+
+          <article className="integration-card">
+            <div className="panel-heading">
+              <p className="eyebrow">integration 05 · jellyfin</p>
+              <h3>Jellyfin sidecar</h3>
+            </div>
+            <p className="hero-text">
+              A Jellyfin Webhook sidecar bills watched minutes, writes a
+              hash-linked receipt, and routes the creator payout through the
+              FeeRouter in live mode. The current public proof labels fixture
+              replays separately from real Jellyfin plugin events.
+            </p>
+            {jellyfin ? (
+              <>
+                <div className="metrics-band profile-metrics">
+                  <div className="metric">
+                    <span>receipts</span>
+                    <strong>{jellyfin.totals.receipts}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>videos</span>
+                    <strong>{jellyfin.totals.registeredVideos}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>minutes</span>
+                    <strong>{jellyfin.totals.totalWatchedMinutes}</strong>
+                  </div>
+                  <div className="metric wide">
+                    <span>payments recorded</span>
+                    <strong>{formatDollars(jellyfinRouted)} USDC</strong>
+                  </div>
+                </div>
+                <p className="eyebrow">
+                  {jellyfinLiveWebhookReceipt
+                    ? "FeeRouter webhook receipt"
+                    : jellyfinFixtureReplay
+                      ? "fixture FeeRouter replay"
+                      : jellyfin.status}{" "}
+                  · ledger {jellyfin.verification.ok ? "verified" : "issue"}
+                </p>
+              </>
+            ) : (
+              <p className="hero-text">Jellyfin stats unavailable.</p>
+            )}
+            <Link className="receipt-link" href="/jellyfin">
+              Open Jellyfin proof →
+            </Link>
+          </article>
+
+          <article className="integration-card">
+            <div className="panel-heading">
+              <p className="eyebrow">integration 06 · wordpress</p>
+              <h3>WordPress plugin</h3>
+            </div>
+            <p className="hero-text">
+              A WordPress plugin gates selected posts, calls Tollgate's hosted
+              settlement API, and records each paid read on the same Arc USDC
+              rail.
+            </p>
+            {wordpress ? (
+              <>
+                <div className="metrics-band profile-metrics">
+                  <div className="metric">
+                    <span>plugin</span>
+                    <strong>tollgate.zip</strong>
+                  </div>
+                  <div className="metric">
+                    <span>paid reads</span>
+                    <strong>{wordpress.ledger.wordpressReceiptCount}</strong>
+                  </div>
+                  <div className="metric">
+                    <span>publisher sites</span>
+                    <strong>{wordpressSites.size}</strong>
+                  </div>
+                  <div className="metric wide">
+                    <span>payments recorded</span>
+                    <strong>{formatDollars(wordpressRouted)} USDC</strong>
+                  </div>
+                </div>
+                <p className="eyebrow">
+                  upload zip + paste API key ·{" "}
+                  {wordpressForumRouted ? "settling on-chain" : "local-proof"} ·
+                  ledger {wordpress.ledger.valid ? "verified" : "issue"}
+                </p>
+              </>
+            ) : (
+              <p className="hero-text">WordPress stats unavailable.</p>
+            )}
+            <Link className="receipt-link" href="/wordpress/register">
+              Register a WordPress site →
             </Link>
           </article>
         </section>

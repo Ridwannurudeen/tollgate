@@ -1,14 +1,15 @@
 # Tollgate Jellyfin Sidecar
 
-Status: DOCKER-DRY-RUN-VALIDATED
+Status: LIVE-FEEROUTER-FIXTURE-REPLAY
 
-Readiness: READY-needs-real-Jellyfin-webhook-plugin-config
+Readiness: READY-needs-real-Jellyfin-webhook-plugin-event
 
 This package is a Jellyfin Webhook sidecar for Tollgate per-minute VOD accounting.
 It consumes PlaybackStart and PlaybackStop webhook events, maps Jellyfin item IDs
 to creator wallets from `data/registry.json`, computes watched minutes, writes a
 hash-chained receipt ledger, and routes settlement through a FeeRouter adapter
-that is dry-run only in Wave 3.1.
+that defaults to dry-run locally and can route real Arc USDC through FeeRouter
+when `JELLYFIN_FEE_ROUTER_MODE=live` is configured on the server.
 
 ## Verified Jellyfin Webhook Shape
 
@@ -52,7 +53,7 @@ Assumptions recorded in fixtures:
 2. Add a Generic destination with URL:
 
    ```text
-   http://<sidecar-host>:4317/webhooks/jellyfin
+   https://tollgate.gudman.xyz/jellyfin/api/webhooks/jellyfin
    ```
 
 3. Enable notification types: Playback Start and Playback Stop.
@@ -72,8 +73,8 @@ Jellyfin item ID and wallet:
   "videos": [
     {
       "itemId": "video-demo-001",
-      "title": "Demo Independent Film",
-      "displayName": "Demo Creator",
+      "title": "Fixture PlaybackStop Replay",
+      "displayName": "Fixture Creator",
       "wallet": "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
       "priceAtomicUsdcPerMinute": 2500,
       "approvalStatus": "operator-approved"
@@ -108,8 +109,33 @@ Environment:
 - `JELLYFIN_SESSIONS_PATH` default `data/sessions.json`
 - `JELLYFIN_USDC_ATOMIC_PER_MINUTE` default `2500`
 - `JELLYFIN_FEE_ROUTER_MODE` default `dry-run`
+- `JELLYFIN_FEE_ROUTER_PRIVATE_KEY` optional dedicated live-mode payer key
+- `LEPTONWEB_FEE_ROUTER_PRIVATE_KEY` fallback live-mode payer key when the
+  sidecar imports the existing Tollgate server environment
+- `JELLYFIN_ARC_RPC_URL` default `https://rpc.testnet.arc.network`
+- `JELLYFIN_ARC_CHAIN_ID` default `5042002`
+- `JELLYFIN_USDC_ADDRESS` default `0x3600000000000000000000000000000000000000`
+- `JELLYFIN_FEE_ROUTER_ADDRESS` default `0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59`
+- `JELLYFIN_FEE_ROUTER_SPLIT_REGISTRY_PATH` default `data/fee-router-splits.json`
 
-Wave 3.1 has no live-spend path. Any mode other than `dry-run` fails at startup.
+Live mode starts only when a FeeRouter private key is present. It creates or
+reuses a one-recipient FeeRouter split for the creator wallet, verifies the
+split on-chain, routes the watched-minute payout with `FeeRouter.pay`, and
+stores the resulting tx hashes in the receipt ledger. Dry-run remains the
+default for local development and Docker demos.
+
+Live deployment fixture replay verified on 2026-07-08:
+
+- Public proof: `https://tollgate.gudman.xyz/jellyfin/api/proof`
+- Public page: `https://tollgate.gudman.xyz/jellyfin`
+- FeeRouter pay tx from a `fixtures/jellyfin-playback-*.json` replay:
+  `0xd44b494f3a603f3590926d24e52773b288bc95e0c4558b36fbcc7935cdb6a73e`
+- Proof status: `LIVE-FEEROUTER-FIXTURE-REPLAY`
+
+This proves the sidecar can settle through FeeRouter in live mode, but it is not
+yet proof of a real Jellyfin server with the official Webhook plugin emitting a
+viewer event. The proof pack keeps that distinction visible through
+`receiptOrigins`.
 
 ## Docker Demo Kit
 
@@ -156,7 +182,9 @@ Duplicate PlaybackStop: created=false
 This validates the Docker wiring, sidecar HTTP surface, fixture webhook handling,
 hash-chained ledger, and dry-run FeeRouter adapter. It does not prove Jellyfin's
 Webhook plugin UI because the local container still needs first-run setup and
-plugin configuration. Live settlement remains disabled by design.
+plugin configuration. Server live mode is verified through
+`https://tollgate.gudman.xyz/jellyfin/api/proof` once the sidecar records a
+`forum-routed` receipt.
 
 ## Receipt Semantics
 

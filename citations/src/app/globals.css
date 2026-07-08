@@ -1655,6 +1655,16 @@ textarea:focus {
   margin: 0;
 }
 
+.integration-card .metrics-band.profile-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.integration-card .metric strong {
+  overflow-wrap: break-word;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .integration-card .receipt-link {
   font-size: 13px;
 }
@@ -2292,6 +2302,10 @@ textarea:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .integration-card .metrics-band.profile-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .metric.wide {
     grid-column: span 2;
   }
@@ -2362,6 +2376,10 @@ textarea:focus {
   .decision-summary,
   .profile-metrics,
   .metrics-band {
+    grid-template-columns: 1fr;
+  }
+
+  .integration-card .metrics-band.profile-metrics {
     grid-template-columns: 1fr;
   }
 

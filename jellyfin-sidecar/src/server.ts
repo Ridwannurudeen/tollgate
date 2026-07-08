@@ -42,7 +42,7 @@ function parseJsonBody(body: string): JellyfinWebhookPayload {
 }
 
 export function createSidecarServer(config: SidecarConfig = loadConfig()) {
-  const feeRouter = createFeeRouterAdapter(config.feeRouterMode);
+  const feeRouter = createFeeRouterAdapter(config);
 
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);

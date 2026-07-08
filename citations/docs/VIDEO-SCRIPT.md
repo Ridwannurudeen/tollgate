@@ -27,8 +27,8 @@
 **Say:** "That is the differentiator: creators are already getting paid, and the next step is turning those same external teams into paying readers."
 
 ### 1:50-2:20 - Three integrations, one settlement core
-**Show:** `tollgate.gudman.xyz/aperture` proof surface, then `tollgate.gudman.xyz/video` and the plugin creator-payout tx `0x1ed2e7...a49d`.
-**Say:** "The same settlement core attaches to three real creator communities. Citations pays writers when an AI answer cites them. Aperture pays photographers when shared Immich photos are downloaded. The PeerTube plugin gates video downloads and routes USDC through the same Arc FeeRouter — validated against a running PeerTube instance, with a plugin-triggered creator payout proven on Arc — routing USDC to the creator's claimable FeeRouter split."
+**Show:** `tollgate.gudman.xyz/aperture` proof surface, then `tollgate.gudman.xyz/video` and the shared FeeRouter rail tx `0x1ed2e7...a49d`.
+**Say:** "The same settlement core attaches to three real creator communities. Citations pays writers when an AI answer cites them. Aperture pays photographers when shared Immich photos are downloaded. The PeerTube plugin gates video downloads and exposes a proof router validated against a running local PeerTube instance. Tollgate is not hosting a public PeerTube instance today, so this page shows the plugin package, local validation, and the shared Arc FeeRouter rail proof."
 **Show:** `/core` or proof cards tying x402, Gateway, USDC, and FeeRouter together.
 **Say:** "One rail, three surfaces: feeds, photos, and video."
 
@@ -40,7 +40,7 @@
 
 ## Capture checklist
 - Keep the final cut under 2:45.
-- Do one live action on camera if possible: a paid question, an Aperture download proof, or a PeerTube plugin payout proof walkthrough.
+- Do one live action on camera if possible: a paid question, an Aperture download proof, or the PeerTube plugin proof-mirror walkthrough.
 - If the live query is risky, use `tollgate.gudman.xyz/answers/0xe7c1a7397fdbb323`.
 - Show at least one external creator page and one Arcscan success transaction.
 - Keep crypto jargon to the final settlement segment; before that, speak in creator/user language.

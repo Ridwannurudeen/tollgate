@@ -55,15 +55,19 @@ export type SessionStore = {
   sessions: ActivePlaybackSession[];
 };
 
-export type SettlementMode = "dry-run";
+export type SettlementMode = "dry-run" | "forum-routed";
 
 export type SettlementEvidence = {
   settlementMode: SettlementMode;
   paymentResource: string;
-  dryRun: true;
   wallet: Address;
   amountAtomicUsdc: number;
   feeRouterSplitId: string;
+  dryRun?: true;
+  payer?: Address;
+  transaction?: Hex;
+  feeRouterCreateSplitTx?: Hex;
+  feeRouterPayTx?: Hex;
 };
 
 export type FeeRouterSettlementInput = {

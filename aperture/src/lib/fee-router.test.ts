@@ -12,6 +12,14 @@ const TEST_KEY = generatePrivateKey();
 
 const RECIPIENT = "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03";
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+  process.env[name] = value;
+}
+
 type ContractCall = {
   functionName: string;
   args?: readonly unknown[];
@@ -86,9 +94,56 @@ describe("routeLicensePayment", () => {
   });
 
   it("requires a private key when enabled", async () => {
-    await expect(
-      routeLicensePayment(RECIPIENT, 2500, { enabled: true }),
-    ).rejects.toThrow("APERTURE_FEE_ROUTER_PRIVATE_KEY");
+    const originalApertureKey = process.env.APERTURE_FEE_ROUTER_PRIVATE_KEY;
+    const originalFacilitatorKey = process.env.FACILITATOR_PRIVATE_KEY;
+    delete process.env.APERTURE_FEE_ROUTER_PRIVATE_KEY;
+    delete process.env.FACILITATOR_PRIVATE_KEY;
+
+    try {
+      await expect(
+        routeLicensePayment(RECIPIENT, 2500, { enabled: true }),
+      ).rejects.toThrow("APERTURE_FEE_ROUTER_PRIVATE_KEY");
+    } finally {
+      restoreEnv("APERTURE_FEE_ROUTER_PRIVATE_KEY", originalApertureKey);
+      restoreEnv("FACILITATOR_PRIVATE_KEY", originalFacilitatorKey);
+    }
+  });
+
+  it("uses the facilitator key fallback when a dedicated Aperture key is absent", async () => {
+    const originalApertureKey = process.env.APERTURE_FEE_ROUTER_PRIVATE_KEY;
+    const originalFacilitatorKey = process.env.FACILITATOR_PRIVATE_KEY;
+    delete process.env.APERTURE_FEE_ROUTER_PRIVATE_KEY;
+    process.env.FACILITATOR_PRIVATE_KEY = TEST_KEY;
+
+    const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const createSplitAccounts: unknown[] = [];
+    const { publicClient, walletClient } = mockClients(
+      1_000_000n,
+      61n,
+      writes,
+      [],
+      createSplitAccounts,
+    );
+
+    try {
+      const evidence = await routeLicensePayment(RECIPIENT, 2500, {
+        enabled: true,
+        publicClient,
+        walletClient,
+        splitRegistryPath: registryPath,
+      });
+
+      expect(evidence?.settlementMode).toBe("forum-routed");
+      expect(accountAddress(createSplitAccounts[0])).toBe(
+        privateKeyToAccount(TEST_KEY).address,
+      );
+    } finally {
+      restoreEnv("APERTURE_FEE_ROUTER_PRIVATE_KEY", originalApertureKey);
+      restoreEnv("FACILITATOR_PRIVATE_KEY", originalFacilitatorKey);
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("settles via approve/createSplit/pay and pays the simulated split id", async () => {
