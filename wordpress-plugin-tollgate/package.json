@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:zip": "node scripts/build-zip.mjs",
     "test": "node --test tests/static.test.mjs",
-    "wp:test-env": "node tests/wp-env-smoke.mjs",
+    "wp:test-env": "node tests/wp-test-env.mjs",
     "wp:server": "node tests/playground-server.mjs",
     "wp:smoke": "node tests/playground-smoke.mjs"
   },

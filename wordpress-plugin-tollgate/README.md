@@ -19,15 +19,25 @@ Static checks:
 npm test
 ```
 
-Docker-backed WordPress/PHP/MySQL runtime smoke test:
+Build the uploadable WordPress plugin package:
+
+```bash
+npm run build:zip
+```
+
+This writes `dist/tollgate.zip` with only `tollgate/tollgate.php` and `tollgate/readme.txt`, ready for WordPress's Plugins -> Add New -> Upload Plugin flow.
+
+To publish the zip for download from the `/wordpress/register` page, run `npm run sync:wordpress-zip` in `citations/` after `build:zip` -- this copies `dist/tollgate.zip` to `citations/public/tollgate.zip`. Re-run both after any `tollgate.php`/`readme.txt` change and before deploying.
+
+WordPress/PHP runtime smoke test:
 
 ```bash
 npm run wp:test-env
 ```
 
-This uses WordPress's `@wordpress/env` tool and requires Docker to be installed and running. The lockfile currently resolves `@wordpress/env` to `11.10.0`. The `.wp-env.json` config mounts this plugin with `plugins: [ "." ]` on port `8897`.
+This command prefers WordPress's Docker-backed `@wordpress/env` runtime when Docker is installed and running, then falls back to WordPress Playground when Docker is unavailable. The lockfile currently resolves `@wordpress/env` to `11.10.0`. The `.wp-env.json` config mounts this plugin with `plugins: [ "." ]` on port `8897`.
 
-The check starts `wp-env`, activates the mounted plugin through WP-CLI, configures a local mock Tollgate API, logs into wp-admin, renders Settings -> Tollgate, opens the seeded post editor, saves the Tollgate meta box, verifies the saved post meta, and POSTs the plugin REST pay route at `/wp-json/tollgate/v1/pay/:id`. It does not call the live hosted Tollgate API.
+In Docker mode, the check starts `wp-env`, activates the mounted plugin through WP-CLI, configures a local mock Tollgate API, logs into wp-admin, renders Settings -> Tollgate, opens the seeded post editor, saves the Tollgate meta box, verifies the saved post meta, and POSTs the plugin REST pay route at `/wp-json/tollgate/v1/pay/:id`. It does not call the live hosted Tollgate API. Run `node tests/wp-env-smoke.mjs` directly when you specifically want to require the Docker runtime.
 
 Docker-free Playground smoke test:
 
@@ -35,11 +45,11 @@ Docker-free Playground smoke test:
 npm run wp:smoke
 ```
 
-The Playground smoke test uses `@wp-playground/cli`, which runs WordPress through PHP-WASM from Node. It does not require local PHP, Docker, MySQL, or Apache, so it remains the runnable local WordPress runtime check when Docker is unavailable. The test auto-mounts and activates this plugin, seeds a gated post, uses a local mock Tollgate API, then verifies the archive page does not leak gated content, the human paywall, AI-agent HTTP 402 response, and plugin REST pay route.
+The Playground smoke test uses `@wp-playground/cli`, which runs WordPress through PHP-WASM from Node. It does not require local PHP, Docker, MySQL, or Apache, so it remains the runnable local WordPress runtime check when Docker is unavailable. The test auto-mounts and activates this plugin, seeds a gated post, uses a local mock Tollgate API, then verifies the archive page does not leak gated content, the human paywall, AI-agent HTTP 402 response, and plugin REST pay route. Run `npm run wp:smoke` when you explicitly want the Playground path.
 
 Manual hosted-API end-to-end check:
 
-1. Run `npm run wp:test-env` once on a machine with Docker to verify the plugin activates and the wp-admin/REST cycle works in a disposable WordPress install.
+1. Run `npm run wp:test-env` to verify the plugin activates and the gate/paywall/REST-payment cycle works in a disposable WordPress install. The command uses Docker when available and Playground otherwise.
 2. Start the environment with `npx wp-env start`.
 3. Register the local site with the hosted Tollgate API and paste the returned site API key under Settings -> Tollgate. Do not commit the key.
 4. Open a gated post, use the pay button, and verify the hosted API records the settlement/receipt.

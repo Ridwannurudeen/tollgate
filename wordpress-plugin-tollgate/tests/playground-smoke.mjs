@@ -147,6 +147,34 @@ flush_rewrite_rules(false);
   };
 }
 
+// Playground boots its PHP workers asynchronously and prints
+// "Ready! WordPress is running on ..." once they can serve requests. Probing
+// the HTTP server before that line appears sends requests into a
+// still-initializing worker pool, which faults the CLI's internal
+// request-router ("Error: fetch failed") and can crash the whole process.
+// Wait for the readiness line (or the process to die) before any HTTP probe.
+async function waitForReadyLine(processHandle, logs) {
+  const started = Date.now();
+  while (Date.now() - started < 240_000) {
+    if (processHandle.exitCode !== null) {
+      throw new Error(
+        `Playground exited before printing its readiness line.\n${logs
+          .slice(-80)
+          .join("")}`,
+      );
+    }
+    if (/Ready! WordPress is running/i.test(logs.join(""))) {
+      // Small grace so the just-started workers settle before the first probe.
+      await delay(1500);
+      return;
+    }
+    await delay(500);
+  }
+  throw new Error(
+    `Timed out waiting for Playground readiness line.\n${logs.slice(-80).join("")}`,
+  );
+}
+
 async function waitForJson(url, processHandle, logs) {
   const started = Date.now();
   let lastError = null;
@@ -232,23 +260,16 @@ async function waitForSeededPost(baseUrl, processHandle, logs) {
   );
 }
 
-async function main() {
-  const api = await mockTollgateApi();
-  const port = await freePort();
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const tmp = await mkdtemp(path.join(tmpdir(), "tollgate-playground-"));
-  const blueprintPath = path.join(tmp, "blueprint.json");
-  const logs = [];
-  let playground;
-
-  try {
-    await writeFile(
-      blueprintPath,
-      `${JSON.stringify(blueprint(api.baseUrl), null, 2)}\n`,
-      "utf8",
-    );
-
-    playground = spawn(
+// The Playground CLI downloads the WordPress/PHP WASM assets on boot. When
+// that network fetch hiccups the CLI dies with "Error: fetch failed" before it
+// ever prints its readiness line. A successful attempt warms the on-disk asset
+// cache, so retrying the whole spawn recovers reliably (and boots fast once
+// cached). Retry boot up to `attempts` times before giving up.
+async function bootReadyPlayground(port, baseUrl, blueprintPath, logs) {
+  const attempts = 3;
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const playground = spawn(
       process.execPath,
       [
         cliEntry,
@@ -269,6 +290,38 @@ async function main() {
     playground.stdout.on("data", (chunk) => logs.push(chunk.toString("utf8")));
     playground.stderr.on("data", (chunk) => logs.push(chunk.toString("utf8")));
 
+    try {
+      await waitForReadyLine(playground, logs);
+      return playground;
+    } catch (error) {
+      lastError = error;
+      if (playground.exitCode === null) playground.kill();
+      if (attempt < attempts) {
+        logs.length = 0;
+        await delay(2000);
+      }
+    }
+  }
+  throw lastError ?? new Error("Playground failed to boot.");
+}
+
+async function main() {
+  const api = await mockTollgateApi();
+  const port = await freePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const tmp = await mkdtemp(path.join(tmpdir(), "tollgate-playground-"));
+  const blueprintPath = path.join(tmp, "blueprint.json");
+  const logs = [];
+  let playground;
+
+  try {
+    await writeFile(
+      blueprintPath,
+      `${JSON.stringify(blueprint(api.baseUrl), null, 2)}\n`,
+      "utf8",
+    );
+
+    playground = await bootReadyPlayground(port, baseUrl, blueprintPath, logs);
     await waitForTollgateNamespace(baseUrl, playground, logs);
 
     const post = await waitForSeededPost(baseUrl, playground, logs);

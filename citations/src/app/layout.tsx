@@ -42,6 +42,7 @@ export default function RootLayout({
                 <p className="footer-head">Product</p>
                 <a href="/">Landing</a>
                 <a href="/register">Register</a>
+                <a href="/wordpress/register">WordPress publishers</a>
                 <a href="/sources">Sources</a>
                 <a href="/ask">Ask the AI</a>
                 <a href="/creators">Creators</a>

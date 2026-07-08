@@ -15,3 +15,5 @@ npm-debug.log*
 .next-gateway-*.log
 .next-start-*.log
 wallets/local-keystore.dpapi.json
+
+public/tollgate.zip
