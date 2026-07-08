@@ -48,9 +48,9 @@ export default function RootLayout({
                 <a href="/creators">Creators</a>
                 <a href="/core">Settlement core</a>
                 <a href="/aperture">Photo licensing</a>
-                <a href="/immich">Immich proof</a>
-                <a href="/video">Video licensing</a>
-                <a href="/jellyfin">Jellyfin proof</a>
+                <a href="/immich/register">Connect Immich</a>
+                <a href="/video/register">Install PeerTube</a>
+                <a href="/jellyfin/register">Connect Jellyfin</a>
               </div>
               <div className="footer-col">
                 <p className="footer-head">Proof</p>

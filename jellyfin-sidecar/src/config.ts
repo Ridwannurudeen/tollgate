@@ -6,8 +6,10 @@ export type FeeRouterMode = "dry-run" | "live";
 export type SidecarConfig = {
   port: number;
   registryPath: string;
+  operatorsPath: string;
   ledgerPath: string;
   sessionsPath: string;
+  publicWebhookUrl: string;
   defaultAtomicUsdcPerMinute: number;
   feeRouterMode: FeeRouterMode;
   feeRouterPrivateKey?: Hex;
@@ -88,6 +90,11 @@ export function loadConfig(
       env.JELLYFIN_REGISTRY_PATH,
       "data/registry.json",
     ),
+    operatorsPath: resolvePath(
+      cwd,
+      env.JELLYFIN_OPERATORS_PATH,
+      "data/operators.json",
+    ),
     ledgerPath: resolvePath(cwd, env.JELLYFIN_LEDGER_PATH, "data/ledger.json"),
     sessionsPath: resolvePath(
       cwd,
@@ -98,6 +105,9 @@ export function loadConfig(
       env.JELLYFIN_USDC_ATOMIC_PER_MINUTE,
       2500,
     ),
+    publicWebhookUrl:
+      env.JELLYFIN_PUBLIC_WEBHOOK_URL ??
+      "https://tollgate.gudman.xyz/jellyfin/api/webhooks/jellyfin",
     feeRouterMode,
     feeRouterPrivateKey,
     feeRouterRpcUrl:

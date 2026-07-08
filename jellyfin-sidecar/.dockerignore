@@ -1,6 +1,8 @@
 node_modules
 dist
 data/registry.json
+data/operators.json
 data/ledger.json
 data/sessions.json
+data/fee-router-splits.json
 *.log

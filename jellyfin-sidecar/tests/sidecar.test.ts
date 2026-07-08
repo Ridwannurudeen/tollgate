@@ -1,8 +1,10 @@
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, type SidecarConfig } from "../src/config.js";
 import { DryRunFeeRouterAdapter } from "../src/fee-router.js";
 import { processJellyfinWebhook } from "../src/jellyfin.js";
 import {
@@ -10,7 +12,14 @@ import {
   verifyPlaybackLedger,
   writePlaybackLedger,
 } from "../src/ledger.js";
+import {
+  authenticateJellyfinOperator,
+  readJellyfinOperators,
+  registerJellyfinOperator,
+} from "../src/operators.js";
 import { buildProofPack } from "../src/proof.js";
+import { readCreatorRegistry } from "../src/registry.js";
+import { createSidecarServer } from "../src/server.js";
 import type {
   FeeRouterAdapter,
   FeeRouterSettlementInput,
@@ -62,6 +71,57 @@ async function createHarness(
       defaultAtomicUsdcPerMinute: 2500,
       feeRouter,
     },
+  };
+}
+
+function configForHarness(harness: Awaited<ReturnType<typeof createHarness>>) {
+  const base = loadConfig({}, harness.dir);
+  return {
+    ...base,
+    port: 0,
+    registryPath: harness.registryPath,
+    operatorsPath: path.join(harness.dir, "operators.json"),
+    ledgerPath: harness.ledgerPath,
+    sessionsPath: harness.sessionsPath,
+    publicWebhookUrl:
+      "https://tollgate.gudman.xyz/jellyfin/api/webhooks/jellyfin",
+  } satisfies SidecarConfig;
+}
+
+async function listen(server: Server): Promise<string> {
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address() as AddressInfo;
+  return `http://127.0.0.1:${address.port}`;
+}
+
+async function closeServer(server: Server): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+async function postJson(
+  baseUrl: string,
+  pathname: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  });
+  return {
+    status: response.status,
+    body: (await response.json()) as Record<string, unknown>,
   };
 }
 
@@ -283,5 +343,127 @@ describe("jellyfin sidecar", () => {
     expect(() => loadConfig({ JELLYFIN_FEE_ROUTER_MODE: "live" })).toThrow(
       "JELLYFIN_FEE_ROUTER_PRIVATE_KEY",
     );
+  });
+
+  it("registers a Jellyfin operator with a hashed API key and item mapping", async () => {
+    const harness = await createHarness([]);
+    const config = configForHarness(harness);
+    try {
+      const result = await registerJellyfinOperator(
+        {
+          operatorName: "Studio Jellyfin",
+          itemId: "movie-001",
+          title: "Studio Cut",
+          displayName: "Studio Creator",
+          wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+          priceAtomicUsdcPerMinute: 3000,
+        },
+        {
+          operatorsPath: config.operatorsPath,
+          registryPath: config.registryPath,
+          now: new Date("2026-07-08T00:00:00.000Z"),
+        },
+      );
+
+      const operators = await readJellyfinOperators(config.operatorsPath);
+      const registry = await readCreatorRegistry(config.registryPath);
+      const authenticated = await authenticateJellyfinOperator(
+        result.apiKey,
+        config.operatorsPath,
+      );
+
+      expect(result.apiKey).toMatch(/^tgjf_[a-f0-9]{64}$/);
+      expect(JSON.stringify(operators)).not.toContain(result.apiKey);
+      expect(authenticated?.id).toBe(result.operator.id);
+      expect(registry.videos[0]).toMatchObject({
+        itemId: "movie-001",
+        title: "Studio Cut",
+        displayName: "Studio Creator",
+        wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+        priceAtomicUsdcPerMinute: 3000,
+        approvalStatus: "operator-approved",
+      });
+    } finally {
+      await rm(harness.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("requires a registered API key before accepting Jellyfin webhooks", async () => {
+    const harness = await createHarness([]);
+    const config = configForHarness(harness);
+    const server = createSidecarServer(config);
+    const baseUrl = await listen(server);
+    try {
+      const start = await readFixture("jellyfin-playback-start.json");
+      const stop = await readFixture("jellyfin-playback-stop.json");
+      const registration = await postJson(baseUrl, "/operators/register", {
+        operatorName: "Fixture Server",
+        itemId: "video-demo-001",
+        displayName: "Fixture Creator",
+        wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+        priceAtomicUsdcPerMinute: 2500,
+      });
+      const apiKey = registration.body.apiKey;
+      if (typeof apiKey !== "string") throw new Error("missing API key");
+
+      const unauthenticated = await postJson(
+        baseUrl,
+        "/webhooks/jellyfin",
+        start,
+      );
+      const started = await postJson(baseUrl, "/webhooks/jellyfin", start, {
+        "x-tollgate-key": apiKey,
+      });
+      const settled = await postJson(baseUrl, "/webhooks/jellyfin", stop, {
+        authorization: `Bearer ${apiKey}`,
+      });
+
+      expect(registration.status).toBe(201);
+      expect(registration.body.webhookUrl).toBe(
+        "https://tollgate.gudman.xyz/jellyfin/api/webhooks/jellyfin",
+      );
+      expect(JSON.stringify(registration.body)).not.toContain("apiKeyHash");
+      expect(unauthenticated.status).toBe(401);
+      expect(started.status).toBe(200);
+      expect(started.body.kind).toBe("started");
+      expect(settled.status).toBe(200);
+      expect(settled.body.kind).toBe("settled");
+      expect((await readPlaybackLedger(config.ledgerPath)).receipts).toHaveLength(
+        1,
+      );
+    } finally {
+      await closeServer(server);
+      await rm(harness.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects playback events for items outside the operator key scope", async () => {
+    const harness = await createHarness([]);
+    const config = configForHarness(harness);
+    const server = createSidecarServer(config);
+    const baseUrl = await listen(server);
+    try {
+      const start = await readFixture("jellyfin-playback-start.json");
+      const registration = await postJson(baseUrl, "/operators/register", {
+        operatorName: "Fixture Server",
+        itemId: "other-video-001",
+        displayName: "Fixture Creator",
+        wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+      });
+      const apiKey = registration.body.apiKey;
+      if (typeof apiKey !== "string") throw new Error("missing API key");
+
+      const response = await postJson(baseUrl, "/webhooks/jellyfin", start, {
+        "x-tollgate-key": apiKey,
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe(
+        "Jellyfin item is not registered for this API key.",
+      );
+    } finally {
+      await closeServer(server);
+      await rm(harness.dir, { recursive: true, force: true });
+    }
   });
 });

@@ -1940,6 +1940,45 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.copy-snippet {
+  display: grid;
+  gap: 8px;
+}
+
+.copy-snippet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.copy-snippet-head span {
+  color: var(--ink-4);
+  font-family: var(--font-num);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.copy-snippet-head .source-register-button {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.copy-snippet code {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  color: var(--ink-1);
+  font-family: var(--font-num);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .embed-shell {
   display: grid;
   align-content: start;

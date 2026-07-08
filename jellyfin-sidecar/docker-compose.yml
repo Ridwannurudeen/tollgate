@@ -13,8 +13,10 @@ services:
     environment:
       JELLYFIN_SIDECAR_PORT: "4317"
       JELLYFIN_REGISTRY_PATH: /app/data/registry.json
+      JELLYFIN_OPERATORS_PATH: /app/data/operators.json
       JELLYFIN_LEDGER_PATH: /app/data/ledger.json
       JELLYFIN_SESSIONS_PATH: /app/data/sessions.json
+      JELLYFIN_PUBLIC_WEBHOOK_URL: http://127.0.0.1:4317/webhooks/jellyfin
       JELLYFIN_USDC_ATOMIC_PER_MINUTE: "2500"
       JELLYFIN_FEE_ROUTER_MODE: dry-run
     ports:

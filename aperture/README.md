@@ -81,6 +81,27 @@ Watch nginx access logs on the Immich box:
 APERTURE_ACCESS_LOG=/var/log/nginx/access.log npm run watch:access-log
 ```
 
+Docker sidecar run for a Linux Immich/nginx host:
+
+```bash
+docker build -f Dockerfile -t tollgate-immich-sidecar .
+cat > aperture.env <<'EOF'
+APERTURE_ACCESS_LOG=/var/log/nginx/access.log
+APERTURE_IMMICH_API_BASE_URL=http://127.0.0.1:2283/api
+APERTURE_LICENSE_FEE_ATOMIC_USDC=2500
+APERTURE_FEE_ROUTER_ENABLED=1
+APERTURE_FEE_ROUTER_PRIVATE_KEY=<operator-private-key>
+EOF
+docker volume create tollgate-aperture-data
+docker run -d --name tollgate-immich-sidecar --restart unless-stopped --network host --env-file ./aperture.env -v /var/log/nginx/access.log:/var/log/nginx/access.log:ro -v tollgate-aperture-data:/app/data tollgate-immich-sidecar
+```
+
+Register an operator-approved owner mapping into the same Docker data volume:
+
+```bash
+docker run --rm --network host --env-file ./aperture.env -v tollgate-aperture-data:/app/data tollgate-immich-sidecar npm run register:owner -- --owner-id <immich-owner-id> --display-name "Photographer Name" --wallet 0x...
+```
+
 FeeRouter settlement is disabled by default. To settle on Arc, set:
 
 ```bash

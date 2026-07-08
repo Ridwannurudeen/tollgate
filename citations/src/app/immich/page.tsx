@@ -63,9 +63,17 @@ export default async function ImmichPage() {
             <p className="eyebrow">immich shared-link sidecar</p>
             <h1>Immich downloads feed the same creator-payment ledger.</h1>
           </div>
-          <Link className="wallet-button receipt-back" href="/core">
-            Settlement core
-          </Link>
+          <div className="hero-cta">
+            <Link
+              className="wallet-button primary receipt-back"
+              href="/immich/register"
+            >
+              Install / connect
+            </Link>
+            <Link className="wallet-button receipt-back" href="/core">
+              Settlement core
+            </Link>
+          </div>
         </header>
 
         <section className="receipt-proof">
@@ -112,6 +120,12 @@ export default async function ImmichPage() {
         </section>
 
         <section className="evidence-grid">
+          <div className="evidence-row">
+            <span>operator setup</span>
+            <strong>
+              <a href="/immich/register">/immich/register</a>
+            </strong>
+          </div>
           <div className="evidence-row">
             <span>Aperture proof</span>
             <strong>

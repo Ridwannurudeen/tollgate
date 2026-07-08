@@ -5,9 +5,9 @@ Status: LIVE-FEEROUTER-FIXTURE-REPLAY
 Readiness: READY-needs-real-Jellyfin-webhook-plugin-event
 
 This package is a Jellyfin Webhook sidecar for Tollgate per-minute VOD accounting.
-It consumes PlaybackStart and PlaybackStop webhook events, maps Jellyfin item IDs
-to creator wallets from `data/registry.json`, computes watched minutes, writes a
-hash-chained receipt ledger, and routes settlement through a FeeRouter adapter
+It consumes authenticated PlaybackStart and PlaybackStop webhook events, maps
+Jellyfin item IDs to creator wallets from `data/registry.json`, computes watched
+minutes, writes a hash-chained receipt ledger, and routes settlement through a FeeRouter adapter
 that defaults to dry-run locally and can route real Arc USDC through FeeRouter
 when `JELLYFIN_FEE_ROUTER_MODE=live` is configured on the server.
 
@@ -49,24 +49,30 @@ Assumptions recorded in fixtures:
 
 ## Jellyfin Setup
 
-1. Install the Jellyfin Webhook plugin and restart Jellyfin.
-2. Add a Generic destination with URL:
+1. Open `https://tollgate.gudman.xyz/jellyfin/register` and register a media
+   item ID, creator display name, payout wallet, and optional per-minute price.
+2. Copy the one-time API key returned by the page.
+3. Install the Jellyfin Webhook plugin and restart Jellyfin.
+4. Add a Generic destination with URL:
 
    ```text
    https://tollgate.gudman.xyz/jellyfin/api/webhooks/jellyfin
    ```
 
-3. Enable notification types: Playback Start and Playback Stop.
-4. Enable the item classes you want to monetize, such as Movies, Episodes, or
+5. Add header `X-Tollgate-Key` with the one-time key as its value. The sidecar
+   also accepts `Authorization: Bearer <key>`.
+6. Enable notification types: Playback Start and Playback Stop.
+7. Enable the item classes you want to monetize, such as Movies, Episodes, or
    Videos.
-5. Check `Send All Properties (ignores template)`.
-6. Use `Content-Type: application/json` if your plugin version exposes headers.
+8. Check `Send All Properties (ignores template)`.
+9. Use `Content-Type: application/json` if your plugin version exposes headers.
    The sidecar parses JSON even if the plugin sends the default text content type.
 
 ## Registry
 
-Copy `data/registry.example.json` to `data/registry.json` and replace the
-Jellyfin item ID and wallet:
+The hosted registration route writes both `data/operators.json` and
+`data/registry.json`. For local/manual runs, copy `data/registry.example.json`
+to `data/registry.json` and replace the Jellyfin item ID and wallet:
 
 ```json
 {
@@ -97,7 +103,11 @@ npm run dev
 
 Routes:
 
-- `POST /webhooks/jellyfin` consumes PlaybackStart and PlaybackStop payloads.
+- `POST /operators/register` issues a one-time API key, stores only its hash,
+  and writes the item-to-wallet mapping.
+- `POST /webhooks/jellyfin` consumes PlaybackStart and PlaybackStop payloads
+  only when `X-Tollgate-Key` or `Authorization: Bearer <key>` authenticates a
+  registered operator for the event item ID.
 - `GET /health` returns ledger verification, registry count, and dry-run status.
 - `GET /proof` returns the public proof pack and full hash-chained receipt ledger.
 
@@ -105,8 +115,11 @@ Environment:
 
 - `JELLYFIN_SIDECAR_PORT` default `4317`
 - `JELLYFIN_REGISTRY_PATH` default `data/registry.json`
+- `JELLYFIN_OPERATORS_PATH` default `data/operators.json`
 - `JELLYFIN_LEDGER_PATH` default `data/ledger.json`
 - `JELLYFIN_SESSIONS_PATH` default `data/sessions.json`
+- `JELLYFIN_PUBLIC_WEBHOOK_URL` default
+  `https://tollgate.gudman.xyz/jellyfin/api/webhooks/jellyfin`
 - `JELLYFIN_USDC_ATOMIC_PER_MINUTE` default `2500`
 - `JELLYFIN_FEE_ROUTER_MODE` default `dry-run`
 - `JELLYFIN_FEE_ROUTER_PRIVATE_KEY` optional dedicated live-mode payer key
@@ -140,13 +153,13 @@ viewer event. The proof pack keeps that distinction visible through
 ## Docker Demo Kit
 
 ```bash
-cp data/registry.example.json data/registry.json
 docker compose up --build
 ```
 
 The compose file starts a Jellyfin container and the sidecar. You still need to
 finish Jellyfin first-run setup, install/configure the Webhook plugin, import a
-media item, and set that media item's Jellyfin `ItemId` in `data/registry.json`.
+media item, and register that media item's Jellyfin `ItemId` through
+`POST /operators/register` or by editing local data files for a fixture replay.
 
 ## Docker Validation
 
@@ -156,14 +169,18 @@ Docker Compose 2.40.3.
 Commands:
 
 ```bash
-cp data/registry.example.json data/registry.json
 docker compose up -d --build
 curl -I http://127.0.0.1:8096/
 curl http://127.0.0.1:4317/health
 curl -X POST -H "Content-Type: application/json" \
+  --data '{"operatorName":"Local Jellyfin","itemId":"video-demo-001","displayName":"Fixture Creator","wallet":"0x12F25B721Cc21c38495e33A4c8524dd0B647ba03","priceAtomicUsdcPerMinute":2500}' \
+  http://127.0.0.1:4317/operators/register
+curl -X POST -H "Content-Type: application/json" \
+  -H "X-Tollgate-Key: <api-key-from-registration>" \
   --data-binary @fixtures/jellyfin-playback-start.json \
   http://127.0.0.1:4317/webhooks/jellyfin
 curl -X POST -H "Content-Type: application/json" \
+  -H "X-Tollgate-Key: <api-key-from-registration>" \
   --data-binary @fixtures/jellyfin-playback-stop.json \
   http://127.0.0.1:4317/webhooks/jellyfin
 curl http://127.0.0.1:4317/proof

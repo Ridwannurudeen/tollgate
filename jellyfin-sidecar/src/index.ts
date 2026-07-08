@@ -2,6 +2,7 @@ export * from "./config.js";
 export * from "./fee-router.js";
 export * from "./jellyfin.js";
 export * from "./ledger.js";
+export * from "./operators.js";
 export * from "./proof.js";
 export * from "./registry.js";
 export * from "./server.js";

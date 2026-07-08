@@ -82,9 +82,17 @@ export default async function JellyfinPage() {
             <p className="eyebrow">jellyfin vod sidecar</p>
             <h1>Jellyfin watch time can settle per minute.</h1>
           </div>
-          <Link className="wallet-button receipt-back" href="/core">
-            Settlement core
-          </Link>
+          <div className="hero-cta">
+            <Link
+              className="wallet-button primary receipt-back"
+              href="/jellyfin/register"
+            >
+              Connect server
+            </Link>
+            <Link className="wallet-button receipt-back" href="/core">
+              Settlement core
+            </Link>
+          </div>
         </header>
 
         <section className="receipt-proof">
@@ -131,6 +139,12 @@ export default async function JellyfinPage() {
         </section>
 
         <section className="evidence-grid">
+          <div className="evidence-row">
+            <span>operator setup</span>
+            <strong>
+              <a href="/jellyfin/register">/jellyfin/register</a>
+            </strong>
+          </div>
           <div className="evidence-row">
             <span>public proof</span>
             <strong>

@@ -323,8 +323,8 @@ export default async function CorePage() {
               ledger {verification.ok ? "verified" : "needs attention"} ·{" "}
               {verification.receiptCount} receipts
             </p>
-            <Link className="receipt-link" href="/">
-              Open the citations app →
+            <Link className="receipt-link" href="/register">
+              Register a source →
             </Link>
           </article>
 
@@ -373,7 +373,7 @@ export default async function CorePage() {
               <p className="hero-text">Aperture stats unavailable.</p>
             )}
             <Link className="receipt-link" href="/aperture">
-              Open the photo-licensing app →
+              List a photo or video →
             </Link>
           </article>
 
@@ -419,8 +419,8 @@ export default async function CorePage() {
             ) : (
               <p className="hero-text">Immich/Aperture stats unavailable.</p>
             )}
-            <Link className="receipt-link" href="/immich">
-              Open Immich proof →
+            <Link className="receipt-link" href="/immich/register">
+              Install / connect Immich →
             </Link>
           </article>
 
@@ -464,8 +464,8 @@ export default async function CorePage() {
             <p className="eyebrow">
               self-hosted PeerTube · published package · proof mirror
             </p>
-            <Link className="receipt-link" href="/video">
-              Open video licensing →
+            <Link className="receipt-link" href="/video/register">
+              Install PeerTube plugin →
             </Link>
           </article>
 
@@ -512,8 +512,8 @@ export default async function CorePage() {
             ) : (
               <p className="hero-text">Jellyfin stats unavailable.</p>
             )}
-            <Link className="receipt-link" href="/jellyfin">
-              Open Jellyfin proof →
+            <Link className="receipt-link" href="/jellyfin/register">
+              Connect Jellyfin server →
             </Link>
           </article>
 

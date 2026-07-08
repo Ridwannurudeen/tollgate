@@ -70,9 +70,17 @@ export default async function VideoPage() {
             <p className="eyebrow">video licensing</p>
             <h1>PeerTube downloads can pay creators per unlock.</h1>
           </div>
-          <Link className="wallet-button receipt-back" href="/core">
-            Settlement core
-          </Link>
+          <div className="hero-cta">
+            <Link
+              className="wallet-button primary receipt-back"
+              href="/video/register"
+            >
+              Install plugin
+            </Link>
+            <Link className="wallet-button receipt-back" href="/core">
+              Settlement core
+            </Link>
+          </div>
         </header>
 
         <section className="receipt-proof">
@@ -120,6 +128,12 @@ export default async function VideoPage() {
         </section>
 
         <section className="evidence-grid">
+          <div className="evidence-row">
+            <span>operator setup</span>
+            <strong>
+              <a href="/video/register">/video/register</a>
+            </strong>
+          </div>
           <div className="evidence-row">
             <span>npm package</span>
             <strong>
