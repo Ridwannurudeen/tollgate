@@ -1,0 +1,69 @@
+{
+  "name": "@tollgate/pay-per-piece",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Unpublished Tollgate SDK for routing per-piece creator payments through FeeRouter on Arc testnet.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./stores/file": {
+      "types": "./dist/stores/file.d.ts",
+      "import": "./dist/stores/file.js"
+    },
+    "./adapters/x402": {
+      "types": "./dist/adapters/x402.d.ts",
+      "import": "./dist/adapters/x402.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "examples/toy-paywall",
+    "src/adapters/x402.ts",
+    "src/chain.ts",
+    "src/fee-router-contract.ts",
+    "src/fee-router-nonce.ts",
+    "src/fee-router.ts",
+    "src/index.ts",
+    "src/split-registry.ts",
+    "src/stores/file.ts"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "viem": "2.55.0"
+  },
+  "peerDependencies": {
+    "@x402/evm": "2.17.0",
+    "@x402/fetch": "2.17.0"
+  },
+  "peerDependenciesMeta": {
+    "@x402/evm": {
+      "optional": true
+    },
+    "@x402/fetch": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "@x402/evm": "2.17.0",
+    "@x402/fetch": "2.17.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.6"
+  },
+  "overrides": {
+    "@vitest/pretty-format": "3.2.6"
+  }
+}

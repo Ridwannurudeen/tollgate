@@ -1,0 +1,16 @@
+{
+  "name": "@tollgate/toy-paywall",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test server.node-test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@tollgate/pay-per-piece": "file:../.."
+  }
+}
