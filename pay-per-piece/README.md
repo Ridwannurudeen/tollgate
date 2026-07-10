@@ -1,20 +1,22 @@
-# @tollgate/pay-per-piece
+# tollgate-pay-per-piece
 
-Unpublished TypeScript SDK for routing per-piece creator payments through the Tollgate FeeRouter on Arc testnet.
+TypeScript SDK for routing per-piece creator payments through the Tollgate FeeRouter on Arc testnet.
 
-This package is private and not published to npm. The default import contains the chain constants, FeeRouter reads and writes, nonce reservation, and a storage-independent split registry interface. Node file storage and x402 support are separate entry points.
+The default import contains the chain constants, FeeRouter reads and writes, nonce reservation, and a storage-independent split registry interface. Node file storage and x402 support are separate entry points.
 
 ## Install
 
-Use it from this repo while the SDK is still unpublished:
+```bash
+npm install tollgate-pay-per-piece
+```
+
+Or use it from this repo without publishing a new version:
 
 ```bash
 cd pay-per-piece
 npm install
 npm run build
 ```
-
-Install the built package into a separate local consumer with a real file copy:
 
 ```bash
 cd ../your-app
@@ -30,8 +32,8 @@ import {
   createFeeRouterSigner,
   ensureCreatorSplit,
   payViaSplit,
-} from "@tollgate/pay-per-piece";
-import { createFileSplitRegistryStore } from "@tollgate/pay-per-piece/stores/file";
+} from "tollgate-pay-per-piece";
+import { createFileSplitRegistryStore } from "tollgate-pay-per-piece/stores/file";
 
 const privateKey = process.env.PAYER_PRIVATE_KEY;
 const recipient = process.env.CREATOR_ADDRESS;
@@ -74,7 +76,7 @@ type SplitRegistryStore = {
 };
 ```
 
-The Node-only `createFileSplitRegistryStore(path)` implementation lives at `@tollgate/pay-per-piece/stores/file`. It writes a temporary sibling and renames it over the target so readers never observe partial JSON. The registry, nonce, and same-payer payment locks are process-local; run one process per payer account or supply external coordination when multiple workers share a payer.
+The Node-only `createFileSplitRegistryStore(path)` implementation lives at `tollgate-pay-per-piece/stores/file`. It writes a temporary sibling and renames it over the target so readers never observe partial JSON. The registry, nonce, and same-payer payment locks are process-local; run one process per payer account or supply external coordination when multiple workers share a payer.
 
 ## Optional x402 paid fetch
 
@@ -85,7 +87,7 @@ npm install @x402/evm@2.17.0 @x402/fetch@2.17.0
 ```
 
 ```js
-import { createX402PaidFetch } from "@tollgate/pay-per-piece/adapters/x402";
+import { createX402PaidFetch } from "tollgate-pay-per-piece/adapters/x402";
 
 async function fetchPaidResource(x402Signer) {
   const paidFetch = createX402PaidFetch({ signer: x402Signer });
