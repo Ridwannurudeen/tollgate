@@ -165,7 +165,7 @@ cast send 0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59 \
 
 Verify the resulting transaction on `https://testnet.arcscan.app`.
 
-> Need testnet USDC for gas? The hackathon's faucet is **TestMint** (`https://testmint.myproceeds.xyz`). A few cents of USDC covers many claims.
+> Need testnet USDC for gas? Use Circle's Arc testnet faucet (`https://faucet.circle.com`), which is free. TestMint (`https://testmint.myproceeds.xyz`) is not a free faucet despite the name — it mints testnet USDC in exchange for real mainnet Base USDC paid via x402, which is why it prompts a wallet connection instead of just taking an address; see `docs/arc-tooling.md`.
 
 ---
 
