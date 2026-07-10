@@ -4,7 +4,7 @@ All figures below were read live from the deployed ledger and verified on-chain 
 
 ## Headline: real external creators, paid on-chain
 
-Three independent external creators onboarded through the public self-serve flow, each proved wallet control with a signed ownership message (`verifiedCreator: true`), and each has been cited by the live answer agent and paid in USDC on Arc through the on-chain FeeRouter. All three (CitePay, qdee, and Rising Technology) have now **autonomously claimed their FeeRouter balance**; CitePay and qdee also registered a new verified source with no hand-holding. Rising Technology's claim (`0xe16b1ef5…1bbdb`, block 51139386, 2026-07-10) was verified independently via `eth_getTransactionReceipt` and `totalClaimableOf` reading `0` afterward.
+Three independent external creators onboarded through the public self-serve flow, each proved wallet control with a signed ownership message (`verifiedCreator: true`), and each has been cited by the live answer agent and paid in USDC on Arc through the on-chain FeeRouter. This count of 3 has held since the creators first onboarded; what's new as of 2026-07-10 is that **all three, not two**, have now autonomously claimed their FeeRouter balance with zero hand-holding — CitePay and qdee claimed earlier and also registered a new verified source unaided; Rising Technology was the outstanding one and closed that gap today (`0xe16b1ef5…1bbdb`, block 51139386), verified independently via `eth_getTransactionReceipt` and `totalClaimableOf` reading `0` afterward.
 
 | Creator | Wallet | Verified source | Paid on-chain | Receipts |
 | --- | --- | --- | --- | --- |
