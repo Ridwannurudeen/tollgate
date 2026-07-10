@@ -4,6 +4,13 @@ TypeScript SDK for routing per-piece creator payments through the Tollgate FeeRo
 
 The default import contains the chain constants, FeeRouter reads and writes, nonce reservation, and a storage-independent split registry interface. Node file storage and x402 support are separate entry points.
 
+## Before you start
+
+- **This targets Arc testnet only.** Chain ID, RPC default, and the USDC token address are all Arc-testnet constants (`src/chain.ts`). There is no mainnet path today.
+- **`FEE_ROUTER_ADDRESS` (`src/fee-router-contract.ts`) is Tollgate's own deployed FeeRouter contract on Arc testnet — you don't deploy your own.** You're routing payments through shared, Tollgate-operated infrastructure, not standing up independent settlement infra. Splits are namespaced by creator address, so this is safe to share across integrators, but it does mean your payouts depend on that contract staying live and unmodified.
+- **You need a funded payer wallet before any of this works**: a private key holding some Arc testnet USDC (covers both the payment amount and gas — Arc gas is paid in USDC). Get testnet USDC from `https://faucet.circle.com`. Nothing in the code below will succeed against an empty wallet.
+- **The `@x402/evm`/`@x402/fetch` peer dependencies are pinned to exact versions** (`2.17.0`) in `package.json`. If your app already depends on different versions of these for its own x402 handling, you'll get a peer conflict — check before installing.
+
 ## Install
 
 ```bash
