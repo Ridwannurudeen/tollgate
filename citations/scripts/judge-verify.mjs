@@ -1,5 +1,6 @@
 import { verifyLedger } from "./verify-ledger.mjs";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { hashTypedData, keccak256, recoverAddress, toHex } from "viem";
 
 const DEFAULT_TARGET_URL = "https://tollgate.gudman.xyz";
@@ -7,7 +8,6 @@ const ARC_RPC_URL =
   process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network";
 const FEE_ROUTER_ADDRESS =
   "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59".toLowerCase();
-const ARC_CHAIN_ID = 5042002;
 const USE_INTENT_DOMAIN_NAME = "Tollgate UseReceipt Registry";
 const USE_INTENT_DOMAIN_VERSION = "1";
 const USE_INTENT_TYPES = {
@@ -25,6 +25,30 @@ const USE_INTENT_TYPES = {
 const USE_INTENT_ANCHORED_TOPIC = keccak256(
   toHex("UseIntentAnchored(bytes32,bytes32,address)"),
 ).toLowerCase();
+const AGENT_WALLET_SELECTOR = keccak256(
+  toHex("tollgateAgentWallet()"),
+).slice(0, 10);
+const ACTOR_CLASSES = [
+  "operator",
+  "fixture",
+  "volume-engine",
+  "reciprocal-partner",
+  "sponsored-cold-human",
+  "self-funded-cold-human",
+  "external-agent",
+  "external-integrator",
+  "unclassified",
+];
+const ACTOR_CLASS_MAP = Object.fromEntries(
+  Object.entries(
+    JSON.parse(
+      await readFile(
+        new URL("../data/actor-classes.json", import.meta.url),
+        "utf8",
+      ),
+    ).wallets,
+  ).map(([wallet, actorClass]) => [wallet.toLowerCase(), actorClass]),
+);
 
 function targetUrlFromArgs() {
   for (let index = 2; index < process.argv.length; index += 1) {
@@ -92,9 +116,82 @@ function actualAgentCounts(ledger) {
     skipDecisions: decisions.filter((decision) => !decision.selected).length,
     abstentions: ledger.queries.filter((query) => query.citations.length === 0)
       .length,
-    refundedSources: ledger.receipts.filter(
-      (receipt) => receipt.settlementMode === "refunded",
-    ).length,
+    refundedSources: ledger.queries.reduce(
+      (sum, query) => sum + (query.refundSummary?.refundedCount ?? 0),
+      0,
+    ),
+  };
+}
+
+function isIndependentActorClass(actorClass) {
+  return (
+    actorClass !== "operator" &&
+    actorClass !== "fixture" &&
+    actorClass !== "volume-engine" &&
+    actorClass !== "reciprocal-partner" &&
+    actorClass !== "unclassified"
+  );
+}
+
+function actorClassForPayment(payment) {
+  if (ACTOR_CLASSES.includes(payment?.actorClass)) return payment.actorClass;
+  const payer = payment?.payer;
+  if (typeof payer !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(payer)) {
+    return "unclassified";
+  }
+  return ACTOR_CLASS_MAP[payer.toLowerCase()] ?? "unclassified";
+}
+
+function actualActorMetrics(ledger) {
+  const payments = ledger.queries.flatMap((query) =>
+    query.readerPayment ? [query.readerPayment] : [],
+  );
+  const byClass = Object.fromEntries(
+    ACTOR_CLASSES.map((actorClass) => [
+      actorClass,
+      { paymentCount: 0, atomicUsdc: 0, uniquePayerWallets: 0 },
+    ]),
+  );
+  const walletsByClass = new Map(
+    ACTOR_CLASSES.map((actorClass) => [actorClass, new Set()]),
+  );
+  const independentWallets = new Set();
+  const totalWallets = new Set();
+  let independentPaymentCount = 0;
+  let independentAtomicUsdc = 0;
+  let totalAtomicUsdc = 0;
+  for (const payment of payments) {
+    const actorClass = actorClassForPayment(payment);
+    byClass[actorClass].paymentCount += 1;
+    byClass[actorClass].atomicUsdc += payment.amountAtomicUsdc;
+    totalAtomicUsdc += payment.amountAtomicUsdc;
+    if (typeof payment.payer === "string" && /^0x[0-9a-fA-F]{40}$/.test(payment.payer)) {
+      const payer = payment.payer.toLowerCase();
+      walletsByClass.get(actorClass).add(payer);
+      totalWallets.add(payer);
+      if (isIndependentActorClass(actorClass)) independentWallets.add(payer);
+    }
+    if (isIndependentActorClass(actorClass)) {
+      independentPaymentCount += 1;
+      independentAtomicUsdc += payment.amountAtomicUsdc;
+    }
+  }
+  for (const actorClass of ACTOR_CLASSES) {
+    byClass[actorClass].uniquePayerWallets = walletsByClass.get(actorClass).size;
+  }
+  return {
+    byClass,
+    independent: {
+      paymentCount: independentPaymentCount,
+      atomicUsdc: independentAtomicUsdc,
+      uniquePayerWallets: independentWallets.size,
+    },
+    total: {
+      paymentCount: payments.length,
+      atomicUsdc: totalAtomicUsdc,
+      uniquePayerWallets: totalWallets.size,
+    },
+    unclassified: { ...byClass.unclassified },
   };
 }
 
@@ -161,8 +258,7 @@ function intentMessage(query) {
       query.citations.map((citation) => citation.sourceId),
     ),
     decisionTraceHash: query.traceHash ?? sha256Hex(query.agentSteps ?? []),
-    claimSupportRoot:
-      query.claimSupportRoot ?? sha256Hex(query.claimSupport ?? []),
+    claimSupportRoot: sha256Hex(query.claimSupport ?? []),
     maxSpendAtomicUsdc: BigInt(record.maxSpendAtomicUsdc),
     expiry: BigInt(record.expiry),
     nonce: BigInt(record.nonce),
@@ -196,10 +292,22 @@ function hasIntentAnchorLog(
   });
 }
 
-async function verifyUseIntent(query, registryAddress, agentWallet, rpc) {
+async function verifyUseIntent(query, agentWallet, rpc) {
   const record = query.useIntent;
   if (!record) return { ok: true };
   try {
+    if (
+      typeof record.registryAddress !== "string" ||
+      !/^0x[0-9a-fA-F]{40}$/.test(record.registryAddress) ||
+      !Number.isSafeInteger(record.chainId) ||
+      record.chainId <= 0
+    ) {
+      return {
+        ok: false,
+        detail: "intent record is missing its registry address or chain ID",
+      };
+    }
+    const registryAddress = record.registryAddress;
     const message = intentMessage(query);
     const storedRoots = {
       candidateSetRoot: record.candidateSetRoot,
@@ -216,7 +324,7 @@ async function verifyUseIntent(query, registryAddress, agentWallet, rpc) {
       domain: {
         name: USE_INTENT_DOMAIN_NAME,
         version: USE_INTENT_DOMAIN_VERSION,
-        chainId: ARC_CHAIN_ID,
+        chainId: record.chainId,
         verifyingContract: registryAddress,
       },
       types: USE_INTENT_TYPES,
@@ -238,6 +346,21 @@ async function verifyUseIntent(query, registryAddress, agentWallet, rpc) {
     });
     if (recovered.toLowerCase() !== agentWallet.toLowerCase()) {
       return { ok: false, detail: `signature recovers ${recovered}, not agent wallet` };
+    }
+    const registryCode = await rpc("eth_getCode", [registryAddress, "latest"]);
+    if (typeof registryCode !== "string" || registryCode === "0x") {
+      return { ok: false, detail: "intent registry has no deployed bytecode" };
+    }
+    const configuredSigner = await rpc("eth_call", [
+      { to: registryAddress, data: AGENT_WALLET_SELECTOR },
+      "latest",
+    ]);
+    const onchainSigner =
+      typeof configuredSigner === "string" && /^0x[0-9a-fA-F]{64}$/.test(configuredSigner)
+        ? `0x${configuredSigner.slice(-40)}`
+        : null;
+    if (onchainSigner?.toLowerCase() !== agentWallet.toLowerCase()) {
+      return { ok: false, detail: "registry authorized signer does not match the proof pack" };
     }
     const receipt = await rpc("eth_getTransactionReceipt", [record.anchorTx]);
     if (!isSuccessfulReceipt(receipt)) {
@@ -343,6 +466,24 @@ async function main() {
     fail("settlement counts agree with ledger");
   }
 
+  const actorMetrics = actualActorMetrics(ledger);
+  if (
+    sameJson(proof.traction?.actorMetrics, actorMetrics) &&
+    proof.traction?.paidQueries === actorMetrics.independent.paymentCount &&
+    proof.traction?.totalPaidQueries === actorMetrics.total.paymentCount &&
+    proof.traction?.uniquePayerWallets ===
+      actorMetrics.independent.uniquePayerWallets &&
+    proof.traction?.totalUniquePayerWallets ===
+      actorMetrics.total.uniquePayerWallets
+  ) {
+    pass("actor-class counts, volume, and payer totals agree with ledger");
+  } else {
+    fail(
+      "actor-class counts, volume, and payer totals agree with ledger",
+      `proof=${JSON.stringify(proof.traction?.actorMetrics)} actual=${JSON.stringify(actorMetrics)}`,
+    );
+  }
+
   const creatorClaimedCount = (sourcesEnvelope.sources ?? []).filter(
     (source) => source.creatorClaimed === true,
   ).length;
@@ -357,8 +498,7 @@ async function main() {
 
   const useIntentQueries = ledger.queries.filter((query) => query.useIntent);
   if (
-    proof.useIntent?.anchoredCount === useIntentQueries.length &&
-    (useIntentQueries.length === 0 || proof.useIntent?.registryAddress)
+    proof.useIntent?.anchoredCount === useIntentQueries.length
   ) {
     pass("use-intent count agrees with ledger");
   } else {
@@ -371,31 +511,16 @@ async function main() {
   if (useIntentQueries.length === 0) {
     pass("use-intent anchoring has no records to verify");
   } else {
-    const registryAddress =
-      proof.useIntent?.registryAddress ??
-      process.env.LEPTONWEB_USE_RECEIPT_REGISTRY_ADDRESS;
     const agentWallet = proof.useIntent?.agentWallet;
     if (
-      typeof registryAddress !== "string" ||
-      !/^0x[0-9a-fA-F]{40}$/.test(registryAddress) ||
       typeof agentWallet !== "string" ||
       !/^0x[0-9a-fA-F]{40}$/.test(agentWallet)
     ) {
       fail("use-intent registry configuration", "public registry and agent addresses are missing");
     } else {
-      const registryCode = await rpcRequest("eth_getCode", [
-        registryAddress,
-        "latest",
-      ]);
-      if (typeof registryCode === "string" && registryCode !== "0x") {
-        pass("use-intent registry has deployed bytecode");
-      } else {
-        fail("use-intent registry has deployed bytecode");
-      }
       for (const query of useIntentQueries) {
         const result = await verifyUseIntent(
           query,
-          registryAddress,
           agentWallet,
           rpcRequest,
         );

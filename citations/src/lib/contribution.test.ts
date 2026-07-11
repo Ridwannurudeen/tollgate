@@ -87,6 +87,16 @@ describe("proof of useful citation", () => {
     ]);
   });
 
+  it("adds an omitted answer sentence so every sentence is verified", async () => {
+    const first = "The receipt chain binds each useful claim to a source record.";
+    const second = "Creator payouts remain tied to that public evidence trail.";
+    const claims = await extractClaims(`${first} ${second}`, async () =>
+      JSON.stringify({ claims: [first] }),
+    );
+
+    expect(claims).toEqual([first, second]);
+  });
+
   it("removes unsupported claims from the final answer", () => {
     const support: ClaimSupport[] = [
       {
@@ -103,7 +113,7 @@ describe("proof of useful citation", () => {
       },
     ];
     const answer = removeUnsupportedClaims(
-      `${support[0].claim} ${support[1].claim}`,
+      `${support[0].claim} ${support[1].claim} ${support[1].claim}`,
       support,
     );
     expect(answer).toContain(support[0].claim);

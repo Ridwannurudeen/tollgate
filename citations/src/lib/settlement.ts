@@ -16,6 +16,7 @@ import {
   verifyClaims,
   type ClaimLlm,
 } from "./contribution";
+import { actorClassForPayer } from "./actor-class";
 import { refundReaderPayment, routeCitationPayments } from "./fee-router";
 import { groundingYieldsBySource } from "./grounding-yield";
 import { sha256Hex } from "./hash";
@@ -48,6 +49,7 @@ const DEFAULT_PROBATION_MAX_PAID_CITATIONS = 3;
 
 type SettleOptions = {
   creatorWallet?: string;
+  sourceIds?: string[];
 };
 
 type PreparedUseIntent = {
@@ -56,16 +58,28 @@ type PreparedUseIntent = {
 };
 
 export class PaidQueryAgentError extends Error {
-  readonly stage: string | null;
+  readonly stage: string;
   readonly readerPayment: QueryPaymentEvidence;
+  readonly query?: QueryRecord;
+  readonly priorFailure?: { stage: string; message: string };
 
-  constructor(cause: unknown, readerPayment: QueryPaymentEvidence) {
+  constructor(
+    cause: unknown,
+    readerPayment: QueryPaymentEvidence,
+    stage?: string,
+    query?: QueryRecord,
+    priorFailure?: { stage: string; message: string },
+  ) {
     const message =
       cause instanceof Error ? cause.message : "Paid query agent failed.";
     super(message);
     this.name = "PaidQueryAgentError";
-    this.stage = cause instanceof AgentPlanningError ? cause.stage : null;
+    this.stage =
+      stage ??
+      (cause instanceof AgentPlanningError ? cause.stage : "agent-planning");
     this.readerPayment = readerPayment;
+    this.query = query;
+    this.priorFailure = priorFailure;
   }
 }
 
@@ -254,7 +268,18 @@ export async function settleQuestion(
 export function createQueryPaymentEvidence(
   payment: Omit<QueryPaymentEvidence, "paymentHash">,
 ): QueryPaymentEvidence {
-  const payload: Omit<QueryPaymentEvidence, "paymentHash"> = {
+  const operatorWallet = process.env.CIRCLE_PAYER_ADDRESS;
+  const actorClass =
+    payment.actorClass ??
+    (operatorWallet &&
+    /^0x[0-9a-fA-F]{40}$/.test(operatorWallet) &&
+    payment.payer?.toLowerCase() === operatorWallet.toLowerCase()
+      ? "operator"
+      : actorClassForPayer(payment.payer));
+  const payload: Omit<
+    QueryPaymentEvidence,
+    "paymentHash" | "actorClass" | "refund" | "refundFailure"
+  > = {
     amountAtomicUsdc: payment.amountAtomicUsdc,
     settlementMode: payment.settlementMode,
     payTo: payment.payTo,
@@ -266,6 +291,7 @@ export function createQueryPaymentEvidence(
   }
   return {
     ...payload,
+    actorClass,
     paymentHash: sha256Hex(payload),
   };
 }
@@ -284,15 +310,40 @@ export async function settlePaidQuestion(
   );
   const readerPayment = createQueryPaymentEvidence(payment);
   const agent = agentOptionsForLedger(ledger);
-  let query: Awaited<ReturnType<typeof createAgentQueryRecord>>;
+  let plannedQuery: Awaited<ReturnType<typeof createAgentQueryRecord>>;
   try {
-    const plannedQuery = await createAgentQueryRecord(
+    plannedQuery = await createAgentQueryRecord(
       normalized,
       createdAt,
       agentSources,
       readerPayment,
       agent.options,
     );
+  } catch (error) {
+    if (
+      agent.serverMode !== "judge-strict" &&
+      !contributionPayoutsEnabled(agent.serverMode)
+    ) {
+      throw error;
+    }
+    const stage =
+      error instanceof AgentPlanningError
+        ? error.stage
+        : error instanceof Error &&
+            error.message ===
+              "Judge-strict mode requires a configured LLM planner."
+          ? "configuration"
+          : "agent-planning";
+    return refundFailedPaidQuery(
+      error,
+      readerPayment,
+      "judge-strict-planner-failure",
+      stage,
+    );
+  }
+
+  let query: Awaited<ReturnType<typeof createAgentQueryRecord>>;
+  try {
     query = await applyContributionProof(
       plannedQuery,
       agentSources,
@@ -305,11 +356,13 @@ export async function settlePaidQuestion(
     ) {
       throw error;
     }
-    const refundedPayment = await attachReaderRefund(
+    return refundFailedPaidQuery(
+      error,
       readerPayment,
       "judge-strict-planner-failure",
+      "claim-verification",
+      plannedQuery,
     );
-    throw new PaidQueryAgentError(error, refundedPayment);
   }
   if (
     query.citations.length === 0 &&
@@ -317,27 +370,84 @@ export async function settlePaidQuestion(
     /^0x[0-9a-fA-F]{40}$/.test(query.readerPayment.payer) &&
     query.readerPayment.amountAtomicUsdc > 0
   ) {
-    query.readerPayment = await attachReaderRefund(
-      query.readerPayment,
-      "no-answer",
+    try {
+      query.readerPayment = await attachReaderRefund(
+        query.readerPayment,
+        "no-answer",
+        agent.serverMode === "judge-strict",
+      );
+    } catch (error) {
+      throw new PaidQueryAgentError(
+        error,
+        query.readerPayment,
+        "reader-refund",
+        query,
+        { stage: "no-answer", message: "No source-backed answer was produced." },
+      );
+    }
+  }
+  let preparedUseIntent: PreparedUseIntent | null;
+  try {
+    preparedUseIntent = await prepareUseIntent(query);
+  } catch (error) {
+    return refundFailedPaidQuery(
+      error,
+      query.readerPayment ?? readerPayment,
+      "use-intent-preparation-failure",
+      "use-intent-signing",
+      query,
     );
   }
-  const preparedUseIntent = await prepareUseIntent(query);
-  const receiptEvidence = await routeCitationPayments(query);
-  const anchoredQuery = await anchorPreparedUseIntent(
-    query,
-    preparedUseIntent,
-  );
-  return settleAndAnchorTrackRecord(anchoredQuery, receiptEvidence);
+  let receiptEvidence: Awaited<ReturnType<typeof routeCitationPayments>>;
+  try {
+    receiptEvidence = await routeCitationPayments(query);
+  } catch (error) {
+    throw new PaidQueryAgentError(
+      error,
+      query.readerPayment ?? readerPayment,
+      "fee-router-settlement",
+      query,
+    );
+  }
+  let anchoredQuery: QueryRecord;
+  try {
+    anchoredQuery = await anchorPreparedUseIntent(query, preparedUseIntent);
+  } catch (error) {
+    throw new PaidQueryAgentError(
+      error,
+      query.readerPayment ?? readerPayment,
+      "use-intent-anchoring",
+      query,
+    );
+  }
+  try {
+    return await settleAndAnchorTrackRecord(anchoredQuery, receiptEvidence);
+  } catch (error) {
+    throw new PaidQueryAgentError(
+      error,
+      anchoredQuery.readerPayment ?? readerPayment,
+      "ledger-or-track-record",
+      anchoredQuery,
+    );
+  }
 }
 
 export function filterSourcesForSettlement(
   sources: CreatorSource[],
   options: SettleOptions,
 ): CreatorSource[] {
-  if (!options.creatorWallet) return sources;
+  let filtered = sources;
+  if (options.sourceIds) {
+    const sourceById = new Map(sources.map((source) => [source.id, source]));
+    const missing = options.sourceIds.filter((sourceId) => !sourceById.has(sourceId));
+    if (missing.length > 0) {
+      throw new Error(`Judge demo sources are unavailable: ${missing.join(", ")}.`);
+    }
+    filtered = options.sourceIds.map((sourceId) => sourceById.get(sourceId)!);
+  }
+  if (!options.creatorWallet) return filtered;
   const creatorWallet = options.creatorWallet.toLowerCase();
-  const filtered = sources.filter(
+  filtered = filtered.filter(
     (source) => source.wallet.toLowerCase() === creatorWallet,
   );
   if (filtered.length === 0) {
@@ -395,6 +505,7 @@ function agentOptionsForLedger(ledger: Ledger) {
 async function attachReaderRefund(
   payment: QueryPaymentEvidence,
   reason: string,
+  required = false,
 ): Promise<QueryPaymentEvidence> {
   if (
     !payment.payer ||
@@ -403,20 +514,71 @@ async function attachReaderRefund(
   ) {
     return payment;
   }
-  const refundTx = await refundReaderPayment(
-    payment.payer as `0x${string}`,
-    payment.amountAtomicUsdc,
-  ).catch(() => null);
-  return refundTx
-    ? {
-        ...payment,
-        refund: {
-          amountAtomicUsdc: payment.amountAtomicUsdc,
-          transaction: refundTx,
-          reason,
-        },
-      }
-    : payment;
+  let refundTx: Awaited<ReturnType<typeof refundReaderPayment>>;
+  try {
+    refundTx = await refundReaderPayment(
+      payment.payer as `0x${string}`,
+      payment.amountAtomicUsdc,
+    );
+  } catch (error) {
+    if (required) throw error;
+    return {
+      ...payment,
+      refundFailure: {
+        reason,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Reader refund settlement failed.",
+      },
+    };
+  }
+  if (!refundTx) {
+    if (required) {
+      throw new Error("Reader refund could not be settled on-chain.");
+    }
+    return {
+      ...payment,
+      refundFailure: {
+        reason,
+        message: "Reader refund is not configured or funded.",
+      },
+    };
+  }
+  return {
+    ...payment,
+    refund: {
+      amountAtomicUsdc: payment.amountAtomicUsdc,
+      transaction: refundTx,
+      reason,
+    },
+  };
+}
+
+async function refundFailedPaidQuery(
+  cause: unknown,
+  payment: QueryPaymentEvidence,
+  reason: string,
+  stage: string,
+  query?: QueryRecord,
+): Promise<never> {
+  try {
+    const refundedPayment = await attachReaderRefund(payment, reason, true);
+    throw new PaidQueryAgentError(cause, refundedPayment, stage, query);
+  } catch (refundError) {
+    if (refundError instanceof PaidQueryAgentError) throw refundError;
+    throw new PaidQueryAgentError(
+      refundError,
+      payment,
+      "reader-refund",
+      query,
+      {
+        stage,
+        message:
+          cause instanceof Error ? cause.message : "Paid query agent failed.",
+      },
+    );
+  }
 }
 
 function sourcePaidQueryCount(ledger: Ledger, sourceId: string): number {

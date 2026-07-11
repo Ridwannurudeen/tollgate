@@ -197,6 +197,72 @@ function traceHashCandidates(query) {
   ];
 }
 
+function allocatePool(sourceIds, weights, poolAtomicUsdc) {
+  const totalWeight = sourceIds.reduce(
+    (sum, sourceId) => sum + Math.max(0, weights.get(sourceId) ?? 0),
+    0,
+  );
+  const rewards = new Map();
+  if (sourceIds.length === 0 || totalWeight <= 0 || poolAtomicUsdc <= 0) {
+    return rewards;
+  }
+  let allocated = 0;
+  for (const sourceId of sourceIds) {
+    const reward = Math.floor(
+      (poolAtomicUsdc * Math.max(0, weights.get(sourceId) ?? 0)) /
+        totalWeight,
+    );
+    rewards.set(sourceId, reward);
+    allocated += reward;
+  }
+  let remainder = poolAtomicUsdc - allocated;
+  for (const sourceId of sourceIds) {
+    if (remainder <= 0) break;
+    rewards.set(sourceId, (rewards.get(sourceId) ?? 0) + 1);
+    remainder -= 1;
+  }
+  return rewards;
+}
+
+function scoreContribution(claimSupport, poolAtomicUsdc, fallbackAmounts) {
+  const sourceIds = Array.from(
+    new Set([
+      ...Object.keys(fallbackAmounts),
+      ...claimSupport.flatMap((support) =>
+        support.sourceId ? [support.sourceId] : [],
+      ),
+    ]),
+  );
+  const supported = claimSupport.filter(
+    (support) => support.status === "supported" && support.sourceId,
+  );
+  const marginal = new Map(
+    sourceIds.map((sourceId) => [
+      sourceId,
+      supported.length -
+        supported.filter((support) => support.sourceId !== sourceId).length,
+    ]),
+  );
+  const hasPositiveContribution = sourceIds.some(
+    (sourceId) => (marginal.get(sourceId) ?? 0) > 0,
+  );
+  const weights = hasPositiveContribution
+    ? marginal
+    : new Map(
+        sourceIds.map((sourceId) => [
+          sourceId,
+          Math.max(0, fallbackAmounts[sourceId] ?? 0) || 1,
+        ]),
+      );
+  const rewards = allocatePool(sourceIds, weights, Math.max(0, poolAtomicUsdc));
+  return sourceIds.map((sourceId) => ({
+    sourceId,
+    marginalContribution: Math.max(0, marginal.get(sourceId) ?? 0),
+    rewardAtomicUsdc: rewards.get(sourceId) ?? 0,
+    fallback: !hasPositiveContribution,
+  }));
+}
+
 export function verifyLedger(ledger) {
   const issues = [];
   const receiptHashes = new Set(
@@ -256,6 +322,97 @@ export function verifyLedger(ledger) {
         receiptHash: query.traceHash,
         reason: `query ${query.id} has invalid trace hash`,
       });
+    }
+
+    const hasContributionProof =
+      query.claimSupport !== undefined ||
+      query.contributionScores !== undefined ||
+      query.claimSupportRoot !== undefined;
+    if (hasContributionProof) {
+      if (!query.claimSupport || !query.claimSupportRoot) {
+        issues.push({
+          index: -1,
+          reason: `query ${query.id} has incomplete claim-support evidence`,
+        });
+      } else if (sha256Hex(query.claimSupport) !== query.claimSupportRoot) {
+        issues.push({
+          index: -1,
+          receiptHash: query.claimSupportRoot,
+          reason: `query ${query.id} has invalid claim-support root`,
+        });
+      }
+
+      if (!query.claimSupport || !query.contributionScores) {
+        issues.push({
+          index: -1,
+          reason: `query ${query.id} has incomplete contribution scores`,
+        });
+      } else {
+        const scoredSourceIds = new Set(
+          query.contributionScores.map((score) => score.sourceId),
+        );
+        const fallbackAmounts = Object.fromEntries(
+          query.citations
+            .filter((citation) => scoredSourceIds.has(citation.sourceId))
+            .map((citation) => [citation.sourceId, citation.amountAtomicUsdc]),
+        );
+        const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
+          (sum, amount) => sum + amount,
+          0,
+        );
+        const expectedScores = scoreContribution(
+          query.claimSupport,
+          poolAtomicUsdc,
+          fallbackAmounts,
+        );
+        if (sha256Hex(expectedScores) !== sha256Hex(query.contributionScores)) {
+          issues.push({
+            index: -1,
+            reason: `query ${query.id} has contribution scores that do not match claim support`,
+          });
+        }
+        for (const score of expectedScores) {
+          const citation = query.citations.find(
+            (candidate) => candidate.sourceId === score.sourceId,
+          );
+          if (!citation) {
+            issues.push({
+              index: -1,
+              reason: `query ${query.id} has contribution score for missing citation`,
+            });
+            continue;
+          }
+          const shouldRefund = !score.fallback && score.rewardAtomicUsdc === 0;
+          if (
+            (shouldRefund && citation.payoutPolicy !== "refund-unused") ||
+            (!shouldRefund &&
+              citation.payoutAtomicUsdc !== score.rewardAtomicUsdc)
+          ) {
+            issues.push({
+              index: -1,
+              reason: `query ${query.id} has citation payout that does not match contribution score`,
+            });
+          }
+          const receipt = ledger.receipts.find(
+            (candidate) =>
+              candidate.queryId === query.id &&
+              candidate.sourceId === citation.sourceId,
+          );
+          if (receipt) {
+            const expectedAmount =
+              receipt.settlementMode === "refunded"
+                ? citation.amountAtomicUsdc
+                : (citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc);
+            if (receipt.amountAtomicUsdc !== expectedAmount) {
+              issues.push({
+                index: -1,
+                receiptHash: receipt.receiptHash,
+                reason: `query ${query.id} has receipt amount that does not match contribution payout`,
+              });
+            }
+          }
+        }
+      }
     }
 
     query.receiptHashes.forEach((receiptHash) => {

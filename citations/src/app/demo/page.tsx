@@ -10,16 +10,13 @@ import {
   shortHash,
   shortWallet,
 } from "@/lib/format";
-import {
-  getJudgeDemoEvidence,
-  readLedger,
-  verifyLedgerIntegrity,
-} from "@/lib/ledger";
+import { getJudgeDemoEvidence } from "@/lib/ledger";
+import { buildProofPack } from "@/lib/proof-pack";
 import {
   readCachedSlashBondStatus,
   readDemoSlashBondEvidence,
 } from "@/lib/slash-bond";
-import type { AnswerEvidence, Ledger, PaymentReceipt } from "@/lib/types";
+import type { AnswerEvidence, PaymentReceipt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -32,20 +29,6 @@ type DemoStep = {
   href?: string;
   linkText: string;
 };
-
-function totalReceiptPaid(ledger: Ledger): number {
-  return ledger.receipts.reduce(
-    (sum, receipt) => sum + receipt.amountAtomicUsdc,
-    0,
-  );
-}
-
-function totalReaderPaid(ledger: Ledger): number {
-  return ledger.queries.reduce(
-    (sum, query) => sum + (query.readerPayment?.amountAtomicUsdc ?? 0),
-    0,
-  );
-}
 
 function sourcePurchaseReceipt(
   evidence: AnswerEvidence | null,
@@ -86,13 +69,14 @@ function StepCard({ step }: { step: DemoStep }) {
 }
 
 export default async function DemoPage() {
-  const [ledger, covenant, slashBond, demoSlash] = await Promise.all([
-    readLedger(),
+  const [proof, covenant, slashBond, demoSlash] = await Promise.all([
+    buildProofPack(),
     readCovenantEnvelope().catch(() => null),
     readCachedSlashBondStatus().catch(() => null),
     readDemoSlashBondEvidence().catch(() => null),
   ]);
-  const verification = verifyLedgerIntegrity(ledger);
+  const ledger = { queries: proof.queries, receipts: proof.receipts };
+  const verification = proof.integrity;
   const demo = getJudgeDemoEvidence(ledger);
   const sourceReceipt = sourcePurchaseReceipt(demo.sourcePurchase);
   const verifiedReceiptCount = ledger.receipts.filter(
@@ -219,9 +203,13 @@ export default async function DemoPage() {
 
         <section className="receipt-proof">
           <div className="signature-stat proof-stat">
-            <span className="stat-label">payments recorded</span>
-            <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
-            <span className="stat-unit">USDC on Arc</span>
+            <span className="stat-label">independent reader volume</span>
+            <strong>
+              {formatDollars(
+                proof.traction.independentReaderPaymentsAtomicUsdc,
+              )}
+            </strong>
+            <span className="stat-unit">USDC</span>
             <span className="stamp" aria-hidden="true">
               recorded / on-chain
             </span>
@@ -261,8 +249,10 @@ export default async function DemoPage() {
             <strong>{trackRecordQueries.length}</strong>
           </div>
           <div className="metric">
-            <span>reader paid</span>
-            <strong>{formatDollars(totalReaderPaid(ledger))}</strong>
+            <span>total reader volume</span>
+            <strong>
+              {formatDollars(proof.traction.totalReaderPaymentsAtomicUsdc)}
+            </strong>
           </div>
           <div className="metric">
             <span>issues</span>

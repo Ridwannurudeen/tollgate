@@ -57,4 +57,19 @@ describe("POST /api/query", () => {
     expect(body.query.receiptHashes).toEqual([]);
     expect(body.receipts).toEqual([]);
   });
+
+  it("surfaces a missing judge-strict planner as a configuration stage", async () => {
+    mocks.settleQuestion.mockRejectedValueOnce(
+      new Error("Judge-strict mode requires a configured LLM planner."),
+    );
+
+    const response = await POST(
+      request("How does a strict agent buy useful citations?"),
+    );
+    const body = (await response.json()) as { error: string; stage: string };
+
+    expect(response.status).toBe(502);
+    expect(body.stage).toBe("configuration");
+    expect(body.error).toContain("configured LLM planner");
+  });
 });

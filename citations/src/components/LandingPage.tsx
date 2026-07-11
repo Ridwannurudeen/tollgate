@@ -1,43 +1,31 @@
 import Link from "next/link";
 import { CountUpNumber } from "@/components/CountUpNumber";
 import { EarningsBoard } from "@/components/EarningsBoard";
+import { JudgeDemoPanel } from "@/components/JudgeDemoPanel";
 import { LegacyHashRedirect } from "@/components/LegacyHashRedirect";
 import { ReceiptTicker } from "@/components/ReceiptTicker";
 import { formatDollars, shortHash } from "@/lib/format";
 import { verifiedExternalCreatorSources } from "@/lib/first-load";
-import type { CreatorEarnings, CreatorSource, Ledger } from "@/lib/types";
+import type { JudgeProofPack } from "@/lib/proof-pack";
+import type { CreatorSource } from "@/lib/types";
 
 type Props = {
   sources: CreatorSource[];
-  ledger: Ledger;
-  creators: CreatorEarnings[];
+  proof: JudgeProofPack;
 };
 
-function totalPaid(ledger: Ledger): number {
-  return ledger.queries.reduce((sum, query) => sum + query.totalAtomicUsdc, 0);
-}
-
-function totalReaderPaid(ledger: Ledger): number {
-  return ledger.queries.reduce(
-    (sum, query) => sum + (query.readerPayment?.amountAtomicUsdc ?? 0),
-    0,
-  );
-}
-
-function latestHash(ledger: Ledger): string {
-  return ledger.receipts.at(-1)?.receiptHash ?? `0x${"0".repeat(64)}`;
-}
-
-export function LandingPage({ sources, ledger, creators }: Props) {
+export function LandingPage({ sources, proof }: Props) {
   const externalCreators = verifiedExternalCreatorSources(sources);
   const stats = {
-    totalPaid: totalPaid(ledger),
-    readerPaid: totalReaderPaid(ledger),
-    queryCount: ledger.queries.length,
-    receiptCount: ledger.receipts.length,
-    creatorCount: creators.length,
-    sourceCount: sources.length,
-    latestHash: latestHash(ledger),
+    totalPaid: proof.traction.totalTestAtomicUsdc,
+    readerPaid: proof.traction.totalReaderPaymentsAtomicUsdc,
+    independentReaderPaid: proof.traction.independentReaderPaymentsAtomicUsdc,
+    independentPaidQueries: proof.traction.independentPaidQueries,
+    queryCount: proof.queries.length,
+    receiptCount: proof.traction.payoutReceipts,
+    creatorCount: proof.creators.length,
+    sourceCount: proof.sources.length,
+    latestHash: proof.ledger.latestHash ?? `0x${"0".repeat(64)}`,
   };
 
   return (
@@ -88,13 +76,15 @@ export function LandingPage({ sources, ledger, creators }: Props) {
 
       <Link className="traction-audit-strip" href="/proof">
         <strong>
-          3 independent teams registered, verified ownership, and were paid real
-          USDC on Arc - 2 onboarded autonomously by their own agents.
+          {stats.independentPaidQueries} independently classified reader
+          payments; sponsored, fixture, and unclassified volume stays separate.
         </strong>
-        <span>Review traction quality</span>
+        <span>Review actor classes</span>
       </Link>
 
-      <ReceiptTicker receipts={ledger.receipts} />
+      <JudgeDemoPanel />
+
+      <ReceiptTicker receipts={proof.receipts} />
 
       <section className="how-it-works landing-how" id="how">
         <div className="section-heading">
@@ -177,9 +167,9 @@ export function LandingPage({ sources, ledger, creators }: Props) {
           <p className="eyebrow">live traction</p>
           <h2>Creator earnings are visible before the pitch deck</h2>
           <p className="hero-text">
-            The homepage now shows the network heartbeat and sends operators to
-            the dedicated workbench routes instead of burying every action in
-            one long page.
+            Headline traction uses independently classified reader activity.
+            Total payment volume remains visible below it, with fixture and
+            sponsored activity kept out of the independent number.
           </p>
         </div>
         <div className="metrics-band profile-metrics">
@@ -192,7 +182,11 @@ export function LandingPage({ sources, ledger, creators }: Props) {
             <strong>{stats.receiptCount}</strong>
           </div>
           <div className="metric">
-            <span>reader paid</span>
+            <span>independent reader paid</span>
+            <strong>{formatDollars(stats.independentReaderPaid)}</strong>
+          </div>
+          <div className="metric">
+            <span>total reader volume</span>
             <strong>{formatDollars(stats.readerPaid)}</strong>
           </div>
           <div className="metric">
@@ -320,7 +314,7 @@ export function LandingPage({ sources, ledger, creators }: Props) {
       </section>
 
       <section className="landing-board">
-        <EarningsBoard creators={creators} limit={5} sources={sources} />
+        <EarningsBoard creators={proof.creators} limit={5} sources={sources} />
       </section>
 
       <section className="landing-final-cta">

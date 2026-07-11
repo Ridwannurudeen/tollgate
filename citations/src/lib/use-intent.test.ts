@@ -116,6 +116,8 @@ describe("TollgateUseIntent", () => {
 
     expect(record).toMatchObject({
       digest: built.digest,
+      chainId: 5_042_002,
+      registryAddress: REGISTRY,
       nonce: "7",
       maxSpendAtomicUsdc: "1000",
       anchorTx: `0x${"c".repeat(64)}`,

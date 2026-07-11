@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { EarningsBoard } from "@/components/EarningsBoard";
 import { SiteNav } from "@/components/SiteNav";
+import {
+  actorClassForPayment,
+  isIndependentActorClass,
+} from "@/lib/actor-class";
 import { readSources } from "@/lib/catalog";
 import { readCovenantEnvelope } from "@/lib/covenant";
 import {
@@ -15,11 +19,7 @@ import {
   settlementLabel,
   shortHash,
 } from "@/lib/format";
-import {
-  readLedger,
-  summarizeCreators,
-  verifyLedgerIntegrity,
-} from "@/lib/ledger";
+import { buildProofPack } from "@/lib/proof-pack";
 import { readCachedSlashBondStatus } from "@/lib/slash-bond";
 import type { Ledger } from "@/lib/types";
 
@@ -32,13 +32,6 @@ type SourceStat = {
   earnedAtomicUsdc: number;
   citationCount: number;
 };
-
-function totalReceiptPaid(ledger: Ledger): number {
-  return ledger.receipts.reduce(
-    (sum, receipt) => sum + receipt.amountAtomicUsdc,
-    0,
-  );
-}
 
 function sourceStats(ledger: Ledger): SourceStat[] {
   const stats = new Map<string, SourceStat>();
@@ -64,18 +57,33 @@ function sourceStats(ledger: Ledger): SourceStat[] {
 }
 
 export default async function ProofPage() {
-  const [ledger, sources, covenant, slashBond] = await Promise.all([
-    readLedger(),
+  const [proof, sources, covenant, slashBond] = await Promise.all([
+    buildProofPack(),
     readSources(),
     readCovenantEnvelope().catch(() => null),
     readCachedSlashBondStatus().catch(() => null),
   ]);
-  const creators = summarizeCreators(ledger);
-  const verification = verifyLedgerIntegrity(ledger);
+  const ledger = { queries: proof.queries, receipts: proof.receipts };
+  const creators = proof.creators;
+  const verification = proof.integrity;
   const sourceLeaders = sourceStats(ledger);
   const latestReceipt = ledger.receipts.at(-1);
   const latestQuery = ledger.queries[0] ?? null;
-  const economics = ledgerPaidQueryEconomics(ledger);
+  const actorMetrics = proof.traction.actorMetrics;
+  const independentPaidQueries = ledger.queries.filter(
+    (query) =>
+      query.readerPayment &&
+      isIndependentActorClass(actorClassForPayment(query.readerPayment)),
+  );
+  const independentQueryIds = new Set(
+    independentPaidQueries.map((query) => query.id),
+  );
+  const independentEconomics = ledgerPaidQueryEconomics({
+    queries: independentPaidQueries,
+    receipts: ledger.receipts.filter((receipt) =>
+      independentQueryIds.has(receipt.queryId),
+    ),
+  });
   const externalSources = sources.filter(
     (source) => source.sourceKind === "external",
   );
@@ -83,15 +91,7 @@ export default async function ProofPage() {
   const internalSources = sources.filter(
     (source) => source.sourceKind === "internal-test",
   );
-  const paidQueries = ledger.queries.filter((query) => query.readerPayment);
-  const uniquePayers = new Set(
-    paidQueries
-      .map((query) => query.readerPayment?.payer)
-      .filter((payer): payer is string => Boolean(payer)),
-  );
-  const uniqueCreatorWallets = new Set(
-    ledger.receipts.map((receipt) => receipt.wallet.toLowerCase()),
-  );
+  const uniqueCreatorWallets = proof.traction.uniqueCreatorWallets;
   const verifiedReceiptCount = ledger.receipts.filter(
     (receipt) => receipt.settlementMode === "x402-verified",
   ).length;
@@ -122,11 +122,19 @@ export default async function ProofPage() {
 
         <section className="receipt-proof">
           <div className="signature-stat proof-stat">
-            <span className="stat-label">payments recorded</span>
-            <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
+            <span className="stat-label">independent reader volume</span>
+            <strong>
+              {formatDollars(actorMetrics.independent.atomicUsdc)}
+            </strong>
             <div className="receipt-lines">
               <span className="receipt-line">
                 receipts <strong>{ledger.receipts.length}</strong>
+              </span>
+              <span className="receipt-line">
+                total creator receipt volume{" "}
+                <strong>
+                  {formatDollars(proof.traction.totalTestAtomicUsdc)}
+                </strong>
               </span>
               <span className="receipt-line">
                 chain <strong>{verification.ok ? "valid" : "review"}</strong>
@@ -167,22 +175,30 @@ export default async function ProofPage() {
             <strong>{sources.length}</strong>
           </div>
           <div className="metric">
-            <span>reader paid</span>
-            <strong>{formatDollars(economics.readerPaidAtomicUsdc)}</strong>
-          </div>
-          <div className="metric">
-            <span>creator payouts (reader-paid)</span>
-            <strong>{formatDollars(economics.creatorPayoutsAtomicUsdc)}</strong>
-          </div>
-          <div className="metric">
-            <span>protocol retained (reader-paid)</span>
+            <span>independent reader paid</span>
             <strong>
-              {formatDollars(economics.protocolRetainedAtomicUsdc)}
+              {formatDollars(actorMetrics.independent.atomicUsdc)}
+            </strong>
+          </div>
+          <div className="metric">
+            <span>creator payouts (independent)</span>
+            <strong>
+              {formatDollars(independentEconomics.creatorPayoutsAtomicUsdc)}
+            </strong>
+          </div>
+          <div className="metric">
+            <span>protocol retained (independent)</span>
+            <strong>
+              {formatDollars(independentEconomics.protocolRetainedAtomicUsdc)}
             </strong>
           </div>
           <div className="metric">
             <span>budget utilization</span>
-            <strong>{formatBudgetUtilization(economics)}</strong>
+            <strong>{formatBudgetUtilization(independentEconomics)}</strong>
+          </div>
+          <div className="metric">
+            <span>total reader volume</span>
+            <strong>{formatDollars(actorMetrics.total.atomicUsdc)}</strong>
           </div>
           <div className="metric">
             <span>track records</span>
@@ -288,24 +304,34 @@ export default async function ProofPage() {
               </strong>
             </div>
             <div className="metric">
-              <span>paid queries</span>
-              <strong>{paidQueries.length}</strong>
+              <span>independent paid queries</span>
+              <strong>{actorMetrics.independent.paymentCount}</strong>
+            </div>
+            <div className="metric">
+              <span>total paid queries</span>
+              <strong>{actorMetrics.total.paymentCount}</strong>
             </div>
             <div className="metric">
               <span>payment receipts</span>
               <strong>{ledger.receipts.length}</strong>
             </div>
             <div className="metric">
-              <span>unique payer wallets</span>
-              <strong>{uniquePayers.size}</strong>
+              <span>independent payer wallets</span>
+              <strong>{actorMetrics.independent.uniquePayerWallets}</strong>
+            </div>
+            <div className="metric">
+              <span>total payer wallets</span>
+              <strong>{actorMetrics.total.uniquePayerWallets}</strong>
             </div>
             <div className="metric">
               <span>unique creator wallets</span>
-              <strong>{uniqueCreatorWallets.size}</strong>
+              <strong>{uniqueCreatorWallets}</strong>
             </div>
             <div className="metric">
-              <span>payments recorded</span>
-              <strong>{formatDollars(totalReceiptPaid(ledger))}</strong>
+              <span>creator receipt volume</span>
+              <strong>
+                {formatDollars(proof.traction.totalTestAtomicUsdc)}
+              </strong>
             </div>
           </div>
         </section>

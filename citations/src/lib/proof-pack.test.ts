@@ -20,6 +20,18 @@ describe("judge proof pack", () => {
       });
       expect(proof.settlement.readerPayments.count).toBeGreaterThanOrEqual(0);
       expect(proof.settlement.feeRouterPayouts.count).toBeGreaterThanOrEqual(0);
+      expect(proof.traction.paidQueries).toBe(
+        proof.traction.actorMetrics.independent.paymentCount,
+      );
+      expect(proof.traction.totalPaidQueries).toBe(
+        proof.traction.actorMetrics.total.paymentCount,
+      );
+      expect(proof.traction.uniquePayerWallets).toBe(
+        proof.traction.actorMetrics.independent.uniquePayerWallets,
+      );
+      expect(proof.traction.totalUniquePayerWallets).toBe(
+        proof.traction.actorMetrics.total.uniquePayerWallets,
+      );
       expect(proof.integrity).toEqual(proof.ledger.verification);
       expect(proof.ledger.valid).toBe(true);
     } finally {

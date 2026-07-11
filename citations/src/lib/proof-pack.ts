@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readSources } from "./catalog";
+import { actorClassCounts, summarizeActorPayments } from "./actor-class";
 import { readFeeRouterSplitRegistry } from "./fee-router";
 import { readLedger, summarizeCreators, verifyLedgerIntegrity } from "./ledger";
 import { tollgateAgentWallet } from "./payments";
@@ -30,11 +31,10 @@ export async function buildProofPack() {
   const creators = summarizeCreators(ledger);
   const verification = verifyLedgerIntegrity(ledger);
   const paidQueries = ledger.queries.filter((query) => query.readerPayment);
-  const uniquePayers = new Set(
-    paidQueries
-      .map((query) => query.readerPayment?.payer)
-      .filter((payer): payer is string => Boolean(payer)),
+  const paidPayments = paidQueries.flatMap((query) =>
+    query.readerPayment ? [query.readerPayment] : [],
   );
+  const actorMetrics = summarizeActorPayments(paidPayments);
   const uniqueCreatorWallets = new Set(
     ledger.receipts.map((receipt) => receipt.wallet.toLowerCase()),
   );
@@ -56,8 +56,7 @@ export async function buildProofPack() {
     agent: {
       strictLlmRuns: ledger.queries.filter(
         (query) =>
-          query.agentMode === "llm" &&
-          query.agentServerMode === "judge-strict",
+          query.agentMode === "llm" && query.agentServerMode === "judge-strict",
       ).length,
       llmRuns: ledger.queries.filter((query) => query.agentMode === "llm")
         .length,
@@ -68,11 +67,13 @@ export async function buildProofPack() {
         .length,
       skipDecisions: sourceDecisions.filter((decision) => !decision.selected)
         .length,
-      abstentions: ledger.queries.filter((query) => query.citations.length === 0)
-        .length,
-      refundedSources: ledger.receipts.filter(
-        (receipt) => receipt.settlementMode === "refunded",
+      abstentions: ledger.queries.filter(
+        (query) => query.citations.length === 0,
       ).length,
+      refundedSources: ledger.queries.reduce(
+        (sum, query) => sum + (query.refundSummary?.refundedCount ?? 0),
+        0,
+      ),
     },
     settlement: {
       readerPayments: {
@@ -114,9 +115,16 @@ export async function buildProofPack() {
       ).length,
       verifiedCreators: sources.filter((source) => source.verifiedCreator)
         .length,
-      paidQueries: paidQueries.length,
+      paidQueries: actorMetrics.independent.paymentCount,
+      independentPaidQueries: actorMetrics.independent.paymentCount,
+      totalPaidQueries: actorMetrics.total.paymentCount,
+      independentReaderPaymentsAtomicUsdc: actorMetrics.independent.atomicUsdc,
+      totalReaderPaymentsAtomicUsdc: actorMetrics.total.atomicUsdc,
+      actorClassCounts: actorClassCounts(paidPayments),
+      actorMetrics,
       payoutReceipts: ledger.receipts.length,
-      uniquePayerWallets: uniquePayers.size,
+      uniquePayerWallets: actorMetrics.independent.uniquePayerWallets,
+      totalUniquePayerWallets: actorMetrics.total.uniquePayerWallets,
       uniqueCreatorWallets: uniqueCreatorWallets.size,
       totalTestAtomicUsdc: ledger.receipts.reduce(
         (sum, receipt) => sum + receipt.amountAtomicUsdc,
@@ -145,3 +153,5 @@ export async function buildProofPack() {
     queries: ledger.queries,
   };
 }
+
+export type JudgeProofPack = Awaited<ReturnType<typeof buildProofPack>>;

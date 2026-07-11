@@ -1,28 +1,17 @@
 import { LandingPage } from "@/components/LandingPage";
 import { SiteNav } from "@/components/SiteNav";
 import { publicSource, readSources } from "@/lib/catalog";
-import {
-  readLedger,
-  summarizeCreators,
-  verifyLedgerIntegrity,
-} from "@/lib/ledger";
+import { buildProofPack } from "@/lib/proof-pack";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const ledger = await readLedger();
-  const creators = summarizeCreators(ledger);
-  const sources = await readSources();
-  const verification = verifyLedgerIntegrity(ledger);
+  const [proof, sources] = await Promise.all([buildProofPack(), readSources()]);
 
   return (
     <>
-      <SiteNav proofOk={verification.ok} />
-      <LandingPage
-        creators={creators}
-        ledger={ledger}
-        sources={sources.map(publicSource)}
-      />
+      <SiteNav proofOk={proof.integrity.ok} />
+      <LandingPage proof={proof} sources={sources.map(publicSource)} />
     </>
   );
 }

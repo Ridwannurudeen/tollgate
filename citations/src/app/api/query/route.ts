@@ -39,12 +39,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     const strictPlannerFailure = error instanceof AgentPlanningError;
+    const strictConfigurationFailure =
+      error instanceof Error &&
+      error.message ===
+        "Judge-strict mode requires a configured LLM planner.";
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Query failed.",
-        ...(strictPlannerFailure ? { stage: error.stage } : {}),
+        ...(strictPlannerFailure
+          ? { stage: error.stage }
+          : strictConfigurationFailure
+            ? { stage: "configuration" }
+            : {}),
       },
-      { status: strictPlannerFailure ? 502 : 400 },
+      { status: strictPlannerFailure || strictConfigurationFailure ? 502 : 400 },
     );
   }
 }

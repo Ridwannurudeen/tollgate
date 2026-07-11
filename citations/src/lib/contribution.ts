@@ -105,6 +105,12 @@ function parseExtractedClaims(text: string): string[] {
   );
 }
 
+function sentenceClaims(answer: string): string[] {
+  return (answer.match(/[^.!?]+(?:[.!?]+|$)/g) ?? [])
+    .map((sentence) => clean(sentence, MAX_CLAIM_LENGTH))
+    .filter(Boolean);
+}
+
 export async function extractClaims(
   answer: string,
   llm: ClaimLlm,
@@ -113,7 +119,15 @@ export async function extractClaims(
   if (!normalizedAnswer) return [];
   const claims = parseExtractedClaims(await llm(claimMessages(normalizedAnswer)));
   const exactClaims = claims.filter((claim) => normalizedAnswer.includes(claim));
-  return exactClaims.length > 0 ? exactClaims : [normalizedAnswer];
+  const uncoveredSentences = sentenceClaims(normalizedAnswer).filter(
+    (sentence) => !exactClaims.some((claim) => sentence.includes(claim)),
+  );
+  const coveredClaims = Array.from(
+    new Set([...exactClaims, ...uncoveredSentences]),
+  );
+  return coveredClaims.length > 0 && coveredClaims.length <= MAX_CLAIMS
+    ? coveredClaims
+    : [normalizedAnswer];
 }
 
 function parseVerificationRows(text: string): unknown[] | null {
@@ -289,7 +303,7 @@ export function removeUnsupportedClaims(
   for (const support of claimSupport) {
     if (support.status === "supported") continue;
     if (support.claim && sanitized.includes(support.claim)) {
-      sanitized = sanitized.replace(support.claim, " ");
+      sanitized = sanitized.split(support.claim).join(" ");
     } else {
       hadUnremovableClaim = true;
     }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createQueryRecord } from "./engine";
+import { claimSupportRoot, scoreContribution } from "./contribution";
 import { sha256Hex } from "./hash";
 import { createReceipts, verifyLedgerIntegrity } from "./ledger";
+import { createQueryPaymentEvidence } from "./settlement";
 import type { Ledger, QueryRecord } from "./types";
 
 function ledgerFor(query: QueryRecord): Ledger {
@@ -90,5 +92,96 @@ describe("ledger integrity", () => {
       query.citations[0]?.amountAtomicUsdc,
     );
     expect(verifyLedgerIntegrity(ledger).ok).toBe(true);
+  });
+
+  it("rejects tampered claim support and contribution payouts", () => {
+    const base = createQueryRecord(
+      "How should AI agents prove useful citation payouts?",
+      "2026-07-11T01:04:00.000Z",
+    );
+    const citation = base.citations[0];
+    if (!citation) throw new Error("missing contribution citation");
+    const claimSupport = [
+      {
+        claim: "A useful citation binds a claim to stored evidence.",
+        sourceId: citation.sourceId,
+        span: "stored evidence",
+        status: "supported" as const,
+      },
+    ];
+    const contributionScores = scoreContribution(
+      claimSupport,
+      citation.amountAtomicUsdc,
+      { [citation.sourceId]: citation.amountAtomicUsdc },
+    );
+    const query: QueryRecord = {
+      ...base,
+      citations: [
+        {
+          ...citation,
+          payoutAtomicUsdc: contributionScores[0]?.rewardAtomicUsdc,
+        },
+      ],
+      claimSupport,
+      contributionScores,
+      claimSupportRoot: claimSupportRoot(claimSupport),
+    };
+    const ledger = ledgerFor(query);
+
+    expect(verifyLedgerIntegrity(ledger).ok).toBe(true);
+    expect(
+      verifyLedgerIntegrity({
+        ...ledger,
+        queries: [
+          {
+            ...ledger.queries[0],
+            claimSupport: [{ ...claimSupport[0], span: "tampered span" }],
+          } as QueryRecord,
+        ],
+      }).issues.some((issue) => issue.reason.includes("claim-support root")),
+    ).toBe(true);
+    expect(
+      verifyLedgerIntegrity({
+        ...ledger,
+        queries: [
+          {
+            ...ledger.queries[0],
+            contributionScores: [
+              {
+                ...contributionScores[0],
+                rewardAtomicUsdc:
+                  (contributionScores[0]?.rewardAtomicUsdc ?? 0) + 1,
+              },
+            ],
+          } as QueryRecord,
+        ],
+      }).issues.some((issue) => issue.reason.includes("contribution scores")),
+    ).toBe(true);
+  });
+
+  it("keeps post-hoc actor and refund metadata outside the payment hash", () => {
+    const payment = createQueryPaymentEvidence({
+      amountAtomicUsdc: 1_000,
+      settlementMode: "x402-settled",
+      payTo: "0x1111111111111111111111111111111111111111",
+      payer: "0x2222222222222222222222222222222222222222",
+      transaction: `0x${"3".repeat(64)}`,
+      paymentResource: "/api/paid-query",
+    });
+    const query = createQueryRecord(
+      "How should payment evidence keep administrative metadata additive?",
+      "2026-07-11T01:05:00.000Z",
+      undefined,
+      {
+        ...payment,
+        actorClass: "external-agent",
+        refundFailure: {
+          reason: "no-answer",
+          message: "Reader refund is not configured or funded.",
+        },
+      },
+    );
+
+    expect(verifyLedgerIntegrity(ledgerFor(query)).ok).toBe(true);
   });
 });

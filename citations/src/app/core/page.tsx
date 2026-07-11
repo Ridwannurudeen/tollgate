@@ -2,11 +2,7 @@ import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
 import { readSources } from "@/lib/catalog";
 import { formatDollars } from "@/lib/format";
-import {
-  readLedger,
-  summarizeCreators,
-  verifyLedgerIntegrity,
-} from "@/lib/ledger";
+import { buildProofPack } from "@/lib/proof-pack";
 
 export const dynamic = "force-dynamic";
 
@@ -138,30 +134,21 @@ async function loadJellyfin(): Promise<JellyfinProof | null> {
 }
 
 export default async function CorePage() {
-  const [ledger, sources, aperture, peertube, jellyfin, wordpress] =
+  const [proof, sources, aperture, peertube, jellyfin, wordpress] =
     await Promise.all([
-      readLedger(),
+      buildProofPack(),
       readSources(),
       loadAperture(),
       loadPeerTube(),
       loadJellyfin(),
       loadWordPress(),
     ]);
-  const creators = summarizeCreators(ledger);
-  const verification = verifyLedgerIntegrity(ledger);
-  const citationRouted = ledger.receipts.reduce(
-    (sum, receipt) => sum + receipt.amountAtomicUsdc,
-    0,
-  );
-  const paidQueries = ledger.queries.filter((query) => query.readerPayment);
-  const uniquePayers = new Set(
-    paidQueries
-      .map((query) => query.readerPayment?.payer)
-      .filter((payer): payer is string => Boolean(payer)),
-  );
-  const uniqueCreatorWallets = new Set(
-    ledger.receipts.map((receipt) => receipt.wallet.toLowerCase()),
-  );
+  const ledger = { queries: proof.queries, receipts: proof.receipts };
+  const creators = proof.creators;
+  const verification = proof.integrity;
+  const actorMetrics = proof.traction.actorMetrics;
+  const citationRouted = proof.traction.totalTestAtomicUsdc;
+  const uniqueCreatorWallets = proof.traction.uniqueCreatorWallets;
   const wordpressRouted =
     wordpress?.receipts.reduce(
       (sum, receipt) => sum + receipt.amountAtomicUsdc,
@@ -269,23 +256,43 @@ export default async function CorePage() {
               </strong>
             </div>
             <div className="evidence-row">
-              <span>paid queries</span>
-              <strong>{paidQueries.length}</strong>
+              <span>independent paid queries</span>
+              <strong>{actorMetrics.independent.paymentCount}</strong>
             </div>
             <div className="evidence-row">
-              <span>payment receipts</span>
+              <span>independent payer wallets</span>
+              <strong>{actorMetrics.independent.uniquePayerWallets}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>independent reader volume</span>
+              <strong>
+                {formatDollars(actorMetrics.independent.atomicUsdc)} USDC
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>total paid queries</span>
+              <strong>{actorMetrics.total.paymentCount}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>total payer wallets</span>
+              <strong>{actorMetrics.total.uniquePayerWallets}</strong>
+            </div>
+            <div className="evidence-row">
+              <span>total reader volume</span>
+              <strong>
+                {formatDollars(actorMetrics.total.atomicUsdc)} USDC
+              </strong>
+            </div>
+            <div className="evidence-row">
+              <span>creator payout receipts</span>
               <strong>{ledger.receipts.length}</strong>
             </div>
             <div className="evidence-row">
-              <span>unique payer wallets</span>
-              <strong>{uniquePayers.size}</strong>
-            </div>
-            <div className="evidence-row">
               <span>unique creator wallets</span>
-              <strong>{uniqueCreatorWallets.size}</strong>
+              <strong>{uniqueCreatorWallets}</strong>
             </div>
             <div className="evidence-row">
-              <span>payments recorded</span>
+              <span>creator receipt volume</span>
               <strong>{formatDollars(citationRouted)} USDC</strong>
             </div>
           </div>
@@ -315,7 +322,7 @@ export default async function CorePage() {
                 <strong>{creators.length}</strong>
               </div>
               <div className="metric wide">
-                <span>payments recorded</span>
+                <span>creator receipt volume</span>
                 <strong>{formatDollars(citationRouted)} USDC</strong>
               </div>
             </div>

@@ -16,6 +16,17 @@ export type SourceKind = "external" | "seed" | "internal-test";
 
 export type CreatorKind = "external" | "seed" | "internal-test";
 
+export type ActorClass =
+  | "operator"
+  | "fixture"
+  | "volume-engine"
+  | "reciprocal-partner"
+  | "sponsored-cold-human"
+  | "self-funded-cold-human"
+  | "external-agent"
+  | "external-integrator"
+  | "unclassified";
+
 export type SourceOwnershipProof = {
   method:
     | "wallet-signature"
@@ -213,6 +224,7 @@ export type QueryPaymentEvidence = {
   amountAtomicUsdc: number;
   settlementMode: SettlementMode;
   payTo: `0x${string}`;
+  actorClass?: ActorClass;
   payer?: string;
   transaction?: string;
   paymentResource: string;
@@ -223,6 +235,12 @@ export type QueryPaymentEvidence = {
     amountAtomicUsdc: number;
     transaction: string;
     reason: string;
+  };
+  // Post-hoc operational evidence. Like refund, this is excluded from
+  // paymentHash so a failed return attempt cannot rewrite the paid event.
+  refundFailure?: {
+    reason: string;
+    message: string;
   };
 };
 
@@ -239,6 +257,8 @@ export type TrackRecordEvidence = {
 export type UseIntentRecord = {
   digest: `0x${string}`;
   signature: `0x${string}`;
+  chainId: number;
+  registryAddress: `0x${string}`;
   nonce: string;
   anchorTx: `0x${string}`;
   maxSpendAtomicUsdc: string;

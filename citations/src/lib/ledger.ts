@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { claimSupportRoot, scoreContribution } from "./contribution";
 import { sha256Hex } from "./hash";
 import { notifyCreatorReceipts } from "./notify";
 import type {
@@ -427,7 +428,7 @@ function queryPaymentPayload(
   if (!query.readerPayment) return null;
   const payload: Omit<
     NonNullable<QueryRecord["readerPayment"]>,
-    "paymentHash"
+    "paymentHash" | "actorClass" | "refund" | "refundFailure"
   > = {
     amountAtomicUsdc: query.readerPayment.amountAtomicUsdc,
     settlementMode: query.readerPayment.settlementMode,
@@ -921,6 +922,100 @@ export function verifyLedgerIntegrity(ledger: Ledger): LedgerVerification {
         receiptHash: query.traceHash,
         reason: `query ${query.id} has an invalid trace hash.`,
       });
+    }
+
+    const hasContributionProof =
+      query.claimSupport !== undefined ||
+      query.contributionScores !== undefined ||
+      query.claimSupportRoot !== undefined;
+    if (hasContributionProof) {
+      if (!query.claimSupport || !query.claimSupportRoot) {
+        issues.push({
+          index: -1,
+          reason: `query ${query.id} has incomplete claim-support evidence.`,
+        });
+      } else if (claimSupportRoot(query.claimSupport) !== query.claimSupportRoot) {
+        issues.push({
+          index: -1,
+          receiptHash: query.claimSupportRoot,
+          reason: `query ${query.id} has an invalid claim-support root.`,
+        });
+      }
+
+      if (!query.claimSupport || !query.contributionScores) {
+        issues.push({
+          index: -1,
+          reason: `query ${query.id} has incomplete contribution scores.`,
+        });
+      } else {
+        const scoredSourceIds = new Set(
+          query.contributionScores.map((score) => score.sourceId),
+        );
+        const fallbackAmounts = Object.fromEntries(
+          query.citations
+            .filter((citation) => scoredSourceIds.has(citation.sourceId))
+            .map((citation) => [citation.sourceId, citation.amountAtomicUsdc]),
+        );
+        const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
+          (sum, amount) => sum + amount,
+          0,
+        );
+        const expectedScores = scoreContribution(
+          query.claimSupport,
+          poolAtomicUsdc,
+          fallbackAmounts,
+        );
+        if (
+          sha256Hex(expectedScores) !== sha256Hex(query.contributionScores)
+        ) {
+          issues.push({
+            index: -1,
+            reason: `query ${query.id} has contribution scores that do not match its claim-support table.`,
+          });
+        }
+
+        for (const score of expectedScores) {
+          const citation = query.citations.find(
+            (candidate) => candidate.sourceId === score.sourceId,
+          );
+          if (!citation) {
+            issues.push({
+              index: -1,
+              reason: `query ${query.id} has a contribution score for a missing citation.`,
+            });
+            continue;
+          }
+          const shouldRefund = !score.fallback && score.rewardAtomicUsdc === 0;
+          if (
+            (shouldRefund && citation.payoutPolicy !== "refund-unused") ||
+            (!shouldRefund &&
+              citation.payoutAtomicUsdc !== score.rewardAtomicUsdc)
+          ) {
+            issues.push({
+              index: -1,
+              reason: `query ${query.id} has a citation payout that does not match its contribution score.`,
+            });
+          }
+          const receipt = ledger.receipts.find(
+            (candidate) =>
+              candidate.queryId === query.id &&
+              candidate.sourceId === citation.sourceId,
+          );
+          if (receipt) {
+            const expectedAmount =
+              receipt.settlementMode === "refunded"
+                ? citation.amountAtomicUsdc
+                : (citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc);
+            if (receipt.amountAtomicUsdc !== expectedAmount) {
+              issues.push({
+                index: -1,
+                receiptHash: receipt.receiptHash,
+                reason: `query ${query.id} has a receipt amount that does not match its contribution payout.`,
+              });
+            }
+          }
+        }
+      }
     }
 
     query.receiptHashes.forEach((receiptHash) => {

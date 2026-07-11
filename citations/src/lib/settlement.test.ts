@@ -117,8 +117,13 @@ describe("LeptonWeb settlement engine", () => {
         throw new Error("expected PaidQueryAgentError");
       }
       expect(caught.message).toContain(
-        "Judge-strict mode requires a configured LLM planner.",
+        "Reader refund could not be settled on-chain.",
       );
+      expect(caught.stage).toBe("reader-refund");
+      expect(caught.priorFailure).toEqual({
+        stage: "configuration",
+        message: "Judge-strict mode requires a configured LLM planner.",
+      });
       expect(caught.readerPayment.paymentHash).toMatch(/^0x[0-9a-f]{64}$/);
       const after = await readLedger();
       expect(after.queries).toHaveLength(before.queries.length);
@@ -402,6 +407,21 @@ describe("LeptonWeb settlement engine", () => {
         creatorWallet: "0x3333333333333333333333333333333333333333",
       }),
     ).toThrow("No sources");
+  });
+
+  it("pins a judge profile to the requested source order", () => {
+    const sources = selectSources(
+      "How should AI agents pay creators with x402?",
+    );
+    const selectedIds = sources.slice(0, 2).map((source) => source.id);
+    const filtered = filterSourcesForSettlement(sources, {
+      sourceIds: selectedIds,
+    });
+
+    expect(filtered.map((source) => source.id)).toEqual(selectedIds);
+    expect(() =>
+      filterSourcesForSettlement(sources, { sourceIds: ["missing-source"] }),
+    ).toThrow("Judge demo sources are unavailable");
   });
 
   it("keeps the configured source budget inside the reader payment", () => {

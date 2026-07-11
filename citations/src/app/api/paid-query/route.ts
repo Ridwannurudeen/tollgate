@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaidQueryAgentError } from "@/lib/settlement";
 import {
+  isSponsoredJudgePayment,
+  JUDGE_DEMO_SOURCE_IDS,
+} from "@/lib/judge-demo";
+import {
   PAID_QUERY_PRICE_ATOMIC_USDC,
   tollgateAgentWallet,
 } from "@/lib/payments";
@@ -74,16 +78,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await settlePaidQuestion(question, {
-      amountAtomicUsdc: PAID_QUERY_PRICE_ATOMIC_USDC,
-      settlementMode: settlement.mode,
-      payTo: tollgateAgentWallet(),
-      payer: settlement.payer,
-      transaction: settlement.transaction,
-      paymentResource: "/api/paid-query",
-    }, {
-      creatorWallet,
-    });
+    const judgeDemo = isSponsoredJudgePayment(question, settlement.payer);
+
+    const result = await settlePaidQuestion(
+      question,
+      {
+        amountAtomicUsdc: PAID_QUERY_PRICE_ATOMIC_USDC,
+        settlementMode: settlement.mode,
+        payTo: tollgateAgentWallet(),
+        payer: settlement.payer,
+        transaction: settlement.transaction,
+        paymentResource: "/api/paid-query",
+      },
+      {
+        creatorWallet,
+        sourceIds: judgeDemo ? JUDGE_DEMO_SOURCE_IDS : undefined,
+      },
+    );
 
     return NextResponse.json(result, {
       status: 201,
@@ -96,6 +107,8 @@ export async function POST(request: NextRequest) {
           error: error.message,
           stage: error.stage,
           readerPayment: error.readerPayment,
+          query: error.query,
+          priorFailure: error.priorFailure,
         },
         { status: 502 },
       );

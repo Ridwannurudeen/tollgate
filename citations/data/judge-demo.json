@@ -1,0 +1,25 @@
+{
+  "question": "How does Tollgate pay creators when an AI answer cites their work?",
+  "candidates": [
+    {
+      "sourceId": "autonomous-source-buying",
+      "role": "agent decision process"
+    },
+    {
+      "sourceId": "creator-citation-economics",
+      "role": "creator payment economics"
+    },
+    {
+      "sourceId": "feerouter-splits-receipts",
+      "role": "on-chain payout and receipt proof"
+    },
+    {
+      "sourceId": "x402-settlement-schemes",
+      "role": "reader payment rail"
+    },
+    {
+      "sourceId": "unverified-source-escrow",
+      "role": "ownership and escrow boundary"
+    }
+  ]
+}

@@ -402,6 +402,8 @@ export function useIntentRecord(
   return {
     digest: built.digest,
     signature,
+    chainId: built.chainId,
+    registryAddress: built.registryAddress,
     nonce: built.intent.nonce.toString(),
     anchorTx,
     maxSpendAtomicUsdc: built.intent.maxSpendAtomicUsdc.toString(),
