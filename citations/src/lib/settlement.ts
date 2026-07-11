@@ -25,6 +25,15 @@ import {
   readLedger,
 } from "./ledger";
 import { publishTrackRecordForAnswer } from "./track-record";
+import {
+  anchorUseIntent,
+  assertSpendWithinIntent,
+  buildUseIntent,
+  signUseIntent,
+  useIntentEnabled,
+  useIntentRecord,
+  type BuiltUseIntent,
+} from "./use-intent";
 import type {
   CreatorSource,
   Ledger,
@@ -39,6 +48,11 @@ const DEFAULT_PROBATION_MAX_PAID_CITATIONS = 3;
 
 type SettleOptions = {
   creatorWallet?: string;
+};
+
+type PreparedUseIntent = {
+  built: BuiltUseIntent;
+  signature: `0x${string}`;
 };
 
 export class PaidQueryAgentError extends Error {
@@ -228,8 +242,13 @@ export async function settleQuestion(
     agentSources,
     agent.serverMode,
   );
+  const preparedUseIntent = await prepareUseIntent(query);
   const receiptEvidence = await routeCitationPayments(query);
-  return settleAndAnchorTrackRecord(query, receiptEvidence);
+  const anchoredQuery = await anchorPreparedUseIntent(
+    query,
+    preparedUseIntent,
+  );
+  return settleAndAnchorTrackRecord(anchoredQuery, receiptEvidence);
 }
 
 export function createQueryPaymentEvidence(
@@ -303,8 +322,13 @@ export async function settlePaidQuestion(
       "no-answer",
     );
   }
+  const preparedUseIntent = await prepareUseIntent(query);
   const receiptEvidence = await routeCitationPayments(query);
-  return settleAndAnchorTrackRecord(query, receiptEvidence);
+  const anchoredQuery = await anchorPreparedUseIntent(
+    query,
+    preparedUseIntent,
+  );
+  return settleAndAnchorTrackRecord(anchoredQuery, receiptEvidence);
 }
 
 export function filterSourcesForSettlement(
@@ -325,6 +349,36 @@ export function filterSourcesForSettlement(
 function envPositiveInteger(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+async function prepareUseIntent(
+  query: QueryRecord,
+): Promise<PreparedUseIntent | null> {
+  if (!useIntentEnabled()) return null;
+  if (process.env.LEPTONWEB_FEE_ROUTER_ENABLED !== "1") {
+    throw new Error(
+      "Use-intent anchoring requires LEPTONWEB_FEE_ROUTER_ENABLED=1.",
+    );
+  }
+  const built = buildUseIntent(query);
+  assertSpendWithinIntent(built.intent, built.plannedSpendAtomicUsdc);
+  const signature = await signUseIntent(built.intent, {
+    chainId: built.chainId,
+    registryAddress: built.registryAddress,
+  });
+  return { built, signature };
+}
+
+async function anchorPreparedUseIntent(
+  query: QueryRecord,
+  prepared: PreparedUseIntent | null,
+): Promise<QueryRecord> {
+  if (!prepared) return query;
+  const anchorTx = await anchorUseIntent(prepared.built, prepared.signature);
+  return {
+    ...query,
+    useIntent: useIntentRecord(prepared.built, prepared.signature, anchorTx),
+  };
 }
 
 function agentOptionsForLedger(ledger: Ledger) {

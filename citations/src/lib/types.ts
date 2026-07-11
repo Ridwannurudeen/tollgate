@@ -236,6 +236,19 @@ export type TrackRecordEvidence = {
   publishedAt: string;
 };
 
+export type UseIntentRecord = {
+  digest: `0x${string}`;
+  signature: `0x${string}`;
+  nonce: string;
+  anchorTx: `0x${string}`;
+  maxSpendAtomicUsdc: string;
+  expiry: string;
+  candidateSetRoot: `0x${string}`;
+  selectedSourcesRoot: `0x${string}`;
+  decisionTraceHash: `0x${string}`;
+  claimSupportRoot: `0x${string}`;
+};
+
 export type QueryRecord = {
   id: string;
   question: string;
@@ -252,6 +265,7 @@ export type QueryRecord = {
   claimSupport?: ClaimSupport[];
   contributionScores?: ContributionScore[];
   claimSupportRoot?: string;
+  useIntent?: UseIntentRecord;
   agentBudget?: AgentBudget;
   agentSteps?: AgentStep[];
   externalAssists?: ExternalAssist[];

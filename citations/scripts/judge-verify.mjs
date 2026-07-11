@@ -1,10 +1,30 @@
 import { verifyLedger } from "./verify-ledger.mjs";
+import { createHash } from "node:crypto";
+import { hashTypedData, keccak256, recoverAddress, toHex } from "viem";
 
 const DEFAULT_TARGET_URL = "https://tollgate.gudman.xyz";
 const ARC_RPC_URL =
   process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network";
 const FEE_ROUTER_ADDRESS =
   "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59".toLowerCase();
+const ARC_CHAIN_ID = 5042002;
+const USE_INTENT_DOMAIN_NAME = "Tollgate UseReceipt Registry";
+const USE_INTENT_DOMAIN_VERSION = "1";
+const USE_INTENT_TYPES = {
+  TollgateUseIntent: [
+    { name: "queryHash", type: "bytes32" },
+    { name: "candidateSetRoot", type: "bytes32" },
+    { name: "selectedSourcesRoot", type: "bytes32" },
+    { name: "decisionTraceHash", type: "bytes32" },
+    { name: "claimSupportRoot", type: "bytes32" },
+    { name: "maxSpendAtomicUsdc", type: "uint256" },
+    { name: "expiry", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+  ],
+};
+const USE_INTENT_ANCHORED_TOPIC = keccak256(
+  toHex("UseIntentAnchored(bytes32,bytes32,address)"),
+).toLowerCase();
 
 function targetUrlFromArgs() {
   for (let index = 2; index < process.argv.length; index += 1) {
@@ -105,6 +125,148 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function stableStringify(value) {
+  if (value === undefined) return "null";
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const record = value;
+    return `{${Object.keys(record)
+      .sort()
+      .filter((key) => record[key] !== undefined)
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function sha256Hex(value) {
+  return `0x${createHash("sha256").update(stableStringify(value)).digest("hex")}`;
+}
+
+function normalizedBytes32(value) {
+  return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+function intentMessage(query) {
+  const record = query.useIntent;
+  if (!record) throw new Error(`query ${query.id} has no use intent`);
+  return {
+    queryHash: query.queryHash,
+    candidateSetRoot: sha256Hex(query.sourceDecisions ?? []),
+    selectedSourcesRoot: sha256Hex(
+      query.citations.map((citation) => citation.sourceId),
+    ),
+    decisionTraceHash: query.traceHash ?? sha256Hex(query.agentSteps ?? []),
+    claimSupportRoot:
+      query.claimSupportRoot ?? sha256Hex(query.claimSupport ?? []),
+    maxSpendAtomicUsdc: BigInt(record.maxSpendAtomicUsdc),
+    expiry: BigInt(record.expiry),
+    nonce: BigInt(record.nonce),
+  };
+}
+
+function intentSpendAtomicUsdc(query) {
+  return query.citations.reduce((sum, citation) => {
+    if (citation.payoutPolicy === "refund-unused") return sum;
+    return sum + (citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc);
+  }, 0);
+}
+
+function hasIntentAnchorLog(
+  receipt,
+  registryAddress,
+  queryHash,
+  digest,
+  signer,
+) {
+  const paddedSigner = `0x${"0".repeat(24)}${signer.slice(2).toLowerCase()}`;
+  return (receipt?.logs ?? []).some((log) => {
+    const topics = log?.topics ?? [];
+    return (
+      log?.address?.toLowerCase() === registryAddress.toLowerCase() &&
+      topics[0]?.toLowerCase() === USE_INTENT_ANCHORED_TOPIC &&
+      topics[1]?.toLowerCase() === queryHash.toLowerCase() &&
+      topics[2]?.toLowerCase() === digest.toLowerCase() &&
+      topics[3]?.toLowerCase() === paddedSigner
+    );
+  });
+}
+
+async function verifyUseIntent(query, registryAddress, agentWallet, rpc) {
+  const record = query.useIntent;
+  if (!record) return { ok: true };
+  try {
+    const message = intentMessage(query);
+    const storedRoots = {
+      candidateSetRoot: record.candidateSetRoot,
+      selectedSourcesRoot: record.selectedSourcesRoot,
+      decisionTraceHash: record.decisionTraceHash,
+      claimSupportRoot: record.claimSupportRoot,
+    };
+    for (const [field, value] of Object.entries(storedRoots)) {
+      if (normalizedBytes32(value) !== message[field].toLowerCase()) {
+        return { ok: false, detail: `${field} differs from ledger recomputation` };
+      }
+    }
+    const digest = hashTypedData({
+      domain: {
+        name: USE_INTENT_DOMAIN_NAME,
+        version: USE_INTENT_DOMAIN_VERSION,
+        chainId: ARC_CHAIN_ID,
+        verifyingContract: registryAddress,
+      },
+      types: USE_INTENT_TYPES,
+      primaryType: "TollgateUseIntent",
+      message,
+    });
+    if (normalizedBytes32(record.digest) !== digest.toLowerCase()) {
+      return { ok: false, detail: "stored digest differs from recomputed digest" };
+    }
+    if (normalizedBytes32(message.queryHash) === null) {
+      return { ok: false, detail: "queryHash is not bytes32" };
+    }
+    if (BigInt(record.maxSpendAtomicUsdc) < BigInt(intentSpendAtomicUsdc(query))) {
+      return { ok: false, detail: "intent max spend is below settled spend" };
+    }
+    const recovered = await recoverAddress({
+      hash: digest,
+      signature: record.signature,
+    });
+    if (recovered.toLowerCase() !== agentWallet.toLowerCase()) {
+      return { ok: false, detail: `signature recovers ${recovered}, not agent wallet` };
+    }
+    const receipt = await rpc("eth_getTransactionReceipt", [record.anchorTx]);
+    if (!isSuccessfulReceipt(receipt)) {
+      return { ok: false, detail: "anchor transaction is not confirmed" };
+    }
+    const transaction = await rpc("eth_getTransactionByHash", [record.anchorTx]);
+    if (transaction?.to?.toLowerCase() !== registryAddress.toLowerCase()) {
+      return { ok: false, detail: "anchor transaction target is not the registry" };
+    }
+    if (
+      !hasIntentAnchorLog(
+        receipt,
+        registryAddress,
+        message.queryHash,
+        digest,
+        agentWallet,
+      )
+    ) {
+      return { ok: false, detail: "registry anchor event is missing or mismatched" };
+    }
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 function isSuccessfulReceipt(receipt) {
   return Boolean(
     receipt &&
@@ -191,6 +353,62 @@ async function main() {
       "creator claim count agrees with source registry",
       `proof=${proof.settlement?.creatorClaims?.count ?? "missing"} actual=${creatorClaimedCount}`,
     );
+  }
+
+  const useIntentQueries = ledger.queries.filter((query) => query.useIntent);
+  if (
+    proof.useIntent?.anchoredCount === useIntentQueries.length &&
+    (useIntentQueries.length === 0 || proof.useIntent?.registryAddress)
+  ) {
+    pass("use-intent count agrees with ledger");
+  } else {
+    fail(
+      "use-intent count agrees with ledger",
+      `proof=${proof.useIntent?.anchoredCount ?? "missing"} actual=${useIntentQueries.length}`,
+    );
+  }
+
+  if (useIntentQueries.length === 0) {
+    pass("use-intent anchoring has no records to verify");
+  } else {
+    const registryAddress =
+      proof.useIntent?.registryAddress ??
+      process.env.LEPTONWEB_USE_RECEIPT_REGISTRY_ADDRESS;
+    const agentWallet = proof.useIntent?.agentWallet;
+    if (
+      typeof registryAddress !== "string" ||
+      !/^0x[0-9a-fA-F]{40}$/.test(registryAddress) ||
+      typeof agentWallet !== "string" ||
+      !/^0x[0-9a-fA-F]{40}$/.test(agentWallet)
+    ) {
+      fail("use-intent registry configuration", "public registry and agent addresses are missing");
+    } else {
+      const registryCode = await rpcRequest("eth_getCode", [
+        registryAddress,
+        "latest",
+      ]);
+      if (typeof registryCode === "string" && registryCode !== "0x") {
+        pass("use-intent registry has deployed bytecode");
+      } else {
+        fail("use-intent registry has deployed bytecode");
+      }
+      for (const query of useIntentQueries) {
+        const result = await verifyUseIntent(
+          query,
+          registryAddress,
+          agentWallet,
+          rpcRequest,
+        );
+        if (result.ok) {
+          pass(`use-intent digest, signature, and anchor verified for ${query.id}`);
+        } else {
+          fail(
+            `use-intent digest, signature, and anchor verified for ${query.id}`,
+            result.detail,
+          );
+        }
+      }
+    }
   }
 
   const latestPaidQuery = ledger.queries

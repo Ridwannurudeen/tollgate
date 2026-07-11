@@ -363,6 +363,57 @@ export default async function AnswerPage({ params }: Props) {
           </section>
         )}
 
+        {query.useIntent && (
+          <section className="receipt-context profile-section">
+            <div className="panel-heading">
+              <p className="eyebrow">EIP-712 TollgateUseIntent</p>
+              <h3>Signed decision-to-spend anchor</h3>
+            </div>
+            <div className="evidence-grid">
+              <EvidenceRow label="intent digest" value={query.useIntent.digest} />
+              <EvidenceRow
+                label="signature"
+                value={query.useIntent.signature}
+              />
+              <EvidenceRow
+                label="max spend"
+                value={`${formatUsdc(Number(query.useIntent.maxSpendAtomicUsdc))} USDC`}
+              />
+              <EvidenceRow label="nonce" value={query.useIntent.nonce} />
+              <EvidenceRow label="expiry" value={query.useIntent.expiry} />
+              <EvidenceRow
+                label="candidate set root"
+                value={query.useIntent.candidateSetRoot}
+              />
+              <EvidenceRow
+                label="selected sources root"
+                value={query.useIntent.selectedSourcesRoot}
+              />
+              <EvidenceRow
+                label="decision trace hash"
+                value={query.useIntent.decisionTraceHash}
+              />
+              <EvidenceRow
+                label="claim support root"
+                value={query.useIntent.claimSupportRoot}
+              />
+              <div className="evidence-row">
+                <span>Arc anchor tx</span>
+                <strong>
+                  <a
+                    className="receipt-link inline-link"
+                    href={arcscanTxUrl(query.useIntent.anchorTx)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {query.useIntent.anchorTx}
+                  </a>
+                </strong>
+              </div>
+            </div>
+          </section>
+        )}
+
         {agentBudget && sourceDecisions.length > 0 && (
           <section className="receipt-context profile-section">
             <div className="panel-heading">

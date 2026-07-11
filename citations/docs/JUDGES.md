@@ -27,3 +27,8 @@ https://tollgate.gudman.xyz/api/judge-proof.json
 The proof pack includes the deployed commit, agent decision counts, settlement
 counts, the complete integrity result, and the public ledger evidence used by
 the verifier.
+
+When the operator enables the optional EIP-712 tollgate intent, the same
+command also recomputes each intent from the ledger, recovers the authorized
+agent wallet, and checks the `UseIntentAnchored` receipt on Arc. The registry
+address and signer are public proof-pack fields; no signing key is read.

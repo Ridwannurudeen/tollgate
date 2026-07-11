@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { readSources } from "./catalog";
 import { readFeeRouterSplitRegistry } from "./fee-router";
 import { readLedger, summarizeCreators, verifyLedgerIntegrity } from "./ledger";
+import { tollgateAgentWallet } from "./payments";
 
 const execFileAsync = promisify(execFile);
 
@@ -43,6 +44,7 @@ export async function buildProofPack() {
   const feeRouterPayouts = ledger.receipts.filter(
     (receipt) => receipt.settlementMode === "forum-routed",
   );
+  const useIntentQueries = ledger.queries.filter((query) => query.useIntent);
   const creatorClaimedSources = sources.filter(
     (source) => source.creatorClaimed === true,
   );
@@ -91,6 +93,14 @@ export async function buildProofPack() {
         count: creatorClaimedSources.length,
         wallets: creatorClaimedSources.map((source) => source.wallet),
       },
+    },
+    useIntent: {
+      enabled: process.env.LEPTONWEB_USE_INTENT_ENABLED === "1",
+      registryAddress:
+        process.env.LEPTONWEB_USE_RECEIPT_REGISTRY_ADDRESS ?? null,
+      agentWallet: tollgateAgentWallet(),
+      anchoredCount: useIntentQueries.length,
+      latestDigest: useIntentQueries.at(0)?.useIntent?.digest ?? null,
     },
     integrity: verification,
     traction: {
