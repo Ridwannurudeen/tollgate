@@ -7,6 +7,10 @@ const nextConfig = {
         source: "/api/badge/:sourceId.svg",
         destination: "/api/badge/:sourceId",
       },
+      {
+        source: "/api/judge-proof.json",
+        destination: "/api/judge-proof",
+      },
     ];
   },
 };

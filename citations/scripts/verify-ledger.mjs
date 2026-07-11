@@ -175,6 +175,28 @@ function queryPaymentHashCandidates(query) {
   ];
 }
 
+function traceHashCandidates(query) {
+  if (!query.traceHash || !query.agentSteps) return [];
+  if (query.agentMode === "llm") {
+    if (!query.agentModel) return [];
+    return [
+      sha256Hex({
+        model: query.agentModel,
+        steps: query.agentSteps,
+        sourceDecisions: query.sourceDecisions,
+      }),
+      sha256Hex({ model: query.agentModel, steps: query.agentSteps }),
+    ];
+  }
+  return [
+    sha256Hex({
+      agentSteps: query.agentSteps,
+      sourceDecisions: query.sourceDecisions,
+    }),
+    sha256Hex(query.agentSteps),
+  ];
+}
+
 export function verifyLedger(ledger) {
   const issues = [];
   const receiptHashes = new Set(
@@ -222,6 +244,17 @@ export function verifyLedger(ledger) {
         index: -1,
         receiptHash: query.readerPayment.paymentHash,
         reason: `query ${query.id} has invalid reader payment hash`,
+      });
+    }
+
+    if (
+      query.traceHash &&
+      !traceHashCandidates(query).includes(query.traceHash)
+    ) {
+      issues.push({
+        index: -1,
+        receiptHash: query.traceHash,
+        reason: `query ${query.id} has invalid trace hash`,
       });
     }
 

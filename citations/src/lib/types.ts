@@ -225,6 +225,7 @@ export type QueryRecord = {
   totalAtomicUsdc: number;
   citations: Citation[];
   agentMode?: "deterministic" | "llm";
+  agentServerMode?: "offline-preview" | "production" | "judge-strict";
   agentModel?: string;
   agentRationale?: string;
   sourceDecisions?: SourceDecision[];

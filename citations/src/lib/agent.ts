@@ -50,6 +50,7 @@ export type AgentOptions = {
   externalProvider?: ExternalProvider;
   groundingYields?: GroundingYieldMap;
   strictMode?: boolean;
+  serverMode?: AgentServerMode;
 };
 
 export type AgentServerMode =
@@ -92,10 +93,14 @@ export function agentServerModeFromEnv(): AgentServerMode {
 
 export function agentOptionsForServerMode(
   mode: AgentServerMode = agentServerModeFromEnv(),
-): Pick<AgentOptions, "llmConfig" | "strictMode"> {
-  if (mode === "offline-preview") return { llmConfig: null };
-  if (mode === "judge-strict") return { strictMode: true };
-  return {};
+): Pick<AgentOptions, "llmConfig" | "strictMode" | "serverMode"> {
+  if (mode === "offline-preview") {
+    return { llmConfig: null, serverMode: mode };
+  }
+  if (mode === "judge-strict") {
+    return { strictMode: true, serverMode: mode };
+  }
+  return { serverMode: mode };
 }
 
 type Appraisal = {
@@ -824,7 +829,11 @@ function buildLlmQueryRecord(
         : sum,
     0,
   );
-  const traceHash = sha256Hex({ model, steps: loop.steps });
+  const traceHash = sha256Hex({
+    model,
+    steps: loop.steps,
+    sourceDecisions: decisions,
+  });
   const queryHash = sha256Hex({
     question,
     citations,
@@ -909,17 +918,23 @@ export async function createAgentQueryRecord(
 ): Promise<QueryRecord> {
   const llmConfig =
     options.llmConfig === undefined ? llmConfigFromEnv() : options.llmConfig;
+  const withServerMode = (record: QueryRecord): QueryRecord =>
+    options.serverMode
+      ? { ...record, agentServerMode: options.serverMode }
+      : record;
   if (!llmConfig) {
     if (options.strictMode) {
       throw new Error("Judge-strict mode requires a configured LLM planner.");
     }
-    return deterministicFallback(
-      question,
-      createdAt,
-      sources,
-      readerPayment,
-      "No LLM planner is configured; deterministic budget policy selected the citations.",
-      options.groundingYields,
+    return withServerMode(
+      deterministicFallback(
+        question,
+        createdAt,
+        sources,
+        readerPayment,
+        "No LLM planner is configured; deterministic budget policy selected the citations.",
+        options.groundingYields,
+      ),
     );
   }
 
@@ -935,14 +950,16 @@ export async function createAgentQueryRecord(
       options.strictMode === true,
       options.groundingYields,
     );
-    return buildLlmQueryRecord(
-      question,
-      createdAt,
-      sources,
-      loop,
-      llmConfig.model,
-      readerPayment,
-      options.groundingYields,
+    return withServerMode(
+      buildLlmQueryRecord(
+        question,
+        createdAt,
+        sources,
+        loop,
+        llmConfig.model,
+        readerPayment,
+        options.groundingYields,
+      ),
     );
   } catch (error) {
     if (options.strictMode) throw error;

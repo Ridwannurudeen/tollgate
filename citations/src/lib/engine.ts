@@ -346,7 +346,10 @@ export function createQueryRecord(
     citationMarket.budget,
     totalAtomicUsdc,
   );
-  const traceHash = sha256Hex(agentSteps);
+  const traceHash = sha256Hex({
+    agentSteps,
+    sourceDecisions: citationMarket.decisions,
+  });
   const queryHash = sha256Hex({
     question,
     citations,

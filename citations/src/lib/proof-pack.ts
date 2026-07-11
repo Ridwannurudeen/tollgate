@@ -1,12 +1,30 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { readSources } from "./catalog";
 import { readFeeRouterSplitRegistry } from "./fee-router";
 import { readLedger, summarizeCreators, verifyLedgerIntegrity } from "./ledger";
 
+const execFileAsync = promisify(execFile);
+
+async function readDeployedCommit(): Promise<string> {
+  const configured = process.env.LEPTONWEB_DEPLOY_COMMIT?.trim();
+  if (configured) return configured;
+  try {
+    const result = await execFileAsync("git", ["rev-parse", "HEAD"], {
+      cwd: process.cwd(),
+    });
+    return result.stdout.trim() || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 export async function buildProofPack() {
-  const [ledger, sources, splitRegistry] = await Promise.all([
+  const [ledger, sources, splitRegistry, deployedCommit] = await Promise.all([
     readLedger(),
     readSources(),
     readFeeRouterSplitRegistry(),
+    readDeployedCommit(),
   ]);
   const creators = summarizeCreators(ledger);
   const verification = verifyLedgerIntegrity(ledger);
@@ -19,10 +37,62 @@ export async function buildProofPack() {
   const uniqueCreatorWallets = new Set(
     ledger.receipts.map((receipt) => receipt.wallet.toLowerCase()),
   );
+  const sourceDecisions = ledger.queries.flatMap(
+    (query) => query.sourceDecisions ?? [],
+  );
+  const feeRouterPayouts = ledger.receipts.filter(
+    (receipt) => receipt.settlementMode === "forum-routed",
+  );
+  const creatorClaimedSources = sources.filter(
+    (source) => source.creatorClaimed === true,
+  );
 
   return {
     project: "tollgate-citations",
     generatedAt: new Date().toISOString(),
+    deployedCommit,
+    agent: {
+      strictLlmRuns: ledger.queries.filter(
+        (query) =>
+          query.agentMode === "llm" &&
+          query.agentServerMode === "judge-strict",
+      ).length,
+      llmRuns: ledger.queries.filter((query) => query.agentMode === "llm")
+        .length,
+      deterministicRuns: ledger.queries.filter(
+        (query) => query.agentMode === "deterministic",
+      ).length,
+      buyDecisions: sourceDecisions.filter((decision) => decision.selected)
+        .length,
+      skipDecisions: sourceDecisions.filter((decision) => !decision.selected)
+        .length,
+      abstentions: ledger.queries.filter((query) => query.citations.length === 0)
+        .length,
+      refundedSources: ledger.receipts.filter(
+        (receipt) => receipt.settlementMode === "refunded",
+      ).length,
+    },
+    settlement: {
+      readerPayments: {
+        count: paidQueries.length,
+        atomicUsdc: paidQueries.reduce(
+          (sum, query) => sum + (query.readerPayment?.amountAtomicUsdc ?? 0),
+          0,
+        ),
+      },
+      feeRouterPayouts: {
+        count: feeRouterPayouts.length,
+        atomicUsdc: feeRouterPayouts.reduce(
+          (sum, receipt) => sum + receipt.amountAtomicUsdc,
+          0,
+        ),
+      },
+      creatorClaims: {
+        count: creatorClaimedSources.length,
+        wallets: creatorClaimedSources.map((source) => source.wallet),
+      },
+    },
+    integrity: verification,
     traction: {
       externalSources: sources.filter(
         (source) => source.sourceKind === "external",
