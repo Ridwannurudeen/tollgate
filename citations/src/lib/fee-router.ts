@@ -560,6 +560,14 @@ function splitForCitation(citation: Citation): {
   };
 }
 
+function payoutAmountForCitation(citation: Citation): number {
+  const amount = citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc;
+  if (!Number.isInteger(amount) || amount < 0) {
+    throw new Error(`Invalid payout amount for citation ${citation.sourceId}.`);
+  }
+  return amount;
+}
+
 export async function routeCitationPayments(
   query: QueryRecord,
   options: FeeRouterRouteOptions = {},
@@ -594,7 +602,7 @@ export async function routeCitationPayments(
   const { account, walletClient } = createFeeRouterSigner(options);
   const tenantId = feeRouterTenantId(options);
   const totalAtomicUsdc = routeableCitations.reduce(
-    (sum, citation) => sum + BigInt(citation.amountAtomicUsdc),
+    (sum, citation) => sum + BigInt(payoutAmountForCitation(citation)),
     0n,
   );
   const [balance, allowance] = await Promise.all([
@@ -649,7 +657,7 @@ export async function routeCitationPayments(
         address: FEE_ROUTER_ADDRESS,
         abi: feeRouterV1Abi,
         functionName: "pay",
-        args: [BigInt(split.splitId), BigInt(citation.amountAtomicUsdc)],
+        args: [BigInt(split.splitId), BigInt(payoutAmountForCitation(citation))],
         account,
         chain: arcTestnet,
         nonce,

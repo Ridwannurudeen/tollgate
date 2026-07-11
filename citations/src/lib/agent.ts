@@ -28,7 +28,7 @@ const MAX_ANSWER_LENGTH = 1_600;
 const MAX_REASON_LENGTH = 220;
 const MAX_CLAIMS = 8;
 
-type ChatMessage = {
+export type ChatMessage = {
   role: "system" | "user";
   content: string;
 };
@@ -149,7 +149,7 @@ function cleanModelText(value: unknown, maxLength: number): string {
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
-function llmConfigFromEnv(): LlmConfig | null {
+export function llmConfigFromEnv(): LlmConfig | null {
   const apiKey =
     process.env.LEPTONWEB_LLM_API_KEY ?? process.env.OPENAI_API_KEY;
   const model = process.env.LEPTONWEB_LLM_MODEL;
@@ -309,7 +309,7 @@ function escalationMessages(
   ];
 }
 
-async function completeOpenAiCompatibleChat(
+export async function completeChat(
   messages: ChatMessage[],
   config: LlmConfig,
 ): Promise<string> {
@@ -939,12 +939,12 @@ export async function createAgentQueryRecord(
   }
 
   try {
-    const completeChat = options.completeChat ?? completeOpenAiCompatibleChat;
+    const plannerChat = options.completeChat ?? completeChat;
     const loop = await runAgentLoop(
       question,
       sources,
       DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
-      completeChat,
+      plannerChat,
       llmConfig,
       options.externalProvider ?? EXTERNAL_PROVIDERS.citepay,
       options.strictMode === true,

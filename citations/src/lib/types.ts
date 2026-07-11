@@ -88,6 +88,7 @@ export type Citation = {
   wallet: `0x${string}`;
   url: string;
   amountAtomicUsdc: number;
+  payoutAtomicUsdc?: number;
   reason: string;
   canonicalUrl?: string;
   previewExcerpt?: string;
@@ -113,6 +114,25 @@ export type SourceDecision = {
   valuePerAtomicUsdc: number;
   selected: boolean;
   reason: string;
+};
+
+export type ClaimSupportStatus =
+  | "supported"
+  | "unsupported"
+  | "unable-to-verify";
+
+export type ClaimSupport = {
+  claim: string;
+  sourceId: string | null;
+  span: string | null;
+  status: ClaimSupportStatus;
+};
+
+export type ContributionScore = {
+  sourceId: string;
+  marginalContribution: number;
+  rewardAtomicUsdc: number;
+  fallback: boolean;
 };
 
 export type AgentBudget = {
@@ -229,6 +249,9 @@ export type QueryRecord = {
   agentModel?: string;
   agentRationale?: string;
   sourceDecisions?: SourceDecision[];
+  claimSupport?: ClaimSupport[];
+  contributionScores?: ContributionScore[];
+  claimSupportRoot?: string;
   agentBudget?: AgentBudget;
   agentSteps?: AgentStep[];
   externalAssists?: ExternalAssist[];

@@ -73,4 +73,22 @@ describe("ledger integrity", () => {
 
     expect(verifyLedgerIntegrity(ledgerFor(legacyQuery)).ok).toBe(true);
   });
+
+  it("records contribution payout amounts without changing the purchase price field", () => {
+    const query = createQueryRecord(
+      "How should AI agents pay publishers per citation?",
+      "2026-07-11T01:03:00.000Z",
+    );
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      payoutAtomicUsdc: 123,
+    }));
+    const ledger = ledgerFor(query);
+
+    expect(ledger.receipts[0]?.amountAtomicUsdc).toBe(123);
+    expect(ledger.queries[0]?.citations[0]?.amountAtomicUsdc).toBe(
+      query.citations[0]?.amountAtomicUsdc,
+    );
+    expect(verifyLedgerIntegrity(ledger).ok).toBe(true);
+  });
 });

@@ -65,6 +65,11 @@ export default async function AnswerPage({ params }: Props) {
   const sourceDecisions = query.sourceDecisions ?? [];
   const agentSteps = query.agentSteps ?? [];
   const externalAssists = query.externalAssists ?? [];
+  const claimSupport = query.claimSupport ?? [];
+  const contributionScores = query.contributionScores ?? [];
+  const contributionBySourceId = new Map(
+    contributionScores.map((score) => [score.sourceId, score]),
+  );
   const economics = queryPaymentEconomics(query);
   const latestChainHash = receipts.at(-1)?.receiptHash ?? "none";
   const refundSummary = query.refundSummary ?? {
@@ -480,6 +485,49 @@ export default async function AnswerPage({ params }: Props) {
                 </div>
               </li>
             </ol>
+          </section>
+        )}
+
+        {claimSupport.length > 0 && (
+          <section className="receipt-context profile-section">
+            <div className="panel-heading">
+              <p className="eyebrow">proof of useful citation</p>
+              <h3>Claim support and contribution payout</h3>
+            </div>
+            <div className="decision-list">
+              {claimSupport.map((support, index) => {
+                const score = support.sourceId
+                  ? contributionBySourceId.get(support.sourceId)
+                  : undefined;
+                return (
+                  <article
+                    className={
+                      support.status === "supported"
+                        ? "decision-row selected"
+                        : "decision-row"
+                    }
+                    key={support.claim + index}
+                  >
+                    <div>
+                      <strong>{support.claim}</strong>
+                      <span>
+                        {support.status} / source {support.sourceId ?? "none"}
+                      </span>
+                    </div>
+                    <small>
+                      span: {support.span ?? "not verified"} / marginal
+                      contribution {score?.marginalContribution ?? 0} / payout{" "}
+                      {formatUsdc(score?.rewardAtomicUsdc ?? 0)} USDC
+                    </small>
+                  </article>
+                );
+              })}
+            </div>
+            {query.claimSupportRoot && (
+              <p className="status-line">
+                claim support root {shortHash(query.claimSupportRoot)}
+              </p>
+            )}
           </section>
         )}
 

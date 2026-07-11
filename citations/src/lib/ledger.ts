@@ -501,13 +501,17 @@ export function createReceipts(
       settlementMode: "local-proof" as const,
       paymentResource: `/api/sources/${citation.sourceId}`,
     };
+    const receiptAmountAtomicUsdc =
+      evidence.settlementMode === "refunded"
+        ? citation.amountAtomicUsdc
+        : citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc;
     const unsigned = withQueryPaymentHash(
       buildReceiptPayload(
         query.id,
         citation.sourceId,
         citation.creator,
         citation.wallet,
-        citation.amountAtomicUsdc,
+        receiptAmountAtomicUsdc,
         {
           ...evidence,
           paymentResource:

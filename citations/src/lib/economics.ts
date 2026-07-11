@@ -33,16 +33,17 @@ export function configuredPaymentEconomics(): PaymentEconomics {
 }
 
 export function queryPaymentEconomics(query: QueryRecord): PaymentEconomics {
-  const creatorPayoutsAtomicUsdc =
-    query.refundSummary !== undefined
-      ? query.totalAtomicUsdc - query.refundSummary.refundedAtomicUsdc
-      : query.citations
-          .filter(
-            (citation) =>
-              citation.payoutPolicy !== "escrow-unverified" &&
-              citation.payoutPolicy !== "refund-unused",
-          )
-          .reduce((sum, citation) => sum + citation.amountAtomicUsdc, 0);
+  const creatorPayoutsAtomicUsdc = query.citations
+    .filter(
+      (citation) =>
+        citation.payoutPolicy !== "escrow-unverified" &&
+        citation.payoutPolicy !== "refund-unused",
+    )
+    .reduce(
+      (sum, citation) =>
+        sum + (citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc),
+      0,
+    );
   return paymentEconomics(
     query.readerPayment?.amountAtomicUsdc ?? 0,
     creatorPayoutsAtomicUsdc,

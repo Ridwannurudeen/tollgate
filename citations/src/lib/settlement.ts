@@ -3,8 +3,19 @@ import {
   AgentPlanningError,
   agentOptionsForServerMode,
   agentServerModeFromEnv,
+  completeChat,
   createAgentQueryRecord,
+  llmConfigFromEnv,
+  type AgentServerMode,
 } from "./agent";
+import {
+  claimSupportRoot,
+  extractClaims,
+  removeUnsupportedClaims,
+  scoreContribution,
+  verifyClaims,
+  type ClaimLlm,
+} from "./contribution";
 import { refundReaderPayment, routeCitationPayments } from "./fee-router";
 import { groundingYieldsBySource } from "./grounding-yield";
 import { sha256Hex } from "./hash";
@@ -18,6 +29,7 @@ import type {
   CreatorSource,
   Ledger,
   QueryPaymentEvidence,
+  QueryRecord,
   SettlementResult,
 } from "./types";
 
@@ -41,6 +53,138 @@ export class PaidQueryAgentError extends Error {
     this.stage = cause instanceof AgentPlanningError ? cause.stage : null;
     this.readerPayment = readerPayment;
   }
+}
+
+export function contributionPayoutsEnabled(
+  serverMode: AgentServerMode,
+): boolean {
+  return (
+    process.env.LEPTONWEB_CONTRIBUTION_PAYOUTS === "1" ||
+    (serverMode === "judge-strict" &&
+      process.env.LEPTONWEB_CONTRIBUTION_PAYOUTS !== "0")
+  );
+}
+
+export async function applyContributionProof(
+  query: QueryRecord,
+  sources: CreatorSource[],
+  serverMode: AgentServerMode,
+): Promise<QueryRecord> {
+  if (!contributionPayoutsEnabled(serverMode)) return query;
+  const plannerConfig = llmConfigFromEnv();
+  if (!plannerConfig) {
+    throw new Error(
+      "Contribution payouts require a configured LLM planner for claim verification.",
+    );
+  }
+  const verifierConfig = {
+    ...plannerConfig,
+    model:
+      process.env.LEPTONWEB_VERIFIER_MODEL?.trim() || plannerConfig.model,
+  };
+  const plannerLlm: ClaimLlm = (messages) =>
+    completeChat(messages, plannerConfig);
+  const verifierLlm: ClaimLlm = (messages) =>
+    completeChat(messages, verifierConfig);
+  const purchasedSourceIds = new Set(
+    query.citations.map((citation) => citation.sourceId),
+  );
+  const purchasedSources = sources.filter((source) =>
+    purchasedSourceIds.has(source.id),
+  );
+  const claims = await extractClaims(query.answer, plannerLlm);
+  const claimSupport = await verifyClaims(
+    claims,
+    purchasedSources,
+    verifierLlm,
+  );
+  if (
+    serverMode === "judge-strict" &&
+    claimSupport.length > 0 &&
+    claimSupport.every((support) => support.status === "unable-to-verify")
+  ) {
+    throw new Error(
+      "Judge-strict contribution verifier could not verify any claim.",
+    );
+  }
+  const fallbackAmounts = Object.fromEntries(
+    query.citations
+      .filter((citation) => citation.payoutPolicy !== "refund-unused")
+      .map((citation) => [citation.sourceId, citation.amountAtomicUsdc]),
+  );
+  const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
+    (sum, amount) => sum + amount,
+    0,
+  );
+  const contributionScores = scoreContribution(
+    claimSupport,
+    poolAtomicUsdc,
+    fallbackAmounts,
+  );
+  const scoreBySourceId = new Map(
+    contributionScores.map((score) => [score.sourceId, score]),
+  );
+  const citations = query.citations.map((citation) => {
+    const score = scoreBySourceId.get(citation.sourceId);
+    if (!score || citation.payoutPolicy === "refund-unused") return citation;
+    if (!score.fallback && score.rewardAtomicUsdc === 0) {
+      return {
+        ...citation,
+        payoutPolicy: "refund-unused" as const,
+        payoutAtomicUsdc: undefined,
+      };
+    }
+    return { ...citation, payoutAtomicUsdc: score.rewardAtomicUsdc };
+  });
+  const sanitizedAnswer = removeUnsupportedClaims(query.answer, claimSupport);
+  const supportRoot = claimSupportRoot(claimSupport);
+  const refundSummary = {
+    boughtCount: citations.length,
+    citedCount: citations.filter(
+      (citation) => citation.payoutPolicy !== "refund-unused",
+    ).length,
+    refundedCount: citations.filter(
+      (citation) => citation.payoutPolicy === "refund-unused",
+    ).length,
+    refundedAtomicUsdc: citations
+      .filter((citation) => citation.payoutPolicy === "refund-unused")
+      .reduce((sum, citation) => sum + citation.amountAtomicUsdc, 0),
+  };
+  const queryHash = sha256Hex({
+    question: query.question,
+    citations,
+    sourceDecisions: query.sourceDecisions,
+    agentBudget: query.agentBudget,
+    readerPaymentHash: query.readerPayment?.paymentHash,
+    claimSupportRoot: supportRoot,
+  });
+  const answerHash = sha256Hex({
+    answer: sanitizedAnswer,
+    citations,
+    sourceDecisions: query.sourceDecisions,
+    agentBudget: query.agentBudget,
+    traceHash: query.traceHash,
+    readerPaymentHash: query.readerPayment?.paymentHash,
+    externalAssists: query.externalAssists,
+    claimSupportRoot: supportRoot,
+    contributionScores,
+  });
+  return {
+    ...query,
+    id: sha256Hex({
+      createdAt: query.createdAt,
+      question: query.question,
+      queryHash,
+    }).slice(0, 18),
+    answer: sanitizedAnswer,
+    queryHash,
+    answerHash,
+    citations,
+    claimSupport,
+    contributionScores,
+    claimSupportRoot: supportRoot,
+    refundSummary,
+  };
 }
 
 export function normalizeQuestion(question: string): string {
@@ -72,12 +216,17 @@ export async function settleQuestion(
     options,
   );
   const agent = agentOptionsForLedger(ledger);
-  const query = await createAgentQueryRecord(
+  const plannedQuery = await createAgentQueryRecord(
     normalized,
     createdAt,
     agentSources,
     undefined,
     agent.options,
+  );
+  const query = await applyContributionProof(
+    plannedQuery,
+    agentSources,
+    agent.serverMode,
   );
   const receiptEvidence = await routeCitationPayments(query);
   return settleAndAnchorTrackRecord(query, receiptEvidence);
@@ -116,17 +265,27 @@ export async function settlePaidQuestion(
   );
   const readerPayment = createQueryPaymentEvidence(payment);
   const agent = agentOptionsForLedger(ledger);
-  let query;
+  let query: Awaited<ReturnType<typeof createAgentQueryRecord>>;
   try {
-    query = await createAgentQueryRecord(
+    const plannedQuery = await createAgentQueryRecord(
       normalized,
       createdAt,
       agentSources,
       readerPayment,
       agent.options,
     );
+    query = await applyContributionProof(
+      plannedQuery,
+      agentSources,
+      agent.serverMode,
+    );
   } catch (error) {
-    if (agent.serverMode !== "judge-strict") throw error;
+    if (
+      agent.serverMode !== "judge-strict" &&
+      !contributionPayoutsEnabled(agent.serverMode)
+    ) {
+      throw error;
+    }
     const refundedPayment = await attachReaderRefund(
       readerPayment,
       "judge-strict-planner-failure",

@@ -58,6 +58,7 @@ function mockClients(
   paidSplitIds: bigint[] = [],
   createSplitAccounts: unknown[] = [],
   createSplitArgs: unknown[][] = [],
+  paidAmounts: bigint[] = [],
 ) {
   const publicClient = {
     readContract: async ({ functionName }: { functionName: string }) => {
@@ -93,6 +94,9 @@ function mockClients(
       }
       if (functionName === "pay" && typeof args?.[0] === "bigint") {
         paidSplitIds.push(args[0]);
+      }
+      if (functionName === "pay" && typeof args?.[1] === "bigint") {
+        paidAmounts.push(args[1]);
       }
       const txByte =
         functionName === "approve"
@@ -292,6 +296,43 @@ describe("assertValidFeeRouterSplit", () => {
       expect(evidence[query.citations[0].sourceId]?.feeRouterSplitId).toBe(
         "123",
       );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("routes the contribution-weighted payout amount", async () => {
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      payoutAtomicUsdc: 123,
+    }));
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const paidSplitIds: bigint[] = [];
+    const paidAmounts: bigint[] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      1_000_000n,
+      128n,
+      writes,
+      paidSplitIds,
+      [],
+      [],
+      paidAmounts,
+    );
+
+    try {
+      await routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+        splitRegistryPath: registryPath,
+      });
+
+      expect(paidAmounts).toEqual([123n]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
