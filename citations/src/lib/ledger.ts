@@ -479,6 +479,8 @@ function traceHashCandidates(query: QueryRecord): string[] {
         sourceDecisions: query.sourceDecisions,
       }),
       sha256Hex({ model: query.agentModel, steps: query.agentSteps }),
+      // Legacy LLM records (pre model-binding) hashed the bare step list.
+      sha256Hex(query.agentSteps),
     ];
   }
   return [
@@ -505,7 +507,7 @@ export function createReceipts(
     const receiptAmountAtomicUsdc =
       evidence.settlementMode === "refunded"
         ? citation.amountAtomicUsdc
-        : citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc;
+        : (citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc);
     const unsigned = withQueryPaymentHash(
       buildReceiptPayload(
         query.id,
@@ -934,7 +936,9 @@ export function verifyLedgerIntegrity(ledger: Ledger): LedgerVerification {
           index: -1,
           reason: `query ${query.id} has incomplete claim-support evidence.`,
         });
-      } else if (claimSupportRoot(query.claimSupport) !== query.claimSupportRoot) {
+      } else if (
+        claimSupportRoot(query.claimSupport) !== query.claimSupportRoot
+      ) {
         issues.push({
           index: -1,
           receiptHash: query.claimSupportRoot,
@@ -965,9 +969,7 @@ export function verifyLedgerIntegrity(ledger: Ledger): LedgerVerification {
           poolAtomicUsdc,
           fallbackAmounts,
         );
-        if (
-          sha256Hex(expectedScores) !== sha256Hex(query.contributionScores)
-        ) {
+        if (sha256Hex(expectedScores) !== sha256Hex(query.contributionScores)) {
           issues.push({
             index: -1,
             reason: `query ${query.id} has contribution scores that do not match its claim-support table.`,
