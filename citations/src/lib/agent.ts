@@ -49,7 +49,54 @@ export type AgentOptions = {
   completeChat?: CompleteChat;
   externalProvider?: ExternalProvider;
   groundingYields?: GroundingYieldMap;
+  strictMode?: boolean;
 };
+
+export type AgentServerMode =
+  | "offline-preview"
+  | "production"
+  | "judge-strict";
+
+export type AgentStage =
+  | "appraise"
+  | "draft"
+  | "critique"
+  | "reflect"
+  | "escalate";
+
+export class AgentPlanningError extends Error {
+  readonly stage: AgentStage;
+
+  constructor(stage: AgentStage, cause: unknown) {
+    const message =
+      cause instanceof Error ? cause.message : "LLM planner failed.";
+    super(`Judge-strict mode failed during ${stage}: ${message}`);
+    this.name = "AgentPlanningError";
+    this.stage = stage;
+  }
+}
+
+export function agentServerModeFromEnv(): AgentServerMode {
+  const mode = process.env.LEPTONWEB_AGENT_MODE ?? "production";
+  if (
+    mode === "offline-preview" ||
+    mode === "production" ||
+    mode === "judge-strict"
+  ) {
+    return mode;
+  }
+  throw new Error(
+    "LEPTONWEB_AGENT_MODE must be judge-strict, production, or offline-preview.",
+  );
+}
+
+export function agentOptionsForServerMode(
+  mode: AgentServerMode = agentServerModeFromEnv(),
+): Pick<AgentOptions, "llmConfig" | "strictMode"> {
+  if (mode === "offline-preview") return { llmConfig: null };
+  if (mode === "judge-strict") return { strictMode: true };
+  return {};
+}
 
 type Appraisal = {
   sourceId: string;
@@ -468,161 +515,168 @@ async function runAgentLoop(
   completeChat: CompleteChat,
   llmConfig: LlmConfig,
   externalProvider: ExternalProvider,
+  strictMode: boolean,
   groundingYields?: GroundingYieldMap,
 ): Promise<AgentLoopResult> {
   const steps: AgentStep[] = [];
   const externalAssists: ExternalAssist[] = [];
+  let stage: AgentStage = "appraise";
 
-  const appraisals = parseAppraisals(
-    await completeChat(
-      appraiseMessages(question, sources, sourceBudgetAtomicUsdc),
-      llmConfig,
-    ),
-  );
-  const buyCount = appraisals.filter(
-    (appraisal) => appraisal.verdict === "buy",
-  ).length;
-  const appraisalReason = new Map(
-    appraisals
-      .filter((appraisal) => appraisal.reason)
-      .map((appraisal) => [appraisal.sourceId, appraisal.reason]),
-  );
-  steps.push({
-    index: 0,
-    name: "appraise",
-    summary: `Appraised ${appraisals.length} candidate${
-      appraisals.length === 1 ? "" : "s"
-    }: ${buyCount} to buy, ${appraisals.length - buyCount} to skip.`,
-    detail: appraisalSummary(appraisals),
-  });
+  try {
+    const appraisals = parseAppraisals(
+      await completeChat(
+        appraiseMessages(question, sources, sourceBudgetAtomicUsdc),
+        llmConfig,
+      ),
+    );
+    const buyCount = appraisals.filter(
+      (appraisal) => appraisal.verdict === "buy",
+    ).length;
+    const appraisalReason = new Map(
+      appraisals
+        .filter((appraisal) => appraisal.reason)
+        .map((appraisal) => [appraisal.sourceId, appraisal.reason]),
+    );
+    steps.push({
+      index: 0,
+      name: "appraise",
+      summary: `Appraised ${appraisals.length} candidate${
+        appraisals.length === 1 ? "" : "s"
+      }: ${buyCount} to buy, ${appraisals.length - buyCount} to skip.`,
+      detail: appraisalSummary(appraisals),
+    });
 
-  let { selected, remainingAtomicUsdc } = allocateFromAppraisals(
-    appraisals,
-    sources,
-    sourceBudgetAtomicUsdc,
-    groundingYields,
-  );
-  if (selected.length === 0) {
+    let { selected, remainingAtomicUsdc } = allocateFromAppraisals(
+      appraisals,
+      sources,
+      sourceBudgetAtomicUsdc,
+      groundingYields,
+    );
+    if (selected.length === 0) {
+      steps.push({
+        index: 1,
+        name: "allocate",
+        summary:
+          "Bought 0 sources because the appraisal found no affordable relevant source.",
+        detail:
+          "No creator was paid; the agent did not draft from irrelevant registered sources.",
+        spentAtomicUsdc: 0,
+      });
+      return {
+        answer: NO_SOURCE_ANSWER,
+        selected: [],
+        unusedSourceIds: new Set(),
+        steps,
+        rationale:
+          "No registered source was relevant enough to cite, so the agent bought nothing and did not fabricate an answer.",
+        appraisalReason,
+        externalAssists,
+      };
+    }
     steps.push({
       index: 1,
       name: "allocate",
-      summary:
-        "Bought 0 sources because the appraisal found no affordable relevant source.",
-      detail:
-        "No creator was paid; the agent did not draft from irrelevant registered sources.",
-      spentAtomicUsdc: 0,
+      summary: `Allocated the budget to ${selected.length} source${
+        selected.length === 1 ? "" : "s"
+      } by best yield-adjusted grounding-per-USDC.`,
+      detail: selected.map((source) => source.title).join(", "),
+      spentAtomicUsdc: sourceBudgetAtomicUsdc - remainingAtomicUsdc,
     });
-    return {
-      answer: NO_SOURCE_ANSWER,
-      selected: [],
-      unusedSourceIds: new Set(),
-      steps,
-      rationale:
-        "No registered source was relevant enough to cite, so the agent bought nothing and did not fabricate an answer.",
-      appraisalReason,
-      externalAssists,
-    };
-  }
-  steps.push({
-    index: 1,
-    name: "allocate",
-    summary: `Allocated the budget to ${selected.length} source${
-      selected.length === 1 ? "" : "s"
-    } by best yield-adjusted grounding-per-USDC.`,
-    detail: selected.map((source) => source.title).join(", "),
-    spentAtomicUsdc: sourceBudgetAtomicUsdc - remainingAtomicUsdc,
-  });
 
-  let draft = parseDraft(
-    await completeChat(draftMessages(question, selected), llmConfig),
-  );
-  steps.push({
-    index: 2,
-    name: "draft",
-    summary: `Drafted an answer with ${draft.claims.length} grounded claim${
-      draft.claims.length === 1 ? "" : "s"
-    }.`,
-    detail: "Every claim is tied to a purchased sourceId.",
-  });
+    stage = "draft";
+    let draft = parseDraft(
+      await completeChat(draftMessages(question, selected), llmConfig),
+    );
+    steps.push({
+      index: 2,
+      name: "draft",
+      summary: `Drafted an answer with ${draft.claims.length} grounded claim${
+        draft.claims.length === 1 ? "" : "s"
+      }.`,
+      detail: "Every claim is tied to a purchased sourceId.",
+    });
 
-  let boughtIds = new Set(selected.map((source) => source.id));
-  const unsupported = draft.claims.filter(
-    (claim) => !boughtIds.has(claim.sourceId),
-  );
-  const critique = parseCritique(
-    await completeChat(
-      critiqueMessages(question, draft, [...boughtIds]),
-      llmConfig,
-    ),
-    draft.answer,
-  );
-  steps.push({
-    index: 3,
-    name: "critique",
-    summary:
-      unsupported.length === 0
-        ? "Verified every claim is backed by a purchased source."
-        : `Caught ${unsupported.length} unsupported claim${
-            unsupported.length === 1 ? "" : "s"
-          } to resolve.`,
-    detail: critique.verdict || "Self-critique complete.",
-  });
+    const boughtIds = new Set(selected.map((source) => source.id));
+    const unsupported = draft.claims.filter(
+      (claim) => !boughtIds.has(claim.sourceId),
+    );
+    stage = "critique";
+    const critique = parseCritique(
+      await completeChat(
+        critiqueMessages(question, draft, [...boughtIds]),
+        llmConfig,
+      ),
+      draft.answer,
+    );
+    steps.push({
+      index: 3,
+      name: "critique",
+      summary:
+        unsupported.length === 0
+          ? "Verified every claim is backed by a purchased source."
+          : `Caught ${unsupported.length} unsupported claim${
+              unsupported.length === 1 ? "" : "s"
+            } to resolve.`,
+      detail: critique.verdict || "Self-critique complete.",
+    });
 
-  let answer = critique.groundedAnswer;
-  let unusedSourceIds = new Set(
-    selected
-      .filter((source) => critique.explicitlyUnusedSourceIds.has(source.id))
-      .map((source) => source.id),
-  );
-  let unsupportedAfterRegistry = unsupported.length > 0;
-  let rationale =
-    critique.verdict ||
-    `Bought ${selected.length} source${
-      selected.length === 1 ? "" : "s"
-    } and grounded the answer in them.`;
+    let answer = critique.groundedAnswer;
+    let unusedSourceIds = new Set(
+      selected
+        .filter((source) => critique.explicitlyUnusedSourceIds.has(source.id))
+        .map((source) => source.id),
+    );
+    let unsupportedAfterRegistry = unsupported.length > 0;
+    let rationale =
+      critique.verdict ||
+      `Bought ${selected.length} source${
+        selected.length === 1 ? "" : "s"
+      } and grounded the answer in them.`;
 
-  if (unsupported.length > 0 && selected.length < MAX_AGENT_SOURCES) {
-    const sourceById = new Map(sources.map((source) => [source.id, source]));
-    const hasProbationSource = selected.some((source) => source.probation);
-    const candidate = unsupported
-      .map((claim) => sourceById.get(claim.sourceId))
-      .find(
-        (source): source is CreatorSource =>
-          source !== undefined &&
-          !boughtIds.has(source.id) &&
-          !(source.probation && hasProbationSource) &&
-          source.priceAtomicUsdc <= remainingAtomicUsdc,
-      );
-    if (candidate) {
-      selected = [...selected, candidate];
-      remainingAtomicUsdc -= candidate.priceAtomicUsdc;
-      boughtIds = new Set(selected.map((source) => source.id));
-      const reDraft = parseDraft(
-        await completeChat(draftMessages(question, selected), llmConfig),
-      );
-      draft = reDraft;
-      answer = reDraft.answer;
-      unusedSourceIds = new Set();
-      unsupportedAfterRegistry = reDraft.claims.some(
-        (claim) => !boughtIds.has(claim.sourceId),
-      );
-      steps.push({
-        index: 4,
-        name: "reflect",
-        summary: `Bought 1 more source (${candidate.title}) to ground an unsupported claim, then redrafted.`,
-        detail: `Citation spend rose to cover ${candidate.creator}.`,
-        spentAtomicUsdc: sourceBudgetAtomicUsdc - remainingAtomicUsdc,
-      });
-      rationale = `Self-critique caught an unsupported claim; the agent bought ${candidate.title} and regrounded the answer.`;
+    if (unsupported.length > 0 && selected.length < MAX_AGENT_SOURCES) {
+      const sourceById = new Map(sources.map((source) => [source.id, source]));
+      const hasProbationSource = selected.some((source) => source.probation);
+      const candidate = unsupported
+        .map((claim) => sourceById.get(claim.sourceId))
+        .find(
+          (source): source is CreatorSource =>
+            source !== undefined &&
+            !boughtIds.has(source.id) &&
+            !(source.probation && hasProbationSource) &&
+            source.priceAtomicUsdc <= remainingAtomicUsdc,
+        );
+      if (candidate) {
+        selected = [...selected, candidate];
+        remainingAtomicUsdc -= candidate.priceAtomicUsdc;
+        const nextBoughtIds = new Set(selected.map((source) => source.id));
+        stage = "reflect";
+        const reDraft = parseDraft(
+          await completeChat(draftMessages(question, selected), llmConfig),
+        );
+        draft = reDraft;
+        answer = reDraft.answer;
+        unusedSourceIds = new Set();
+        unsupportedAfterRegistry = reDraft.claims.some(
+          (claim) => !nextBoughtIds.has(claim.sourceId),
+        );
+        steps.push({
+          index: 4,
+          name: "reflect",
+          summary: `Bought 1 more source (${candidate.title}) to ground an unsupported claim, then redrafted.`,
+          detail: `Citation spend rose to cover ${candidate.creator}.`,
+          spentAtomicUsdc: sourceBudgetAtomicUsdc - remainingAtomicUsdc,
+        });
+        rationale = `Self-critique caught an unsupported claim; the agent bought ${candidate.title} and regrounded the answer.`;
+      }
     }
-  }
 
-  if (
-    unsupportedAfterRegistry &&
-    process.env.LEPTONWEB_ESCALATION === "1" &&
-    externalAssists.length === 0 &&
-    externalProvider.priceAtomicUsdc <= escalationCapAtomicUsdc()
-  ) {
+    if (
+      unsupportedAfterRegistry &&
+      process.env.LEPTONWEB_ESCALATION === "1" &&
+      externalAssists.length === 0 &&
+      externalProvider.priceAtomicUsdc <= escalationCapAtomicUsdc()
+    ) {
+      stage = "escalate";
     // Money can move inside ask(): once it has, every failure below must
     // still record the paid assist + an escalate step — a post-transfer
     // error must never unwind to the deterministic fallback and lose the
@@ -669,7 +723,8 @@ async function runAgentLoop(
           fallbackAnswer,
         );
         answer = merge.groundedAnswer;
-      } catch {
+      } catch (error) {
+        if (strictMode) throw error;
         answer = fallbackAnswer;
       }
       steps.push({
@@ -683,15 +738,19 @@ async function runAgentLoop(
     }
   }
 
-  return {
-    answer,
-    selected,
-    unusedSourceIds,
-    steps,
-    rationale,
-    appraisalReason,
-    externalAssists,
-  };
+    return {
+      answer,
+      selected,
+      unusedSourceIds,
+      steps,
+      rationale,
+      appraisalReason,
+      externalAssists,
+    };
+  } catch (error) {
+    if (strictMode) throw new AgentPlanningError(stage, error);
+    throw error;
+  }
 }
 
 function buildLlmQueryRecord(
@@ -851,6 +910,9 @@ export async function createAgentQueryRecord(
   const llmConfig =
     options.llmConfig === undefined ? llmConfigFromEnv() : options.llmConfig;
   if (!llmConfig) {
+    if (options.strictMode) {
+      throw new Error("Judge-strict mode requires a configured LLM planner.");
+    }
     return deterministicFallback(
       question,
       createdAt,
@@ -870,6 +932,7 @@ export async function createAgentQueryRecord(
       completeChat,
       llmConfig,
       options.externalProvider ?? EXTERNAL_PROVIDERS.citepay,
+      options.strictMode === true,
       options.groundingYields,
     );
     return buildLlmQueryRecord(
@@ -882,6 +945,7 @@ export async function createAgentQueryRecord(
       options.groundingYields,
     );
   } catch (error) {
+    if (options.strictMode) throw error;
     const message =
       error instanceof Error ? error.message : "LLM planner failed.";
     return deterministicFallback(

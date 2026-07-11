@@ -5,6 +5,7 @@ import {
   formatBudgetUtilization,
   queryPaymentEconomics,
 } from "@/lib/economics";
+import { agentServerModeFromEnv } from "@/lib/agent";
 import { readCovenantEnvelope } from "@/lib/covenant";
 import {
   arcscanTxUrl,
@@ -78,11 +79,14 @@ export default async function AnswerPage({ params }: Props) {
       .filter((receipt) => receipt.settlementMode === "refunded")
       .reduce((sum, receipt) => sum + receipt.amountAtomicUsdc, 0),
   };
+  const displayedRationale = displayAgentRationale(query.agentRationale);
+  const serverAgentMode = agentServerModeFromEnv();
   const agentModeLabel =
     query.agentMode === "llm"
       ? "agentic reasoning loop"
-      : "deterministic policy";
-  const displayedRationale = displayAgentRationale(query.agentRationale);
+      : query.agentMode === "deterministic"
+        ? "deterministic policy"
+        : "agent mode not recorded";
 
   return (
     <>
@@ -106,7 +110,7 @@ export default async function AnswerPage({ params }: Props) {
           </div>
           <div className="proof-copy">
             <p className="eyebrow">
-              {agentModeLabel} / {query.id}
+              {agentModeLabel} / server {serverAgentMode} / {query.id}
             </p>
             <h2>{query.question}</h2>
             <p className="hero-text">{query.answer}</p>
@@ -162,6 +166,15 @@ export default async function AnswerPage({ params }: Props) {
           <EvidenceRow label="query hash" value={query.queryHash} />
           <EvidenceRow label="answer hash" value={query.answerHash} />
           <EvidenceRow label="created at" value={query.createdAt} />
+          <EvidenceRow
+            label="record agent mode"
+            value={query.agentMode ?? "not recorded"}
+          />
+          <EvidenceRow
+            label="agent model"
+            value={query.agentModel ?? "not recorded"}
+          />
+          <EvidenceRow label="server agent mode" value={serverAgentMode} />
           <EvidenceRow label="receipt count" value={receipts.length} />
           <EvidenceRow
             label="reader payment hash"

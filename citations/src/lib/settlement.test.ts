@@ -39,8 +39,10 @@ import type {
   QueryRecord,
 } from "./types";
 import {
+  PaidQueryAgentError,
   createQueryPaymentEvidence,
   filterSourcesForSettlement,
+  settlePaidQuestion,
   sourcesForAgent,
   validateQuestion,
 } from "./settlement";
@@ -81,6 +83,55 @@ async function withRegistrationFetchDisabled<T>(
 }
 
 describe("LeptonWeb settlement engine", () => {
+  it("surfaces strict paid planner failures without writing a fallback query", async () => {
+    const envNames = [
+      "LEPTONWEB_AGENT_MODE",
+      "LEPTONWEB_LLM_API_KEY",
+      "OPENAI_API_KEY",
+      "LEPTONWEB_LLM_MODEL",
+      "LEPTONWEB_LLM_BASE_URL",
+    ];
+    const previous = new Map(
+      envNames.map((name) => [name, process.env[name]]),
+    );
+    const before = await readLedger();
+    for (const name of envNames) delete process.env[name];
+    process.env.LEPTONWEB_AGENT_MODE = "judge-strict";
+
+    try {
+      let caught: unknown;
+      try {
+        await settlePaidQuestion("How does Forum bind agent spending?", {
+          amountAtomicUsdc: PAID_QUERY_PRICE_ATOMIC_USDC,
+          settlementMode: "x402-verified",
+          payTo: "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836",
+          payer: "0x8888888888888888888888888888888888888888",
+          paymentResource: "/api/paid-query",
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(PaidQueryAgentError);
+      if (!(caught instanceof PaidQueryAgentError)) {
+        throw new Error("expected PaidQueryAgentError");
+      }
+      expect(caught.message).toContain(
+        "Judge-strict mode requires a configured LLM planner.",
+      );
+      expect(caught.readerPayment.paymentHash).toMatch(/^0x[0-9a-f]{64}$/);
+      const after = await readLedger();
+      expect(after.queries).toHaveLength(before.queries.length);
+      expect(after.receipts).toHaveLength(before.receipts.length);
+    } finally {
+      for (const name of envNames) {
+        const value = previous.get(name);
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  });
+
   it("selects creator sources that match the question", () => {
     const sources = selectSources(
       "How should AI agents pay creators with x402?",

@@ -1,5 +1,10 @@
 import { readSources } from "./catalog";
-import { createAgentQueryRecord } from "./agent";
+import {
+  AgentPlanningError,
+  agentOptionsForServerMode,
+  agentServerModeFromEnv,
+  createAgentQueryRecord,
+} from "./agent";
 import { refundReaderPayment, routeCitationPayments } from "./fee-router";
 import { groundingYieldsBySource } from "./grounding-yield";
 import { sha256Hex } from "./hash";
@@ -23,6 +28,20 @@ const DEFAULT_PROBATION_MAX_PAID_CITATIONS = 3;
 type SettleOptions = {
   creatorWallet?: string;
 };
+
+export class PaidQueryAgentError extends Error {
+  readonly stage: string | null;
+  readonly readerPayment: QueryPaymentEvidence;
+
+  constructor(cause: unknown, readerPayment: QueryPaymentEvidence) {
+    const message =
+      cause instanceof Error ? cause.message : "Paid query agent failed.";
+    super(message);
+    this.name = "PaidQueryAgentError";
+    this.stage = cause instanceof AgentPlanningError ? cause.stage : null;
+    this.readerPayment = readerPayment;
+  }
+}
 
 export function normalizeQuestion(question: string): string {
   return question.replace(/\s+/g, " ").trim();
@@ -52,12 +71,13 @@ export async function settleQuestion(
     sourcesForAgent(sources, ledger),
     options,
   );
+  const agent = agentOptionsForLedger(ledger);
   const query = await createAgentQueryRecord(
     normalized,
     createdAt,
     agentSources,
     undefined,
-    { groundingYields: groundingYieldsBySource(ledger) },
+    agent.options,
   );
   const receiptEvidence = await routeCitationPayments(query);
   return settleAndAnchorTrackRecord(query, receiptEvidence);
@@ -95,30 +115,34 @@ export async function settlePaidQuestion(
     options,
   );
   const readerPayment = createQueryPaymentEvidence(payment);
-  const query = await createAgentQueryRecord(
-    normalized,
-    createdAt,
-    agentSources,
-    readerPayment,
-    { groundingYields: groundingYieldsBySource(ledger) },
-  );
+  const agent = agentOptionsForLedger(ledger);
+  let query;
+  try {
+    query = await createAgentQueryRecord(
+      normalized,
+      createdAt,
+      agentSources,
+      readerPayment,
+      agent.options,
+    );
+  } catch (error) {
+    if (agent.serverMode !== "judge-strict") throw error;
+    const refundedPayment = await attachReaderRefund(
+      readerPayment,
+      "judge-strict-planner-failure",
+    );
+    throw new PaidQueryAgentError(error, refundedPayment);
+  }
   if (
     query.citations.length === 0 &&
     query.readerPayment?.payer &&
     /^0x[0-9a-fA-F]{40}$/.test(query.readerPayment.payer) &&
     query.readerPayment.amountAtomicUsdc > 0
   ) {
-    const refundTx = await refundReaderPayment(
-      query.readerPayment.payer as `0x${string}`,
-      query.readerPayment.amountAtomicUsdc,
-    ).catch(() => null);
-    if (refundTx) {
-      query.readerPayment.refund = {
-        amountAtomicUsdc: query.readerPayment.amountAtomicUsdc,
-        transaction: refundTx,
-        reason: "no-answer",
-      };
-    }
+    query.readerPayment = await attachReaderRefund(
+      query.readerPayment,
+      "no-answer",
+    );
   }
   const receiptEvidence = await routeCitationPayments(query);
   return settleAndAnchorTrackRecord(query, receiptEvidence);
@@ -142,6 +166,44 @@ export function filterSourcesForSettlement(
 function envPositiveInteger(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function agentOptionsForLedger(ledger: Ledger) {
+  const serverMode = agentServerModeFromEnv();
+  return {
+    serverMode,
+    options: {
+      ...agentOptionsForServerMode(serverMode),
+      groundingYields: groundingYieldsBySource(ledger),
+    },
+  };
+}
+
+async function attachReaderRefund(
+  payment: QueryPaymentEvidence,
+  reason: string,
+): Promise<QueryPaymentEvidence> {
+  if (
+    !payment.payer ||
+    !/^0x[0-9a-fA-F]{40}$/.test(payment.payer) ||
+    payment.amountAtomicUsdc <= 0
+  ) {
+    return payment;
+  }
+  const refundTx = await refundReaderPayment(
+    payment.payer as `0x${string}`,
+    payment.amountAtomicUsdc,
+  ).catch(() => null);
+  return refundTx
+    ? {
+        ...payment,
+        refund: {
+          amountAtomicUsdc: payment.amountAtomicUsdc,
+          transaction: refundTx,
+          reason,
+        },
+      }
+    : payment;
 }
 
 function sourcePaidQueryCount(ledger: Ledger, sourceId: string): number {

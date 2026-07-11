@@ -315,6 +315,9 @@ export type LedgerVerification = {
 
 export type SettlementStatus = {
   mode: "multi-accept";
+  serverAgentMode: "offline-preview" | "production" | "judge-strict";
+  agentMode: QueryRecord["agentMode"] | null;
+  agentModel: string | null;
   readerSettlement: {
     schemes: string[];
     gatewayBatchedSettlement: boolean;

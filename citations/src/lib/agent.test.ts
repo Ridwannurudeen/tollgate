@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createAgentQueryRecord } from "./agent";
+import {
+  AgentPlanningError,
+  createAgentQueryRecord,
+} from "./agent";
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
 import { NO_SOURCE_ANSWER } from "./engine";
 import {
@@ -77,6 +80,38 @@ function stageOf(messages: { role: string; content: string }[]): string {
 }
 
 describe("createAgentQueryRecord", () => {
+  it("rejects judge-strict mode when no LLM planner is configured", async () => {
+    await expect(
+      createAgentQueryRecord(
+        "How does Forum bind agent spending?",
+        "2026-07-11T00:00:00.000Z",
+        DEFAULT_CREATOR_SOURCES,
+        undefined,
+        { llmConfig: null, strictMode: true },
+      ),
+    ).rejects.toThrow("Judge-strict mode requires a configured LLM planner.");
+  });
+
+  it("rethrows a judge-strict planner error with the failed stage", async () => {
+    const plannerError = new Error("upstream planner unavailable");
+    const completeChat = async () => {
+      throw plannerError;
+    };
+
+    const result = createAgentQueryRecord(
+      "How does Forum bind agent spending?",
+      "2026-07-11T00:01:00.000Z",
+      DEFAULT_CREATOR_SOURCES,
+      undefined,
+      { llmConfig: LLM_CONFIG, completeChat, strictMode: true },
+    );
+
+    await expect(result).rejects.toBeInstanceOf(AgentPlanningError);
+    await expect(result).rejects.toThrow(
+      "Judge-strict mode failed during appraise: upstream planner unavailable",
+    );
+  });
+
   it("falls back to the deterministic policy with a trace when no LLM is configured", async () => {
     const query = await createAgentQueryRecord(
       "How does Forum bound agent spending for paid citations?",

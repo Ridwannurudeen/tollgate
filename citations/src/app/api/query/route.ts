@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AgentPlanningError } from "@/lib/agent";
 import { assertQueryRateLimit } from "@/lib/rate-limit";
 import { settleQuestion } from "@/lib/settlement";
 
@@ -37,9 +38,13 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    const strictPlannerFailure = error instanceof AgentPlanningError;
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Query failed." },
-      { status: 400 },
+      {
+        error: error instanceof Error ? error.message : "Query failed.",
+        ...(strictPlannerFailure ? { stage: error.stage } : {}),
+      },
+      { status: strictPlannerFailure ? 502 : 400 },
     );
   }
 }

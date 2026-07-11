@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { agentServerModeFromEnv } from "@/lib/agent";
 import { ARC_CAIP2, ARC_RPC_URL, ARC_USDC } from "@/lib/chain";
 import { readLedger, verifyLedgerIntegrity } from "@/lib/ledger";
 import {
@@ -24,6 +25,7 @@ export async function GET() {
     .slice()
     .reverse()
     .find((receipt) => receipt.settlementMode === "forum-routed");
+  const latestQuery = ledger.queries[0] ?? null;
   const latestReaderPayment = ledger.queries.find(
     (query) => query.readerPayment,
   )?.readerPayment;
@@ -34,6 +36,9 @@ export async function GET() {
 
   return NextResponse.json<SettlementStatus>({
     mode: "multi-accept",
+    serverAgentMode: agentServerModeFromEnv(),
+    agentMode: latestQuery?.agentMode ?? null,
+    agentModel: latestQuery?.agentModel ?? null,
     readerSettlement: {
       schemes: ["exact", "gateway-batched"],
       gatewayBatchedSettlement: true,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PaidQueryAgentError } from "@/lib/settlement";
 import {
   PAID_QUERY_PRICE_ATOMIC_USDC,
   tollgateAgentWallet,
@@ -89,6 +90,16 @@ export async function POST(request: NextRequest) {
       headers: { [PAYMENT_RESPONSE_HEADER]: settlement.responseHeader },
     });
   } catch (error) {
+    if (error instanceof PaidQueryAgentError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          stage: error.stage,
+          readerPayment: error.readerPayment,
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
       {
         error:
