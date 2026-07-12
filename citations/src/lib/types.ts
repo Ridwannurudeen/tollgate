@@ -146,6 +146,18 @@ export type ContributionScore = {
   fallback: boolean;
 };
 
+export type ContributionCounterfactual = {
+  omittedSourceId: string;
+  claimSupport: ClaimSupport[];
+};
+
+export type ContributionProof = {
+  method: "leave-one-out-v1";
+  purchasedSourceIds: string[];
+  eligibleSourceIds: string[];
+  counterfactuals: ContributionCounterfactual[];
+};
+
 export type AgentBudget = {
   sourceBudgetAtomicUsdc: number;
   spentAtomicUsdc: number;
@@ -284,6 +296,7 @@ export type QueryRecord = {
   sourceDecisions?: SourceDecision[];
   claimSupport?: ClaimSupport[];
   contributionScores?: ContributionScore[];
+  contributionProof?: ContributionProof;
   claimSupportRoot?: string;
   useIntent?: UseIntentRecord;
   agentBudget?: AgentBudget;

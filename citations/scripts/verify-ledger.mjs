@@ -200,7 +200,12 @@ function traceHashCandidates(query) {
   ];
 }
 
-function allocatePool(sourceIds, weights, poolAtomicUsdc) {
+function allocatePool(
+  sourceIds,
+  weights,
+  poolAtomicUsdc,
+  positiveWeightRemainderOnly = false,
+) {
   const totalWeight = sourceIds.reduce(
     (sum, sourceId) => sum + Math.max(0, weights.get(sourceId) ?? 0),
     0,
@@ -219,7 +224,10 @@ function allocatePool(sourceIds, weights, poolAtomicUsdc) {
     allocated += reward;
   }
   let remainder = poolAtomicUsdc - allocated;
-  for (const sourceId of sourceIds) {
+  const remainderSourceIds = positiveWeightRemainderOnly
+    ? sourceIds.filter((sourceId) => (weights.get(sourceId) ?? 0) > 0)
+    : sourceIds;
+  for (const sourceId of remainderSourceIds) {
     if (remainder <= 0) break;
     rewards.set(sourceId, (rewards.get(sourceId) ?? 0) + 1);
     remainder -= 1;
@@ -264,6 +272,174 @@ function scoreContribution(claimSupport, poolAtomicUsdc, fallbackAmounts) {
     rewardAtomicUsdc: rewards.get(sourceId) ?? 0,
     fallback: !hasPositiveContribution,
   }));
+}
+
+function supportedCount(claimSupport) {
+  return claimSupport.filter((support) => support.status === "supported")
+    .length;
+}
+
+function isValidEvidenceRow(value, purchasedSourceIds, omittedSourceId) {
+  if (!value || typeof value !== "object" || typeof value.claim !== "string") {
+    return false;
+  }
+  if (value.status === "supported") {
+    return (
+      typeof value.sourceId === "string" &&
+      purchasedSourceIds.has(value.sourceId) &&
+      value.sourceId !== omittedSourceId &&
+      typeof value.span === "string" &&
+      value.span.length > 0
+    );
+  }
+  return (
+    (value.status === "unsupported" || value.status === "unable-to-verify") &&
+    value.sourceId === null &&
+    value.span === null
+  );
+}
+
+function assertLeaveOneOutProof(
+  baseline,
+  proof,
+  expectedPurchasedSourceIds,
+  eligibleSourceIds,
+) {
+  if (!proof || proof.method !== "leave-one-out-v1") {
+    throw new Error("Unsupported contribution proof method.");
+  }
+  if (
+    expectedPurchasedSourceIds.length < 1 ||
+    expectedPurchasedSourceIds.length > 3 ||
+    new Set(expectedPurchasedSourceIds).size !==
+      expectedPurchasedSourceIds.length
+  ) {
+    throw new Error(
+      "Leave-one-out contribution scoring requires 1 to 3 sources.",
+    );
+  }
+  const expectedPurchasedSourceSet = new Set(expectedPurchasedSourceIds);
+  if (
+    !Array.isArray(baseline) ||
+    !Array.isArray(proof.purchasedSourceIds) ||
+    !Array.isArray(proof.eligibleSourceIds) ||
+    !Array.isArray(proof.counterfactuals) ||
+    proof.purchasedSourceIds.length !== expectedPurchasedSourceIds.length ||
+    new Set(proof.purchasedSourceIds).size !==
+      proof.purchasedSourceIds.length ||
+    proof.purchasedSourceIds.some(
+      (sourceId) => !expectedPurchasedSourceSet.has(sourceId),
+    ) ||
+    proof.eligibleSourceIds.length !== eligibleSourceIds.length ||
+    proof.eligibleSourceIds.some(
+      (sourceId, index) => sourceId !== eligibleSourceIds[index],
+    ) ||
+    eligibleSourceIds.some(
+      (sourceId) => !proof.purchasedSourceIds.includes(sourceId),
+    ) ||
+    proof.counterfactuals.length !== proof.purchasedSourceIds.length ||
+    proof.counterfactuals.some(
+      (counterfactual, index) =>
+        counterfactual?.omittedSourceId !== proof.purchasedSourceIds[index] ||
+        !Array.isArray(counterfactual.claimSupport),
+    )
+  ) {
+    throw new Error(
+      "Leave-one-out contribution proof has invalid source coverage.",
+    );
+  }
+  const purchasedSourceSet = new Set(proof.purchasedSourceIds);
+  if (
+    baseline.some((support) => !isValidEvidenceRow(support, purchasedSourceSet))
+  ) {
+    throw new Error(
+      "Leave-one-out contribution proof has invalid baseline evidence.",
+    );
+  }
+  for (const counterfactual of proof.counterfactuals) {
+    if (
+      counterfactual.claimSupport.length !== baseline.length ||
+      counterfactual.claimSupport.some(
+        (support, index) =>
+          !isValidEvidenceRow(
+            support,
+            purchasedSourceSet,
+            counterfactual.omittedSourceId,
+          ) || support.claim !== baseline[index]?.claim,
+      )
+    ) {
+      throw new Error(
+        "Leave-one-out contribution proof does not match the baseline claims.",
+      );
+    }
+  }
+}
+
+function scoreContributionFromProof(
+  baseline,
+  proof,
+  poolAtomicUsdc,
+  fallbackAmounts,
+  purchasedSourceIds,
+) {
+  const eligibleSourceIds = Object.keys(fallbackAmounts);
+  assertLeaveOneOutProof(
+    baseline,
+    proof,
+    purchasedSourceIds,
+    eligibleSourceIds,
+  );
+  const hasUnableEvidence =
+    baseline.some((support) => support.status === "unable-to-verify") ||
+    proof.counterfactuals.some((counterfactual) =>
+      counterfactual.claimSupport.some(
+        (support) => support.status === "unable-to-verify",
+      ),
+    );
+  const baselineQuality = supportedCount(baseline);
+  const marginal = hasUnableEvidence
+    ? new Map(eligibleSourceIds.map((sourceId) => [sourceId, 0]))
+    : new Map(
+        proof.counterfactuals.map((counterfactual) => [
+          counterfactual.omittedSourceId,
+          baselineQuality - supportedCount(counterfactual.claimSupport),
+        ]),
+      );
+  const hasPositiveContribution = eligibleSourceIds.some(
+    (sourceId) => (marginal.get(sourceId) ?? 0) > 0,
+  );
+  const weights = hasPositiveContribution
+    ? marginal
+    : new Map(
+        eligibleSourceIds.map((sourceId) => [
+          sourceId,
+          Math.max(0, fallbackAmounts[sourceId] ?? 0) || 1,
+        ]),
+      );
+  const rewards = allocatePool(
+    eligibleSourceIds,
+    weights,
+    Math.max(0, Math.floor(poolAtomicUsdc)),
+    true,
+  );
+  return eligibleSourceIds.map((sourceId) => ({
+    sourceId,
+    marginalContribution: Math.max(0, marginal.get(sourceId) ?? 0),
+    rewardAtomicUsdc: rewards.get(sourceId) ?? 0,
+    fallback: !hasPositiveContribution,
+  }));
+}
+
+function claimSupportRoot(claimSupport, contributionProof) {
+  return contributionProof
+    ? sha256Hex({
+        method: contributionProof.method,
+        baselineClaimSupport: claimSupport,
+        purchasedSourceIds: contributionProof.purchasedSourceIds,
+        eligibleSourceIds: contributionProof.eligibleSourceIds,
+        counterfactuals: contributionProof.counterfactuals,
+      })
+    : sha256Hex(claimSupport);
 }
 
 export function verifyLedger(ledger) {
@@ -330,14 +506,34 @@ export function verifyLedger(ledger) {
     const hasContributionProof =
       query.claimSupport !== undefined ||
       query.contributionScores !== undefined ||
+      query.contributionProof !== undefined ||
       query.claimSupportRoot !== undefined;
     if (hasContributionProof) {
-      if (!query.claimSupport || !query.claimSupportRoot) {
+      const rawContributionProof = query.contributionProof;
+      const malformedContributionProof =
+        rawContributionProof !== undefined &&
+        (!rawContributionProof ||
+          typeof rawContributionProof !== "object" ||
+          Array.isArray(rawContributionProof));
+      const contributionProof = malformedContributionProof
+        ? undefined
+        : query.contributionProof;
+      if (malformedContributionProof) {
+        issues.push({
+          index: -1,
+          reason: `query ${query.id} has invalid leave-one-out contribution proof: invalid proof shape`,
+        });
+      }
+      if (!Array.isArray(query.claimSupport) || !query.claimSupportRoot) {
         issues.push({
           index: -1,
           reason: `query ${query.id} has incomplete claim-support evidence`,
         });
-      } else if (sha256Hex(query.claimSupport) !== query.claimSupportRoot) {
+      } else if (
+        !malformedContributionProof &&
+        claimSupportRoot(query.claimSupport, contributionProof) !==
+          query.claimSupportRoot
+      ) {
         issues.push({
           index: -1,
           receiptHash: query.claimSupportRoot,
@@ -345,36 +541,97 @@ export function verifyLedger(ledger) {
         });
       }
 
-      if (!query.claimSupport || !query.contributionScores) {
+      if (
+        !Array.isArray(query.claimSupport) ||
+        !Array.isArray(query.contributionScores)
+      ) {
         issues.push({
           index: -1,
           reason: `query ${query.id} has incomplete contribution scores`,
         });
       } else {
-        const scoredSourceIds = new Set(
-          query.contributionScores.map((score) => score.sourceId),
-        );
-        const fallbackAmounts = Object.fromEntries(
-          query.citations
-            .filter((citation) => scoredSourceIds.has(citation.sourceId))
-            .map((citation) => [citation.sourceId, citation.amountAtomicUsdc]),
-        );
-        const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
-          (sum, amount) => sum + amount,
-          0,
-        );
-        const expectedScores = scoreContribution(
-          query.claimSupport,
-          poolAtomicUsdc,
-          fallbackAmounts,
-        );
-        if (sha256Hex(expectedScores) !== sha256Hex(query.contributionScores)) {
+        let expectedScores = null;
+        try {
+          if (rawContributionProof !== undefined) {
+            if (
+              malformedContributionProof ||
+              !contributionProof ||
+              !Array.isArray(contributionProof.eligibleSourceIds)
+            ) {
+              throw new Error("invalid proof shape");
+            }
+            const eligibleSourceIds = new Set(
+              contributionProof.eligibleSourceIds,
+            );
+            if (
+              query.citations.some(
+                (citation) =>
+                  citation.payoutPolicy !== "refund-unused" &&
+                  !eligibleSourceIds.has(citation.sourceId),
+              )
+            ) {
+              throw new Error("proof omits a payout-eligible citation");
+            }
+            const citationBySourceId = new Map(
+              query.citations.map((citation) => [citation.sourceId, citation]),
+            );
+            const fallbackAmounts = Object.fromEntries(
+              contributionProof.eligibleSourceIds.flatMap((sourceId) => {
+                const citation = citationBySourceId.get(sourceId);
+                return citation ? [[sourceId, citation.amountAtomicUsdc]] : [];
+              }),
+            );
+            const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
+              (sum, amount) => sum + amount,
+              0,
+            );
+            expectedScores = scoreContributionFromProof(
+              query.claimSupport,
+              contributionProof,
+              poolAtomicUsdc,
+              fallbackAmounts,
+              query.citations.map((citation) => citation.sourceId),
+            );
+          } else {
+            const scoredSourceIds = new Set(
+              query.contributionScores.map((score) => score.sourceId),
+            );
+            const fallbackAmounts = Object.fromEntries(
+              query.citations
+                .filter((citation) => scoredSourceIds.has(citation.sourceId))
+                .map((citation) => [
+                  citation.sourceId,
+                  citation.amountAtomicUsdc,
+                ]),
+            );
+            const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
+              (sum, amount) => sum + amount,
+              0,
+            );
+            expectedScores = scoreContribution(
+              query.claimSupport,
+              poolAtomicUsdc,
+              fallbackAmounts,
+            );
+          }
+        } catch (error) {
+          issues.push({
+            index: -1,
+            reason: `query ${query.id} has invalid leave-one-out contribution proof: ${
+              error instanceof Error ? error.message : "unknown error"
+            }`,
+          });
+        }
+        if (
+          expectedScores &&
+          sha256Hex(expectedScores) !== sha256Hex(query.contributionScores)
+        ) {
           issues.push({
             index: -1,
             reason: `query ${query.id} has contribution scores that do not match claim support`,
           });
         }
-        for (const score of expectedScores) {
+        for (const score of expectedScores ?? []) {
           const citation = query.citations.find(
             (candidate) => candidate.sourceId === score.sourceId,
           );
@@ -389,7 +646,8 @@ export function verifyLedger(ledger) {
           if (
             (shouldRefund && citation.payoutPolicy !== "refund-unused") ||
             (!shouldRefund &&
-              citation.payoutAtomicUsdc !== score.rewardAtomicUsdc)
+              (citation.payoutPolicy === "refund-unused" ||
+                citation.payoutAtomicUsdc !== score.rewardAtomicUsdc))
           ) {
             issues.push({
               index: -1,

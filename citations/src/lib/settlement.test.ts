@@ -42,6 +42,7 @@ import {
   PaidQueryAgentError,
   createQueryPaymentEvidence,
   filterSourcesForSettlement,
+  leaveOneOutContributionEnabled,
   settlePaidQuestion,
   sourcesForAgent,
   validateQuestion,
@@ -83,6 +84,39 @@ async function withRegistrationFetchDisabled<T>(
 }
 
 describe("LeptonWeb settlement engine", () => {
+  it("gates leave-one-out contribution scoring by mode, env, and source cap", () => {
+    const envNames = [
+      "LEPTONWEB_CONTRIBUTION_PAYOUTS",
+      "LEPTONWEB_LEAVE_ONE_OUT_CONTRIBUTION",
+    ];
+    const previous = new Map(
+      envNames.map((name) => [name, process.env[name]]),
+    );
+
+    try {
+      for (const name of envNames) delete process.env[name];
+      expect(leaveOneOutContributionEnabled("judge-strict", 0)).toBe(false);
+      expect(leaveOneOutContributionEnabled("judge-strict", 3)).toBe(true);
+      expect(leaveOneOutContributionEnabled("production", 3)).toBe(false);
+
+      process.env.LEPTONWEB_LEAVE_ONE_OUT_CONTRIBUTION = "0";
+      expect(leaveOneOutContributionEnabled("judge-strict", 3)).toBe(false);
+
+      process.env.LEPTONWEB_CONTRIBUTION_PAYOUTS = "1";
+      process.env.LEPTONWEB_LEAVE_ONE_OUT_CONTRIBUTION = "1";
+      expect(leaveOneOutContributionEnabled("production", 3)).toBe(true);
+      expect(leaveOneOutContributionEnabled("production", 4)).toBe(false);
+
+      process.env.LEPTONWEB_CONTRIBUTION_PAYOUTS = "0";
+      expect(leaveOneOutContributionEnabled("judge-strict", 3)).toBe(false);
+    } finally {
+      for (const [name, value] of previous) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  });
+
   it("surfaces strict paid planner failures without writing a fallback query", async () => {
     const envNames = [
       "LEPTONWEB_AGENT_MODE",
