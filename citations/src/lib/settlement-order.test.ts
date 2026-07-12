@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   buildUseIntent: vi.fn(),
   createAgentQueryRecord: vi.fn(),
   groundingYieldsBySource: vi.fn(),
+  payCitationsWithIntent: vi.fn(),
+  payGateAddress: vi.fn(),
   publishTrackRecordForAnswer: vi.fn(),
   readLedger: vi.fn(),
   readSources: vi.fn(),
@@ -49,6 +51,11 @@ vi.mock("./fee-router", () => ({
 
 vi.mock("./grounding-yield", () => ({
   groundingYieldsBySource: mocks.groundingYieldsBySource,
+}));
+
+vi.mock("./pay-gate", () => ({
+  payCitationsWithIntent: mocks.payCitationsWithIntent,
+  payGateAddress: mocks.payGateAddress,
 }));
 
 vi.mock("./ledger", async (importOriginal) => {
@@ -116,12 +123,14 @@ const USE_INTENT_RECORD = {
 const ENV_NAMES = [
   "LEPTONWEB_CONTRIBUTION_PAYOUTS",
   "LEPTONWEB_FEE_ROUTER_ENABLED",
+  "LEPTONWEB_PAYGATE_ADDRESS",
 ];
 let previousEnv: Map<string, string | undefined>;
 
 beforeEach(() => {
   previousEnv = new Map(ENV_NAMES.map((name) => [name, process.env[name]]));
   delete process.env.LEPTONWEB_CONTRIBUTION_PAYOUTS;
+  delete process.env.LEPTONWEB_PAYGATE_ADDRESS;
   process.env.LEPTONWEB_FEE_ROUTER_ENABLED = "1";
   vi.resetAllMocks();
   mocks.agentOptionsForServerMode.mockReturnValue({});
@@ -148,6 +157,13 @@ beforeEach(() => {
     ) => createQueryRecord(question, createdAt, sources, readerPayment),
   );
   mocks.groundingYieldsBySource.mockReturnValue({});
+  mocks.payGateAddress.mockReturnValue(null);
+  mocks.payCitationsWithIntent.mockResolvedValue({
+    evidenceBySourceId: {},
+    transaction: ANCHOR_TX,
+    digest: USE_INTENT_RECORD.digest,
+    payGateAddress: "0x5555555555555555555555555555555555555555",
+  });
   mocks.publishTrackRecordForAnswer.mockResolvedValue(null);
   mocks.readLedger.mockResolvedValue({ queries: [], receipts: [] });
   mocks.readSources.mockResolvedValue([SOURCE]);
@@ -252,5 +268,75 @@ describe("anchor-before-payment settlement ordering", () => {
     expect(caught.stage).toBe("fee-router-settlement");
     expect(caught.query?.useIntent).toBeUndefined();
     expect(mocks.anchorUseIntent).not.toHaveBeenCalled();
+  });
+
+  it("uses one PayGate transaction without a standalone anchor", async () => {
+    const payGate = "0x5555555555555555555555555555555555555555";
+    mocks.payGateAddress.mockReturnValue(payGate);
+
+    const result = await settlePaidQuestion(QUESTION, READER_PAYMENT);
+
+    expect(mocks.payCitationsWithIntent).toHaveBeenCalledOnce();
+    expect(mocks.anchorUseIntent).not.toHaveBeenCalled();
+    expect(mocks.routeCitationPayments).not.toHaveBeenCalled();
+    expect(result.query.useIntent).toMatchObject({
+      anchorTx: ANCHOR_TX,
+      payGate: true,
+      payGateAddress: payGate,
+    });
+  });
+
+  it("surfaces PayGate failure without writing ledger receipts", async () => {
+    mocks.payGateAddress.mockReturnValue(
+      "0x5555555555555555555555555555555555555555",
+    );
+    mocks.payCitationsWithIntent.mockRejectedValue(
+      new Error("PayGate transaction reverted"),
+    );
+
+    await expect(
+      settlePaidQuestion(QUESTION, READER_PAYMENT),
+    ).rejects.toMatchObject({ stage: "pay-gate-settlement" });
+    expect(mocks.anchorUseIntent).not.toHaveBeenCalled();
+    expect(mocks.routeCitationPayments).not.toHaveBeenCalled();
+    expect(mocks.appendSettlement).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when PayGate is configured without use intent", async () => {
+    mocks.payGateAddress.mockReturnValue(
+      "0x5555555555555555555555555555555555555555",
+    );
+    mocks.useIntentEnabled.mockReturnValue(false);
+
+    await expect(settleQuestion(QUESTION)).rejects.toThrow(
+      "PayGate settlement requires use-intent signing",
+    );
+    expect(mocks.payCitationsWithIntent).not.toHaveBeenCalled();
+    expect(mocks.routeCitationPayments).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a standalone anchor when every citation is non-routeable", async () => {
+    mocks.payGateAddress.mockReturnValue(
+      "0x5555555555555555555555555555555555555555",
+    );
+    mocks.payCitationsWithIntent.mockResolvedValue({
+      evidenceBySourceId: {
+        [SOURCE.id]: {
+          settlementMode: "refunded",
+          paymentResource: "tollgate-refund:unused-source",
+          payoutPolicy: "refund-unused",
+        },
+      },
+      transaction: null,
+      digest: null,
+      payGateAddress: null,
+    });
+
+    const result = await settlePaidQuestion(QUESTION, READER_PAYMENT);
+
+    expect(mocks.anchorUseIntent).toHaveBeenCalledOnce();
+    expect(mocks.routeCitationPayments).not.toHaveBeenCalled();
+    expect(result.query.useIntent).toMatchObject({ anchorTx: ANCHOR_TX });
+    expect(result.query.useIntent?.payGate).toBeUndefined();
   });
 });

@@ -2,7 +2,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Address, Hex, PublicClient } from "viem";
+import {
+  encodeAbiParameters,
+  encodeEventTopics,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createQueryRecord } from "./engine";
 import {
@@ -16,6 +22,19 @@ import {
 import { resetFeeRouterNonceStateForTests } from "./fee-router-nonce";
 
 const TEST_KEY = generatePrivateKey();
+const FEE_ROUTER = "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59";
+const SPLIT_CREATED_EVENT_ABI = [
+  {
+    type: "event",
+    name: "SplitCreated",
+    inputs: [
+      { name: "splitId", type: "uint256", indexed: true },
+      { name: "creator", type: "address", indexed: true },
+      { name: "recipients", type: "address[]", indexed: false },
+      { name: "bps", type: "uint16[]", indexed: false },
+    ],
+  },
+] as const;
 
 beforeEach(() => {
   resetFeeRouterNonceStateForTests();
@@ -34,6 +53,26 @@ function accountAddress(value: unknown): string | null {
   }
   const address = (value as { address?: unknown }).address;
   return typeof address === "string" ? address : null;
+}
+
+function splitCreatedLog(
+  splitId: bigint,
+  creator: Address,
+  recipients: Address[],
+  bps: number[],
+) {
+  return {
+    address: FEE_ROUTER,
+    topics: encodeEventTopics({
+      abi: SPLIT_CREATED_EVENT_ABI,
+      eventName: "SplitCreated",
+      args: { splitId, creator },
+    }),
+    data: encodeAbiParameters(
+      [{ type: "address[]" }, { type: "uint16[]" }],
+      [recipients, bps],
+    ),
+  };
 }
 
 function oneCitationQuery() {
@@ -60,6 +99,8 @@ function mockClients(
   createSplitArgs: unknown[][] = [],
   paidAmounts: bigint[] = [],
 ) {
+  let createdRecipients: Address[] = [recipient];
+  let createdBps = [10_000];
   const publicClient = {
     readContract: async ({ functionName }: { functionName: string }) => {
       if (functionName === "balanceOf") return 1_000_000n;
@@ -75,17 +116,38 @@ function mockClients(
       }
       throw new Error(`unexpected read ${functionName}`);
     },
-    simulateContract: async (request: ContractCall) => ({
-      result: createSplitId,
-      request: {
-        ...request,
-        account: "0x4164F5B52ecc6F847f03071A287b0B59954cbcEe",
-      },
-    }),
+    simulateContract: async (request: ContractCall) => {
+      if (
+        request.functionName === "createSplit" &&
+        Array.isArray(request.args?.[0]) &&
+        Array.isArray(request.args?.[1])
+      ) {
+        createdRecipients = request.args[0] as Address[];
+        createdBps = request.args[1] as number[];
+      }
+      return {
+        result: createSplitId,
+        request: {
+          ...request,
+          account: "0x4164F5B52ecc6F847f03071A287b0B59954cbcEe",
+        },
+      };
+    },
     getTransactionCount: async () => 50,
     waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
       status: "success",
       transactionHash: hash,
+      logs:
+        hash === `0x${"b".repeat(64)}`
+          ? [
+              splitCreatedLog(
+                createSplitId,
+                privateKeyToAccount(TEST_KEY).address,
+                createdRecipients,
+                createdBps,
+              ),
+            ]
+          : [],
     }),
   } as unknown as PublicClient;
   const walletClient = {
@@ -154,6 +216,18 @@ describe("assertValidFeeRouterSplit", () => {
       "How should Forum route paid citation receipts?",
       "2026-06-23T00:00:00.000Z",
     );
+
+    await expect(
+      routeCitationPayments(query, { enabled: false }),
+    ).resolves.toEqual({});
+  });
+
+  it("does not validate payout overrides while FeeRouter settlement is disabled", async () => {
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      payoutAtomicUsdc: -1,
+    }));
 
     await expect(
       routeCitationPayments(query, { enabled: false }),
@@ -304,6 +378,55 @@ describe("assertValidFeeRouterSplit", () => {
     }
   });
 
+  it("uses the split id from the mined SplitCreated event when the prediction races", async () => {
+    const query = oneCitationQuery();
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const paidSplitIds: bigint[] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      1_000_000n,
+      123n,
+      writes,
+      paidSplitIds,
+    );
+    Object.assign(publicClient, {
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
+        status: "success",
+        transactionHash: hash,
+        logs:
+          hash === `0x${"b".repeat(64)}`
+            ? [
+                splitCreatedLog(
+                  124n,
+                  privateKeyToAccount(TEST_KEY).address,
+                  [query.citations[0].wallet],
+                  [10_000],
+                ),
+              ]
+            : [],
+      }),
+    });
+
+    try {
+      const evidence = await routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+        splitRegistryPath: registryPath,
+      });
+
+      expect(paidSplitIds).toEqual([124n]);
+      expect(evidence[query.citations[0].sourceId]?.feeRouterSplitId).toBe(
+        "124",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a reverted FeeRouter payment receipt", async () => {
     const query = oneCitationQuery();
     const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
@@ -315,11 +438,13 @@ describe("assertValidFeeRouterSplit", () => {
       129n,
       writes,
     );
+    const waitForReceipt =
+      publicClient.waitForTransactionReceipt.bind(publicClient);
     Object.assign(publicClient, {
-      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
-        status: hash === `0x${"c".repeat(64)}` ? "reverted" : "success",
-        transactionHash: hash,
-      }),
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) =>
+        hash === `0x${"c".repeat(64)}`
+          ? { status: "reverted", transactionHash: hash, logs: [] }
+          : waitForReceipt({ hash }),
     });
 
     try {
@@ -331,7 +456,9 @@ describe("assertValidFeeRouterSplit", () => {
           walletClient,
           splitRegistryPath: registryPath,
         }),
-      ).rejects.toThrow("FeeRouter pay transaction failed with status reverted");
+      ).rejects.toThrow(
+        "FeeRouter pay transaction failed with status reverted",
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -348,12 +475,17 @@ describe("assertValidFeeRouterSplit", () => {
       130n,
       writes,
     );
+    const waitForReceipt =
+      publicClient.waitForTransactionReceipt.bind(publicClient);
     Object.assign(publicClient, {
-      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
-        status: "success",
-        transactionHash:
-          hash === `0x${"c".repeat(64)}` ? `0x${"d".repeat(64)}` : hash,
-      }),
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) =>
+        hash === `0x${"c".repeat(64)}`
+          ? {
+              status: "success",
+              transactionHash: `0x${"d".repeat(64)}`,
+              logs: [],
+            }
+          : waitForReceipt({ hash }),
     });
 
     try {
@@ -545,6 +677,9 @@ describe("assertValidFeeRouterSplit", () => {
     const registryPath = path.join(dir, "fee-router-splits.json");
     const writes: ContractCall[] = [];
     let splitId = 300n;
+    let pendingSplitId = 300n;
+    let pendingRecipients: Address[] = [];
+    let pendingBps: number[] = [];
     const publicClient = {
       readContract: async ({ functionName }: { functionName: string }) => {
         if (functionName === "balanceOf") return 1_000_000n;
@@ -562,6 +697,9 @@ describe("assertValidFeeRouterSplit", () => {
       },
       simulateContract: async (request: ContractCall) => {
         splitId += 1n;
+        pendingSplitId = splitId;
+        pendingRecipients = request.args?.[0] as Address[];
+        pendingBps = request.args?.[1] as number[];
         return {
           result: splitId,
           request: {
@@ -574,6 +712,14 @@ describe("assertValidFeeRouterSplit", () => {
       waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
         status: "success",
         transactionHash: hash,
+        logs: [
+          splitCreatedLog(
+            pendingSplitId,
+            privateKeyToAccount(TEST_KEY).address,
+            pendingRecipients,
+            pendingBps,
+          ),
+        ],
       }),
     } as unknown as PublicClient;
     const walletClient = {
@@ -673,7 +819,7 @@ describe("refundReaderPayment", () => {
     const publicClient = {
       readContract: async ({ functionName }: { functionName: string }) => {
         if (functionName === "balanceOf") return 5_000n;
-      throw new Error(`unexpected read ${functionName}`);
+        throw new Error(`unexpected read ${functionName}`);
       },
       getTransactionCount: async () => 60,
       waitForTransactionReceipt: async () => ({ status: "success" }),
@@ -698,7 +844,7 @@ describe("refundReaderPayment", () => {
     const publicClient = {
       readContract: async ({ functionName }: { functionName: string }) => {
         if (functionName === "balanceOf") return 1_000_000n;
-      throw new Error(`unexpected read ${functionName}`);
+        throw new Error(`unexpected read ${functionName}`);
       },
       getTransactionCount: async () => 70,
       waitForTransactionReceipt: async () => ({ status: "success" }),

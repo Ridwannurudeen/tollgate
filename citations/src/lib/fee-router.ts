@@ -4,6 +4,7 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  parseEventLogs,
   type Abi,
   type Address,
   type Hex,
@@ -35,7 +36,7 @@ const DEFAULT_FEE_ROUTER_TENANT_ID = "citations-core";
 // revert with "transfer amount exceeds allowance". Instead top up to a large
 // bounded standing allowance so many payouts clear without re-approving; actual
 // spend stays capped by the payer wallet's USDC balance regardless of allowance.
-const STANDING_FEE_ROUTER_ALLOWANCE = 10_000_000_000n; // 10,000 USDC (atomic, 6dp)
+export const STANDING_FEE_ROUTER_ALLOWANCE = 10_000_000_000n; // 10,000 USDC (atomic, 6dp)
 let splitRegistryLock: Promise<void> = Promise.resolve();
 type FeeRouterClaimableCacheEntry =
   | { value: bigint; fetchedAt: number }
@@ -139,6 +140,17 @@ export type FeeRouterSplitRegistry = {
   splits: FeeRouterSplitRecord[];
 };
 
+export type PlannedCitationPayment = {
+  sourceId: string;
+  citation: Citation;
+  amountAtomicUsdc: number;
+};
+
+export type CitationPaymentPlan = {
+  evidenceBySourceId: Record<string, ReceiptEvidence>;
+  payments: PlannedCitationPayment[];
+};
+
 export function createFeeRouterPublicClient() {
   return createPublicClient({
     chain: arcTestnet,
@@ -147,11 +159,11 @@ export function createFeeRouterPublicClient() {
   });
 }
 
-async function waitForSuccessfulTransaction(
+export async function waitForSuccessfulTransaction(
   publicClient: PublicClient,
   transaction: Hex,
   operation: string,
-): Promise<void> {
+) {
   const receipt = await publicClient.waitForTransactionReceipt({
     hash: transaction,
   });
@@ -161,6 +173,7 @@ async function waitForSuccessfulTransaction(
   if (receipt.status !== "success") {
     throw new Error(`${operation} failed with status ${receipt.status}.`);
   }
+  return receipt;
 }
 
 export function assertValidFeeRouterSplit(
@@ -273,7 +286,9 @@ export async function readFeeRouterSplit(
   };
 }
 
-function feeRouterEnabled(options: FeeRouterRouteOptions): boolean {
+export function feeRouterSettlementEnabled(
+  options: FeeRouterRouteOptions,
+): boolean {
   return options.enabled ?? process.env.LEPTONWEB_FEE_ROUTER_ENABLED === "1";
 }
 
@@ -476,6 +491,37 @@ async function verifyCreatorSplit(
   }
 }
 
+function createdSplitFromReceipt(
+  receipt: Awaited<ReturnType<typeof waitForSuccessfulTransaction>>,
+  creator: Address,
+  recipients: Address[],
+  bps: number[],
+): bigint {
+  const events = parseEventLogs({
+    abi: feeRouterV1Abi,
+    eventName: "SplitCreated",
+    logs: receipt.logs,
+  }).filter(
+    (event) => event.address.toLowerCase() === FEE_ROUTER_ADDRESS.toLowerCase(),
+  );
+  if (events.length !== 1) {
+    throw new Error(
+      "FeeRouter createSplit receipt has no unique SplitCreated event.",
+    );
+  }
+  const created = events[0].args;
+  if (
+    created.creator.toLowerCase() !== creator.toLowerCase() ||
+    !sameAddressList(created.recipients, recipients) ||
+    !sameBpsList(created.bps, bps)
+  ) {
+    throw new Error(
+      "FeeRouter SplitCreated event does not match the requested split.",
+    );
+  }
+  return created.splitId;
+}
+
 async function ensureCreatorSplit(
   tenantId: string,
   wallet: Address,
@@ -501,7 +547,7 @@ async function ensureCreatorSplit(
       return existing;
     }
 
-    const { result: splitId, request } = await publicClient.simulateContract({
+    const { request } = await publicClient.simulateContract({
       address: FEE_ROUTER_ADDRESS,
       abi: feeRouterV1Abi,
       functionName: "createSplit",
@@ -519,10 +565,16 @@ async function ensureCreatorSplit(
           nonce,
         }),
     );
-    await waitForSuccessfulTransaction(
+    const receipt = await waitForSuccessfulTransaction(
       publicClient,
       createSplitTx,
       "FeeRouter createSplit transaction",
+    );
+    const splitId = createdSplitFromReceipt(
+      receipt,
+      account.address,
+      recipients,
+      bps,
     );
 
     const record: FeeRouterSplitRecord = {
@@ -588,14 +640,12 @@ function payoutAmountForCitation(citation: Citation): number {
   return amount;
 }
 
-export async function routeCitationPayments(
+function buildCitationPaymentPlan(
   query: QueryRecord,
-  options: FeeRouterRouteOptions = {},
-): Promise<Record<string, ReceiptEvidence>> {
-  if (query.citations.length === 0) return {};
-
+  validatePayoutAmounts: boolean,
+): CitationPaymentPlan {
   const evidenceBySourceId: Record<string, ReceiptEvidence> = {};
-  const routeableCitations = query.citations.filter((citation) => {
+  const payments = query.citations.flatMap((citation) => {
     if (citation.payoutPolicy === "refund-unused") {
       evidenceBySourceId[citation.sourceId] = {
         settlementMode: "refunded",
@@ -603,26 +653,71 @@ export async function routeCitationPayments(
         payoutPolicy: "refund-unused",
         refundReason: "Bought source was not cited in the final answer.",
       };
-      return false;
+      return [];
     }
-    if (!shouldEscrowCitation(citation)) return true;
-    evidenceBySourceId[citation.sourceId] = {
-      settlementMode: "escrowed",
-      paymentResource: "tollgate-escrow:unverified-source",
-      payoutPolicy: "escrow-unverified",
-    };
-    return false;
+    if (shouldEscrowCitation(citation)) {
+      evidenceBySourceId[citation.sourceId] = {
+        settlementMode: "escrowed",
+        paymentResource: "tollgate-escrow:unverified-source",
+        payoutPolicy: "escrow-unverified",
+      };
+      return [];
+    }
+    return [
+      {
+        sourceId: citation.sourceId,
+        citation,
+        amountAtomicUsdc: validatePayoutAmounts
+          ? payoutAmountForCitation(citation)
+          : (citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc),
+      },
+    ];
   });
+  return { evidenceBySourceId, payments };
+}
 
-  if (!feeRouterEnabled(options) || routeableCitations.length === 0) {
+export function planCitationPayments(query: QueryRecord): CitationPaymentPlan {
+  return buildCitationPaymentPlan(query, true);
+}
+
+export async function prepareCitationSplit(
+  payment: PlannedCitationPayment,
+  publicClient: PublicClient,
+  walletClient: FeeRouterWalletClient,
+  account: { address: Address },
+  options: FeeRouterRouteOptions = {},
+): Promise<FeeRouterSplitRecord> {
+  const splitInput = splitForCitation(payment.citation);
+  return ensureCreatorSplit(
+    feeRouterTenantId(options),
+    splitInput.wallet,
+    splitInput.recipients,
+    splitInput.bps,
+    publicClient,
+    walletClient,
+    account,
+    options.splitRegistryPath,
+  );
+}
+
+export async function routeCitationPayments(
+  query: QueryRecord,
+  options: FeeRouterRouteOptions = {},
+): Promise<Record<string, ReceiptEvidence>> {
+  const enabled = feeRouterSettlementEnabled(options);
+  const { evidenceBySourceId, payments } = buildCitationPaymentPlan(
+    query,
+    enabled,
+  );
+
+  if (!enabled || payments.length === 0) {
     return evidenceBySourceId;
   }
 
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
   const { account, walletClient } = createFeeRouterSigner(options);
-  const tenantId = feeRouterTenantId(options);
-  const totalAtomicUsdc = routeableCitations.reduce(
-    (sum, citation) => sum + BigInt(payoutAmountForCitation(citation)),
+  const totalAtomicUsdc = payments.reduce(
+    (sum, payment) => sum + BigInt(payment.amountAtomicUsdc),
     0n,
   );
   const [balance, allowance] = await Promise.all([
@@ -663,17 +758,13 @@ export async function routeCitationPayments(
     );
   }
 
-  for (const citation of routeableCitations) {
-    const splitInput = splitForCitation(citation);
-    const split = await ensureCreatorSplit(
-      tenantId,
-      splitInput.wallet,
-      splitInput.recipients,
-      splitInput.bps,
+  for (const payment of payments) {
+    const split = await prepareCitationSplit(
+      payment,
       publicClient,
       walletClient,
       account,
-      options.splitRegistryPath,
+      options,
     );
 
     const payTx = await withReservedNonce(publicClient, account, (nonce) =>
@@ -681,7 +772,7 @@ export async function routeCitationPayments(
         address: FEE_ROUTER_ADDRESS,
         abi: feeRouterV1Abi,
         functionName: "pay",
-        args: [BigInt(split.splitId), BigInt(payoutAmountForCitation(citation))],
+        args: [BigInt(split.splitId), BigInt(payment.amountAtomicUsdc)],
         account,
         chain: arcTestnet,
         nonce,
@@ -693,7 +784,7 @@ export async function routeCitationPayments(
       "FeeRouter pay transaction",
     );
 
-    evidenceBySourceId[citation.sourceId] = {
+    evidenceBySourceId[payment.sourceId] = {
       settlementMode: "forum-routed",
       payer: account.address,
       transaction: payTx,
@@ -713,7 +804,7 @@ export async function routeEscrowReleasePayment(
   releasedReceiptHashes: string[],
   options: FeeRouterRouteOptions = {},
 ): Promise<ReceiptEvidence> {
-  if (!feeRouterEnabled(options)) {
+  if (!feeRouterSettlementEnabled(options)) {
     return {
       settlementMode: "local-proof",
       paymentResource: "tollgate-escrow:release-ready",
@@ -813,7 +904,7 @@ export async function refundReaderPayment(
   amountAtomicUsdc: number,
   options: FeeRouterRouteOptions = {},
 ): Promise<Hex | null> {
-  if (!feeRouterEnabled(options)) return null;
+  if (!feeRouterSettlementEnabled(options)) return null;
   if (!Number.isInteger(amountAtomicUsdc) || amountAtomicUsdc <= 0) return null;
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
   const { account, walletClient } = createFeeRouterSigner(options);

@@ -152,10 +152,7 @@ export function useReceiptRegistryAddress(): Address {
   return address(configured, "LEPTONWEB_USE_RECEIPT_REGISTRY_ADDRESS");
 }
 
-export function useIntentDomain(
-  chainId: number,
-  registryAddress: Address,
-) {
+export function useIntentDomain(chainId: number, registryAddress: Address) {
   return {
     name: USE_INTENT_DOMAIN_NAME,
     version: USE_INTENT_DOMAIN_VERSION,
@@ -320,7 +317,9 @@ function useIntentPrivateKey(): Hex {
     );
   }
   if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
-    throw new Error("LEPTONWEB_USE_INTENT_PRIVATE_KEY must be a 32-byte hex key.");
+    throw new Error(
+      "LEPTONWEB_USE_INTENT_PRIVATE_KEY must be a 32-byte hex key.",
+    );
   }
   return value as Hex;
 }
@@ -356,7 +355,7 @@ export async function signUseIntent(
   });
 }
 
-function contractIntent(intent: TollgateUseIntent) {
+export function useIntentContractValue(intent: TollgateUseIntent) {
   return {
     queryHash: intent.queryHash,
     candidateSetRoot: intent.candidateSetRoot,
@@ -388,7 +387,7 @@ export async function anchorUseIntent(
       address: built.registryAddress,
       abi: useReceiptRegistryAbi,
       functionName: "anchor",
-      args: [contractIntent(built.intent), signature],
+      args: [useIntentContractValue(built.intent), signature],
       account,
       chain: arcTestnet,
       nonce,

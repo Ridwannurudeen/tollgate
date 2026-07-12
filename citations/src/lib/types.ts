@@ -279,6 +279,8 @@ export type UseIntentRecord = {
   selectedSourcesRoot: `0x${string}`;
   decisionTraceHash: `0x${string}`;
   claimSupportRoot: `0x${string}`;
+  payGate?: true;
+  payGateAddress?: `0x${string}`;
 };
 
 export type QueryRecord = {

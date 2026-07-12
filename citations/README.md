@@ -11,19 +11,19 @@ the model call.
 ## Start here
 
 - [Live application](https://tollgate.gudman.xyz/) — HTTP 200 verified on
-  2026-07-11.
+  2026-07-12.
 - [Live proof surface](https://tollgate.gudman.xyz/proof) — HTTP 200 verified on
-  2026-07-11.
+  2026-07-12.
 - [90-second judge flow](docs/JUDGES.md) — the one-click WS5 path and exact
   partial-failure semantics.
-- Proof pack route: `/api/judge-proof.json` on a deployment containing WS2+.
+- Proof pack route: `/api/judge-proof.json` (HTTP 200 verified on 2026-07-12).
 - No-secret verifier: `npm run judge:verify -- --url <deployment>`.
 - [Public repository](https://github.com/Ridwannurudeen/tollgate).
 
-Deployment boundary: the public branch still points to the pre-roadmap commit
-`507abc7`. The public proof-pack URL returned HTTP 404 on 2026-07-11, so no live
-proof-pack count is repeated here. The WS1–WS5 judge flow is local work until an
-operator deploys it. No public demo-video URL has been verified.
+Deployment boundary: the public proof pack reports commit `4e6edd2`, which
+contains the WS8 anchor-before-payment path. The WS9 PayGate source is opt-in
+and has no public contract address until an operator deploys it and sets
+`LEPTONWEB_PAYGATE_ADDRESS`. No public demo-video URL has been verified.
 
 ![Tollgate Citations answer workbench](docs/screenshots/stranger-ready/ask-desktop.png)
 
@@ -47,8 +47,10 @@ UI fixture/live-state values, not claims about the current deployment._
           |
  [literal-span verification + contribution scoring]
        /                 |                    \
-[unused-source]  [FeeRouter creator]  [signed EIP-712 intent]
-   [refunds]       [settlement]          [anchored on Arc]
+[unused-source]  [creator settlement]  [signed EIP-712 intent]
+   [refunds]       /             \       [anchored on Arc]
+             [WS8 Registry]   [opt-in PayGate]
+             then FeeRouter   anchor + cap + routes
                         |
              [creator balance delta]
                         |
@@ -74,10 +76,12 @@ reader or agent.
 4. The claim verifier accepts only literal supporting spans from stored source
    content. Contribution scores allocate the creator pool; unused purchases are
    represented in the refund summary.
-5. FeeRouter settlement writes Arc transaction evidence and the sponsored route
+5. The signed EIP-712 use intent is prepared before creator settlement. The
+   deployed WS8 path confirms its Registry anchor before FeeRouter payouts. When
+   PayGate is configured, one outer transaction anchors the intent, enforces its
+   aggregate spend cap, and routes all positive creator payouts atomically after
+   any required approval and split-creation transactions. The sponsored route
    reads each fixed-pool creator's claimable balance before and after the run.
-   The signed EIP-712 use intent is prepared before settlement and anchored
-   after settlement.
 6. The judge route marks `complete` only when all 14 checks pass: strict LLM
    provenance, the exact five-source pool, buy and skip decisions, a supported
    literal span, an unused-source refund, exact x402 reader settlement,
@@ -138,19 +142,29 @@ against Arc RPC. It does not read a signing key.
 - RPC: `https://rpc.testnet.arc.network`
 - USDC: `0x3600000000000000000000000000000000000000`
 - FeeRouter: `0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59`
+- UseReceiptRegistry: `0xFA44bD7De2C79AB6A52ce4D5aF289718B1DcB56a`
+- PayGate: opt-in via `LEPTONWEB_PAYGATE_ADDRESS`; no public deployment claimed
 - explorer: `https://testnet.arcscan.app`
 
 ## Limitations
 
-- The WS1–WS5 branch is not the current public deployment; see
-  [post-deadline state](docs/POST_DEADLINE.md).
+- The public deployment contains WS8. PayGate remains undeployed source until
+  the operator completes the contract test and deployment steps.
 - The one-click judge run is sponsor-funded operator activity and is excluded
   from independent traction.
 - Payments and contracts described here use Arc testnet USDC, not production
   funds.
 - The strict demonstration depends on a configured model, funded sponsored
-  wallet, enabled FeeRouter, and deployed UseReceiptRegistry. Missing or failed
-  dependencies stop visibly at their returned stage.
+  wallet, enabled FeeRouter, and deployed UseReceiptRegistry. If PayGate is
+  enabled, its address and immutable authorized payer must also match. Missing
+  or failed dependencies stop visibly at their returned stage.
+- PayGate binds a valid intent and aggregate spend cap to one atomic
+  anchor-and-routing transaction. The signed intent does not bind the per-split
+  breakdown, prerequisite approvals and split creation can be separate
+  transactions, and the authorized wallet can still call FeeRouter directly. A
+  copied pending signature can also be anchored directly in the permissionless
+  Registry to consume its nonce and deny settlement, but cannot move the
+  authorized payer's funds through PayGate.
 - The canonical benchmark has measured deterministic policy arms and a
   credentialed full-LLM run (2026-07-12, 50/50 cases measured after a bounded
   JSON repair retry, 0 errors); see `docs/BENCHMARK.md`.
