@@ -141,30 +141,30 @@
     },
     "full-llm": {
       "armKind": "live-llm",
-      "status": "mixed",
-      "measuredCases": 35,
+      "status": "measured",
+      "measuredCases": 50,
       "unavailableCases": 0,
-      "errorCases": 15,
+      "errorCases": 0,
       "metrics": {
         "supportedClaimsPerCent": {
-          "mean": 17.345094358602683,
+          "mean": 19.232736545528205,
           "ci95": [
-            11.581206689775522,
-            23.43404708534343
+            14.350963916761179,
+            24.4914087697375
           ]
         },
         "unsupportedClaimRate": {
-          "mean": 0.23545351473922901,
+          "mean": 0.27537301587301577,
           "ci95": [
-            0.15108843537414965,
-            0.32181405895691617
+            0.20626984126984127,
+            0.3454206349206349
           ]
         },
         "unusedPurchaseRate": {
-          "mean": 0.07142857142857142,
+          "mean": 0.15,
           "ci95": [
-            0.014285714285714285,
-            0.12857142857142856
+            0.09,
+            0.22
           ]
         },
         "budgetViolationRate": {

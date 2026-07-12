@@ -152,8 +152,8 @@ against Arc RPC. It does not read a signing key.
   wallet, enabled FeeRouter, and deployed UseReceiptRegistry. Missing or failed
   dependencies stop visibly at their returned stage.
 - The canonical benchmark has measured deterministic policy arms and a
-  credentialed full-LLM run (2026-07-12, 35/50 cases measured, 15 strict-mode
-  errors recorded as errors); see `docs/BENCHMARK.md`.
+  credentialed full-LLM run (2026-07-12, 50/50 cases measured after a bounded
+  JSON repair retry, 0 errors); see `docs/BENCHMARK.md`.
 - Actor classes are operator-maintained. Unmapped historical wallets remain
   `unclassified`; they are not silently promoted to independent demand.
 - No public demo video, submission tag, production audit, or mainnet deployment

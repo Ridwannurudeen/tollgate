@@ -12,6 +12,6 @@ Supported claims per $0.01 uses 10,000 atomic USDC per cent.
 | random | deterministic-fixture | measured (50/50; 0 unavailable; 0 errors) | 4.8623 [4.0200, 5.6858] | 0.3467 [0.2467, 0.4467] | 0.7167 [0.6767, 0.7600] | 0.0000 [0.0000, 0.0000] | 0.8000 [0.6800, 0.9000] |
 | cheapest-first | deterministic-fixture | measured (50/50; 0 unavailable; 0 errors) | 7.0349 [5.9757, 8.0407] | 0.4667 [0.4000, 0.5467] | 0.7333 [0.7000, 0.7733] | 0.0000 [0.0000, 0.0000] | 0.8000 [0.6800, 0.9000] |
 | relevance-only | deterministic-fixture | measured (50/50; 0 unavailable; 0 errors) | 5.3338 [4.4723, 6.1709] | 0.1467 [0.0867, 0.2133] | 0.5733 [0.5000, 0.6400] | 0.0000 [0.0000, 0.0000] | 0.9600 [0.9000, 1.0000] |
-| full-llm | live-llm | mixed (35/50; 0 unavailable; 15 errors) | 17.3451 [11.5812, 23.4340] | 0.2355 [0.1511, 0.3218] | 0.0714 [0.0143, 0.1286] | 0.0000 [0.0000, 0.0000] | 1.0000 [1.0000, 1.0000] |
+| full-llm | live-llm | measured (50/50; 0 unavailable; 0 errors) | 19.2327 [14.3510, 24.4914] | 0.2754 [0.2063, 0.3454] | 0.1500 [0.0900, 0.2200] | 0.0000 [0.0000, 0.0000] | 1.0000 [1.0000, 1.0000] |
 
 The full-llm arm is a strict, live operator run. It remains not measured unless full-llm mode is explicitly selected and credentials are present; deterministic fixture execution is never reported under that label.
