@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "runMode": "partial",
+  "runMode": "full-llm",
   "fixtureVersion": "ws5-2026-07-11-v1",
   "sourceFixtureHash": "0xe1e398e6814d5fb1f19c89d6bdb3f9d1f7c6b0801aed131514d45cb85bc44c48",
   "evalCount": 50,
@@ -141,30 +141,45 @@
     },
     "full-llm": {
       "armKind": "live-llm",
-      "status": "not-measured",
-      "measuredCases": 0,
-      "unavailableCases": 50,
-      "errorCases": 0,
+      "status": "mixed",
+      "measuredCases": 35,
+      "unavailableCases": 0,
+      "errorCases": 15,
       "metrics": {
         "supportedClaimsPerCent": {
-          "mean": null,
-          "ci95": null
+          "mean": 17.345094358602683,
+          "ci95": [
+            11.581206689775522,
+            23.43404708534343
+          ]
         },
         "unsupportedClaimRate": {
-          "mean": null,
-          "ci95": null
+          "mean": 0.23545351473922901,
+          "ci95": [
+            0.15108843537414965,
+            0.32181405895691617
+          ]
         },
         "unusedPurchaseRate": {
-          "mean": null,
-          "ci95": null
+          "mean": 0.07142857142857142,
+          "ci95": [
+            0.014285714285714285,
+            0.12857142857142856
+          ]
         },
         "budgetViolationRate": {
-          "mean": null,
-          "ci95": null
+          "mean": 0,
+          "ci95": [
+            0,
+            0
+          ]
         },
         "abstentionAccuracy": {
-          "mean": null,
-          "ci95": null
+          "mean": 1,
+          "ci95": [
+            1,
+            1
+          ]
         }
       }
     }

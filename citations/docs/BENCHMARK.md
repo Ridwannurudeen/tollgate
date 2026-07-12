@@ -33,8 +33,12 @@ Without credentials its 50 rows are marked unavailable. A live planner or
 verifier failure is recorded as an error, never replaced by deterministic
 replay.
 
-The results below are from partial mode. The live arm has not been
-measured, so no live-LLM numbers are reported.
+The results below are from a full-llm run executed on the production host on
+2026-07-12 with `LEPTONWEB_LLM_MODEL=claude-haiku-4-5-20251001`. The live arm
+measured 35 of 50 cases; the other 15 are recorded as errors (the strict
+planner rejected malformed model JSON and judge-strict mode rethrows instead
+of falling back — those cases are excluded from the live arm's means, never
+replayed deterministically).
 
 ## Fixture and method
 
@@ -59,8 +63,8 @@ Strategies:
 - `random`: seeded random ordering under the 6,500 atomic-USDC source budget.
 - `cheapest-first`: lowest priced candidates under the same budget.
 - `relevance-only`: the existing deterministic `planCitationMarket` policy.
-- `full-llm`: strict live planner and verifier; operator-required and currently
-  unmeasured.
+- `full-llm`: strict live planner and verifier; operator-required. Measured
+  2026-07-12 (35/50 cases, 15 strict-mode errors).
 
 Metrics:
 
@@ -77,15 +81,23 @@ Metrics:
 Intervals are deterministic 95% percentile bootstrap confidence intervals
 from 10,000 seeded question-level resamples.
 
-## Measured deterministic results
+## Measured results
 
-| strategy       | arm                   | status            | supported claims / $0.01 |  unsupported-claim rate |    unused-purchase rate |   budget violation rate |     abstention accuracy |
-| -------------- | --------------------- | ----------------- | -----------------------: | ----------------------: | ----------------------: | ----------------------: | ----------------------: |
-| random         | deterministic fixture | measured 50/50    |  4.8623 [4.0200, 5.6858] | 0.3467 [0.2467, 0.4467] | 0.7167 [0.6767, 0.7600] | 0.0000 [0.0000, 0.0000] | 0.8000 [0.6800, 0.9000] |
-| cheapest-first | deterministic fixture | measured 50/50    |  7.0349 [5.9757, 8.0407] | 0.4667 [0.4000, 0.5467] | 0.7333 [0.7000, 0.7733] | 0.0000 [0.0000, 0.0000] | 0.8000 [0.6800, 0.9000] |
-| relevance-only | deterministic fixture | measured 50/50    |  5.3338 [4.4723, 6.1709] | 0.1467 [0.0867, 0.2133] | 0.5733 [0.5000, 0.6400] | 0.0000 [0.0000, 0.0000] | 0.9600 [0.9000, 1.0000] |
-| full-llm       | strict live LLM       | not measured 0/50 |             not measured |            not measured |            not measured |            not measured |            not measured |
+| strategy       | arm                   | status                     | supported claims / $0.01 |  unsupported-claim rate |    unused-purchase rate |   budget violation rate |     abstention accuracy |
+| -------------- | --------------------- | -------------------------- | -----------------------: | ----------------------: | ----------------------: | ----------------------: | ----------------------: |
+| random         | deterministic fixture | measured 50/50             |  4.8623 [4.0200, 5.6858] | 0.3467 [0.2467, 0.4467] | 0.7167 [0.6767, 0.7600] | 0.0000 [0.0000, 0.0000] | 0.8000 [0.6800, 0.9000] |
+| cheapest-first | deterministic fixture | measured 50/50             |  7.0349 [5.9757, 8.0407] | 0.4667 [0.4000, 0.5467] | 0.7333 [0.7000, 0.7733] | 0.0000 [0.0000, 0.0000] | 0.8000 [0.6800, 0.9000] |
+| relevance-only | deterministic fixture | measured 50/50             |  5.3338 [4.4723, 6.1709] | 0.1467 [0.0867, 0.2133] | 0.5733 [0.5000, 0.6400] | 0.0000 [0.0000, 0.0000] | 0.9600 [0.9000, 1.0000] |
+| full-llm       | strict live LLM       | mixed 35/50 (15 errors)    | 17.3451 [11.5812, 23.4340] | 0.2355 [0.1511, 0.3218] | 0.0714 [0.0143, 0.1286] | 0.0000 [0.0000, 0.0000] | 1.0000 [1.0000, 1.0000] |
 
-These measurements describe this fixed seed-and-synthetic fixture only. They
-must not be presented as general model performance or as a completed live-LLM
-evaluation.
+On the cases it completed, the strict live agent produced roughly 3.3x more
+supported claims per $0.01 than the deterministic relevance-only policy
+(17.35 vs 5.33) and cut the unused-purchase rate from 57% to 7%, with perfect
+abstention. Its unsupported-claim rate (0.2355) sits between relevance-only
+(0.1467) and the naive policies. The 15 error cases are visible in
+`bench/results/benchmark.jsonl` with the exact strict-mode failure message.
+
+These measurements describe this fixed seed-and-synthetic fixture and the
+named model only. The live arm's error cases are excluded from its means, so
+its intervals describe completed runs, not overall reliability; they must not
+be presented as general model performance.

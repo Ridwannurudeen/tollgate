@@ -151,8 +151,9 @@ against Arc RPC. It does not read a signing key.
 - The strict demonstration depends on a configured model, funded sponsored
   wallet, enabled FeeRouter, and deployed UseReceiptRegistry. Missing or failed
   dependencies stop visibly at their returned stage.
-- The canonical benchmark has measured deterministic policy arms; its full-LLM
-  arm remains explicitly unmeasured until a credentialed run is recorded.
+- The canonical benchmark has measured deterministic policy arms and a
+  credentialed full-LLM run (2026-07-12, 35/50 cases measured, 15 strict-mode
+  errors recorded as errors); see `docs/BENCHMARK.md`.
 - Actor classes are operator-maintained. Unmapped historical wallets remain
   `unclassified`; they are not silently promoted to independent demand.
 - No public demo video, submission tag, production audit, or mainnet deployment
