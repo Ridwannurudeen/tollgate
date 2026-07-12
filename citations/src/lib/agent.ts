@@ -11,6 +11,7 @@ import {
 } from "./external-providers";
 import { groundingYieldValue, type GroundingYieldMap } from "./grounding-yield";
 import { sha256Hex } from "./hash";
+import { completeAndParse, parseJsonObject } from "./json-parse";
 import { buildSourceContent } from "./source-content";
 import type {
   AgentBudget,
@@ -29,7 +30,7 @@ const MAX_REASON_LENGTH = 220;
 const MAX_CLAIMS = 8;
 
 export type ChatMessage = {
-  role: "system" | "user";
+  role: "system" | "user" | "assistant";
   content: string;
 };
 
@@ -348,19 +349,6 @@ export async function completeChat(
   return content;
 }
 
-function parseJsonObject(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start < 0 || end <= start) {
-      throw new Error("LLM planner did not return JSON.");
-    }
-    return JSON.parse(text.slice(start, end + 1));
-  }
-}
-
 function parseAppraisals(text: string): Appraisal[] {
   const parsed = parseJsonObject(text);
   if (!isRecord(parsed) || !Array.isArray(parsed.appraisals)) {
@@ -528,11 +516,11 @@ async function runAgentLoop(
   let stage: AgentStage = "appraise";
 
   try {
-    const appraisals = parseAppraisals(
-      await completeChat(
-        appraiseMessages(question, sources, sourceBudgetAtomicUsdc),
-        llmConfig,
-      ),
+    const appraisals = await completeAndParse(
+      appraiseMessages(question, sources, sourceBudgetAtomicUsdc),
+      llmConfig,
+      completeChat,
+      parseAppraisals,
     );
     const buyCount = appraisals.filter(
       (appraisal) => appraisal.verdict === "buy",
@@ -589,8 +577,11 @@ async function runAgentLoop(
     });
 
     stage = "draft";
-    let draft = parseDraft(
-      await completeChat(draftMessages(question, selected), llmConfig),
+    let draft = await completeAndParse(
+      draftMessages(question, selected),
+      llmConfig,
+      completeChat,
+      parseDraft,
     );
     steps.push({
       index: 2,
@@ -606,12 +597,11 @@ async function runAgentLoop(
       (claim) => !boughtIds.has(claim.sourceId),
     );
     stage = "critique";
-    const critique = parseCritique(
-      await completeChat(
-        critiqueMessages(question, draft, [...boughtIds]),
-        llmConfig,
-      ),
-      draft.answer,
+    const critique = await completeAndParse(
+      critiqueMessages(question, draft, [...boughtIds]),
+      llmConfig,
+      completeChat,
+      (text) => parseCritique(text, draft.answer),
     );
     steps.push({
       index: 3,
@@ -655,8 +645,11 @@ async function runAgentLoop(
         remainingAtomicUsdc -= candidate.priceAtomicUsdc;
         const nextBoughtIds = new Set(selected.map((source) => source.id));
         stage = "reflect";
-        const reDraft = parseDraft(
-          await completeChat(draftMessages(question, selected), llmConfig),
+        const reDraft = await completeAndParse(
+          draftMessages(question, selected),
+          llmConfig,
+          completeChat,
+          parseDraft,
         );
         draft = reDraft;
         answer = reDraft.answer;
@@ -715,17 +708,16 @@ async function runAgentLoop(
         MAX_ANSWER_LENGTH,
       );
       try {
-        const merge = parseEscalationMerge(
-          await completeChat(
-            escalationMessages(
-              question,
-              answer,
-              externalProvider.label,
-              external.answer,
-            ),
-            llmConfig,
+        const merge = await completeAndParse(
+          escalationMessages(
+            question,
+            answer,
+            externalProvider.label,
+            external.answer,
           ),
-          fallbackAnswer,
+          llmConfig,
+          completeChat,
+          (text) => parseEscalationMerge(text, fallbackAnswer),
         );
         answer = merge.groundedAnswer;
       } catch (error) {

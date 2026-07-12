@@ -19,6 +19,8 @@ import {
   BENCHMARK_SOURCE_FIXTURES,
   BENCHMARK_SOURCE_FIXTURE_HASH,
 } from "../../bench/source-fixtures";
+import { createAgentQueryRecord } from "./agent";
+import { REPAIR_PROMPT } from "./json-parse";
 import { buildSourceContent } from "./source-content";
 import type { ClaimSupport, CreatorSource } from "./types";
 
@@ -251,5 +253,44 @@ describe("WS5 benchmark", () => {
         else process.env[name] = value;
       }
     }
+  });
+
+  it("records whether the live arm attempted JSON repair", async () => {
+    const config = {
+      baseUrl: "https://example.com/v1",
+      apiKey: "test",
+      model: "test-model",
+    };
+    const runLive = (malformedFirstResponse: boolean) =>
+      runBenchmark("full-llm", {
+        loadLlmConfig: () => config,
+        completeChat: async (messages) => {
+          if (messages[messages.length - 1]?.content === REPAIR_PROMPT) {
+            return JSON.stringify({ appraisals: [] });
+          }
+          return malformedFirstResponse
+            ? "not json"
+            : JSON.stringify({ appraisals: [] });
+        },
+        createAgentQueryRecord,
+      });
+
+    const repairedRuns = (await runLive(true)).filter(
+      (run) => run.strategy === "full-llm",
+    );
+    const unrepairedRuns = (await runLive(false)).filter(
+      (run) => run.strategy === "full-llm",
+    );
+
+    expect(repairedRuns).toHaveLength(50);
+    expect(repairedRuns.every((run) => run.status === "measured")).toBe(true);
+    expect(repairedRuns.every((run) => run.repairAttempted === true)).toBe(
+      true,
+    );
+    expect(unrepairedRuns).toHaveLength(50);
+    expect(unrepairedRuns.every((run) => run.status === "measured")).toBe(true);
+    expect(unrepairedRuns.every((run) => run.repairAttempted === false)).toBe(
+      true,
+    );
   });
 });
