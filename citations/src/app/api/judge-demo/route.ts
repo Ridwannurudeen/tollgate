@@ -242,7 +242,12 @@ export async function POST(request: NextRequest) {
 
   let response: Response;
   try {
-    const target = new URL("/api/paid-query/demo", request.nextUrl.origin);
+    // Behind the reverse proxy the request origin is not reachable from the
+    // server process itself; LEPTONWEB_INTERNAL_ORIGIN points at loopback.
+    const target = new URL(
+      "/api/paid-query/demo",
+      process.env.LEPTONWEB_INTERNAL_ORIGIN ?? request.nextUrl.origin,
+    );
     const forwardedIp = request.headers.get("x-real-ip");
     response = await fetch(target, {
       method: "POST",
