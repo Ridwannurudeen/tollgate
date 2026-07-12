@@ -43,8 +43,11 @@ describe("judge proof pack", () => {
       expect(proof.traction.totalUniquePayerWallets).toBe(
         proof.traction.actorMetrics.total.uniquePayerWallets,
       );
-      expect(proof.useIntent).not.toHaveProperty("payGateAddress");
-      expect(proof.useIntent).not.toHaveProperty("payGateSettledCount");
+      // With the env var unset, payGateAddress is null but the field still
+      // surfaces historical PayGate settlements recorded in the ledger, so a
+      // deployment that later disables PayGate keeps reporting its past use.
+      expect(proof.useIntent.payGateAddress ?? null).toBeNull();
+      expect(proof.useIntent.payGateSettledCount).toBeGreaterThanOrEqual(0);
       expect(proof.integrity).toEqual(proof.ledger.verification);
       expect(proof.ledger.valid).toBe(true);
     } finally {
