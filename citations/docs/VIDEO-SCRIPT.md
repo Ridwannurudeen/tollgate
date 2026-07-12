@@ -1,46 +1,45 @@
-# Tollgate - <3 min demo video script
+# Tollgate - demo video
 
-**Format:** screen recording + voiceover. Target 2:45. Lead with the creator problem, not crypto. Show live product and proof pages, not slides.
-**Tabs to pre-open:** `tollgate.gudman.xyz`, `tollgate.gudman.xyz/answers/0xe7c1a7397fdbb323`, `tollgate.gudman.xyz/creators/0x5389688243328c26a92b301faEEAb5fbf9AFf105`, `tollgate.gudman.xyz/aperture`, `peertube-plugin-tollgate/README.md`, `testnet.arcscan.app`.
-**Route flag:** the former `/demo` surface now redirects to `/ask`; use `/ask` for the live workbench shot.
+**A first cut exists**: `tollgate-demo-video-2026-07-12.mp4` (66s, silent/captioned, no voiceover — this session had no audio-synthesis capability). It leads with judge-strict agency, counterfactual contribution, PayGate's atomic anchor+pay, the no-secret verifier, and the measured benchmark, in that order — the material that survived a hostile two-pass audit this session, not the broadest feature tour. Every screenshot and number in it is real, captured live against production the same day (queries `0x985d71b75fd8d992` and `0xf69327b2cce382a4`, PayGate tx `0x45169aec...2df2da316`, `judge:verify` 23/23).
+
+**If a proper voiceover cut is recorded, follow this script** — same structure, spoken narration instead of on-screen captions. Target 2:00-2:30. Lead with the creator problem, close with the URL.
+
+**Tabs to pre-open:** `tollgate.gudman.xyz` (scroll to the "Run the verified judge demonstration" panel), `tollgate.gudman.xyz/answers/<queryId-from-your-live-run>`, a terminal with `npm run judge:verify` ready to run, `testnet.arcscan.app` (for the PayGate tx).
 
 ---
 
 ### 0:00-0:15 - The problem
-**Show:** a creator article, a photo, and a video download surface.
-**Say:** "Creators do not get paid for how their work is actually used. A writer earns nothing when an AI cites their article. A photographer earns nothing when someone downloads their photo. A video creator earns nothing when a bot pulls their file. The payment was always too small to collect, so the default became subscriptions or nothing."
+**Show:** the homepage hero.
+**Say:** "Creators earn nothing when an AI reuses their work. Tollgate makes an agent pay for what it uses — and makes every part of that decision provable."
 
-### 0:15-0:35 - The redesigned homepage
-**Show:** `tollgate.gudman.xyz` hero, the "Register your work" CTA, the creator-first navigation, dollar-formatted stats, and the Live stat card for citation payments made and verifiable on-chain.
-**Say:** "Tollgate turns that tiny unit of use into a real market. A creator can register work, a reader can buy an answer, and the page shows live citation payments that are already verifiable on Arc."
+### 0:15-0:45 - A real economic decision, on camera
+**Show:** click "Run the verified judge demonstration" live. Let it run (~25-30s) rather than cutting away.
+**Say:** "One click runs a real, live agent decision. No wallet, no login. If the model fails, it fails visibly — never a silent fake answer." While it runs: "Five priced candidates. The agent buys some, skips others, by relevance under a hard budget."
 
-### 0:35-1:15 - Paid answer + agent trace
-**Show:** ask a paid question live if safe. If not, open `tollgate.gudman.xyz/answers/0xe7c1a7397fdbb323`, the answer that cites qdee, CitePay, and Rising Technology.
-**Say:** "Here is the core product: an autonomous answer agent. It appraises candidate sources, allocates a tiny budget, buys the sources it needs, drafts the answer, critiques unsupported claims, and reflects before finalizing."
-**Show:** the appraise -> allocate -> draft -> critique -> reflect trace, then the reader-payment and receipt evidence.
-**Say:** "The answer is not just text. It is bound to the sources it paid for, the reader payment, and the creator payout receipts."
+### 0:45-1:10 - Paid for proven usefulness, not just cited
+**Show:** the resulting answer page's claim/contribution table.
+**Say:** "Creators aren't paid because they were cited. Remove a source, re-verify the claims — the more the answer actually breaks without it, the more it earns. Computed for real, per query, not estimated."
 
-### 1:15-1:50 - Traction: external creators paid
-**Show:** `/creators/0x5389688243328c26a92b301faEEAb5fbf9AFf105`, then one Arcscan transaction such as `0xa03809...748e6` or `0xc5074b...16509f`.
-**Say:** "The traction story is not seed data. Three independent external creators onboarded through a markdown guide their own agents could execute: CitePay Markets, qdee, and Rising Technology. They registered verified sources, got cited by the live agent, got paid in USDC on-chain, and two of them claimed balances unaided."
-**Show:** creator cards or proof rows for CitePay, qdee, and Rising Technology.
-**Say:** "That is the differentiator: creators are already getting paid, and the next step is turning those same external teams into paying readers."
+### 1:10-1:40 - The spend cap is now law
+**Show:** the answer page's signed use-intent block, then the PayGate transaction on Arcscan (registry + USDC + FeeRouter + PayGate all logging in one tx).
+**Say:** "One atomic transaction anchors the signed intent, enforces its spend cap, and pays every creator. A bad signature or an over-cap request reverts the whole thing — funds included. This isn't a receipt after the fact. It's the payment gate itself."
 
-### 1:50-2:20 - Three integrations, one settlement core
-**Show:** `tollgate.gudman.xyz/aperture` proof surface, then `tollgate.gudman.xyz/video` and the shared FeeRouter rail tx `0x1ed2e7...a49d`.
-**Say:** "The same settlement core attaches to three real creator communities. Citations pays writers when an AI answer cites them. Aperture pays photographers when shared Immich photos are downloaded. The PeerTube plugin gates video downloads and exposes a proof router validated against a running local PeerTube instance. Tollgate is not hosting a public PeerTube instance today, so this page shows the plugin package, local validation, and the shared Arc FeeRouter rail proof."
-**Show:** `/core` or proof cards tying x402, Gateway, USDC, and FeeRouter together.
-**Say:** "One rail, three surfaces: feeds, photos, and video."
+### 1:40-2:00 - Nothing to trust, only to check
+**Show:** run `npm run judge:verify` in a terminal, let it print the full PASS list.
+**Say:** "No API key, no login. It re-derives every hash and reads every transaction straight from Arc. You don't have to believe us."
 
-### 2:20-2:45 - Close
-**Show:** settlement status, FeeRouter address, one Arcscan success page, then the live URL.
-**Say:** "Under the hood, Tollgate uses x402 for per-request payment, Circle Gateway for gas-free batched settlement, USDC on Arc, and FeeRouter contracts to split every creator payment by the fraction. Tiny reuse becomes a real payment, and every claim is provable on-chain."
+### 2:00-2:20 - The number
+**Show:** a stat card or `docs/BENCHMARK.md`: 3.6x supported claims per $0.01 vs. deterministic baseline, 50/50 measured, 0 errors.
+**Say:** "Measured against a fixed 50-question benchmark: the strict live agent produces 3.6 times more useful evidence per dollar than a dumb baseline, and cut wasted purchases from 57% to 15%."
+
+### 2:20-2:30 - Close
+**Show:** the live URL.
+**Say:** "Every claim in this video is reproducible. Verify it yourself at tollgate.gudman.xyz."
 
 ---
 
 ## Capture checklist
-- Keep the final cut under 2:45.
-- Do one live action on camera if possible: a paid question, an Aperture download proof, or the PeerTube plugin proof-mirror walkthrough.
-- If the live query is risky, use `tollgate.gudman.xyz/answers/0xe7c1a7397fdbb323`.
-- Show at least one external creator page and one Arcscan success transaction.
-- Keep crypto jargon to the final settlement segment; before that, speak in creator/user language.
+- Keep the final cut under 2:30.
+- The judge-demo button and `judge:verify` must run live/real on camera — don't fake either.
+- Show the actual PayGate transaction on Arcscan, not just the app's own summary of it.
+- Drop Aperture/PeerTube/WordPress entirely, or one throwaway mention at most — the rubric and this session's audit both point at agentic sophistication + innovation as the strongest, most defensible material, not integration breadth.
