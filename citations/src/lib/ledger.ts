@@ -471,7 +471,9 @@ function queryPaymentHashCandidates(query: QueryRecord): string[] {
 function traceHashCandidates(query: QueryRecord): string[] {
   if (!query.traceHash || !query.agentSteps) return [];
   if (query.agentMode === "llm") {
-    if (!query.agentModel) return [];
+    // Legacy LLM records (pre model-binding) lack agentModel and hashed the
+    // bare step list.
+    if (!query.agentModel) return [sha256Hex(query.agentSteps)];
     return [
       sha256Hex({
         model: query.agentModel,
@@ -479,7 +481,6 @@ function traceHashCandidates(query: QueryRecord): string[] {
         sourceDecisions: query.sourceDecisions,
       }),
       sha256Hex({ model: query.agentModel, steps: query.agentSteps }),
-      // Legacy LLM records (pre model-binding) hashed the bare step list.
       sha256Hex(query.agentSteps),
     ];
   }
