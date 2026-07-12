@@ -147,6 +147,22 @@ export function createFeeRouterPublicClient() {
   });
 }
 
+async function waitForSuccessfulTransaction(
+  publicClient: PublicClient,
+  transaction: Hex,
+  operation: string,
+): Promise<void> {
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: transaction,
+  });
+  if (receipt.transactionHash.toLowerCase() !== transaction.toLowerCase()) {
+    throw new Error(`${operation} was replaced.`);
+  }
+  if (receipt.status !== "success") {
+    throw new Error(`${operation} failed with status ${receipt.status}.`);
+  }
+}
+
 export function assertValidFeeRouterSplit(
   recipients: Address[],
   bps: number[],
@@ -503,7 +519,11 @@ async function ensureCreatorSplit(
           nonce,
         }),
     );
-    await publicClient.waitForTransactionReceipt({ hash: createSplitTx });
+    await waitForSuccessfulTransaction(
+      publicClient,
+      createSplitTx,
+      "FeeRouter createSplit transaction",
+    );
 
     const record: FeeRouterSplitRecord = {
       tenantId,
@@ -636,7 +656,11 @@ export async function routeCitationPayments(
         nonce,
       }),
     );
-    await publicClient.waitForTransactionReceipt({ hash: approveTx });
+    await waitForSuccessfulTransaction(
+      publicClient,
+      approveTx,
+      "FeeRouter approval transaction",
+    );
   }
 
   for (const citation of routeableCitations) {
@@ -663,7 +687,11 @@ export async function routeCitationPayments(
         nonce,
       }),
     );
-    await publicClient.waitForTransactionReceipt({ hash: payTx });
+    await waitForSuccessfulTransaction(
+      publicClient,
+      payTx,
+      "FeeRouter pay transaction",
+    );
 
     evidenceBySourceId[citation.sourceId] = {
       settlementMode: "forum-routed",

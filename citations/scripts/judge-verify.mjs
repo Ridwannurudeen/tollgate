@@ -2,6 +2,10 @@ import { verifyLedger } from "./verify-ledger.mjs";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { hashTypedData, keccak256, recoverAddress, toHex } from "viem";
+import {
+  allTransactionsFollow,
+  confirmedReceiptPosition,
+} from "./transaction-order.mjs";
 
 const DEFAULT_TARGET_URL = "https://tollgate.gudman.xyz";
 const ARC_RPC_URL =
@@ -394,7 +398,7 @@ function isSuccessfulReceipt(receipt) {
   return Boolean(
     receipt &&
       receipt.transactionHash &&
-      (receipt.status === undefined || receipt.status === "0x1"),
+      receipt.status === "0x1",
   );
 }
 
@@ -558,24 +562,78 @@ async function main() {
       fail("latest reader payment transaction is confirmed on Arc");
     }
 
-    const payoutReceipt = ledger.receipts
-      .filter(
-        (receipt) =>
-          receipt.queryId === latestPaidQuery.id && receipt.feeRouterPayTx,
-      )
-      .at(-1);
-    if (!payoutReceipt) {
+    const payoutReceipts = ledger.receipts.filter(
+      (receipt) =>
+        receipt.queryId === latestPaidQuery.id &&
+        receipt.settlementMode === "forum-routed",
+    );
+    const payoutTransactions = payoutReceipts.map((receipt) =>
+      normalizedBytes32(receipt.feeRouterPayTx),
+    );
+    if (
+      payoutReceipts.length === 0 ||
+      payoutTransactions.some((transaction) => transaction === null)
+    ) {
       fail("latest paid query has a FeeRouter payout");
     } else {
       pass("latest paid query has a FeeRouter payout");
-      const payoutTransactionReceipt = await rpcRequest(
-        "eth_getTransactionReceipt",
-        [payoutReceipt.feeRouterPayTx],
+      const payouts = await Promise.all(
+        payoutTransactions.map(async (transaction) => {
+          const [receipt, transactionRecord] = await Promise.all([
+            rpcRequest("eth_getTransactionReceipt", [transaction]),
+            rpcRequest("eth_getTransactionByHash", [transaction]),
+          ]);
+          return { receipt, transaction, transactionRecord };
+        }),
       );
-      if (isSuccessfulReceipt(payoutTransactionReceipt)) {
-        pass("latest FeeRouter payout transaction is confirmed on Arc");
+      if (
+        payouts.every((payout) =>
+          confirmedReceiptPosition(payout.receipt, payout.transaction),
+        )
+      ) {
+        pass("latest FeeRouter payout transactions are confirmed on Arc");
       } else {
-        fail("latest FeeRouter payout transaction is confirmed on Arc");
+        fail("latest FeeRouter payout transactions are confirmed on Arc");
+      }
+      if (
+        payouts.every(
+          (payout) =>
+            normalizedBytes32(payout.transactionRecord?.hash) ===
+              payout.transaction &&
+            payout.transactionRecord?.to?.toLowerCase() === FEE_ROUTER_ADDRESS,
+        )
+      ) {
+        pass("latest FeeRouter payout transactions target FeeRouter");
+      } else {
+        fail("latest FeeRouter payout transactions target FeeRouter");
+      }
+
+      const anchorTransaction = normalizedBytes32(
+        latestPaidQuery.useIntent?.anchorTx,
+      );
+      if (!anchorTransaction) {
+        fail(
+          "latest use-intent anchor precedes every FeeRouter payout",
+          "latest paid query has no valid anchor transaction",
+        );
+      } else {
+        const anchorReceipt = await rpcRequest("eth_getTransactionReceipt", [
+          anchorTransaction,
+        ]);
+        if (
+          allTransactionsFollow(
+            anchorReceipt,
+            anchorTransaction,
+            payouts.map((payout) => ({
+              receipt: payout.receipt,
+              transaction: payout.transaction,
+            })),
+          )
+        ) {
+          pass("latest use-intent anchor precedes every FeeRouter payout");
+        } else {
+          fail("latest use-intent anchor precedes every FeeRouter payout");
+        }
       }
     }
   }

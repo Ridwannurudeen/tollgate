@@ -83,7 +83,10 @@ function mockClients(
       },
     }),
     getTransactionCount: async () => 50,
-    waitForTransactionReceipt: async () => ({ status: "success" }),
+    waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
+      status: "success",
+      transactionHash: hash,
+    }),
   } as unknown as PublicClient;
   const walletClient = {
     writeContract: async ({ functionName, args, account }: ContractCall) => {
@@ -301,6 +304,73 @@ describe("assertValidFeeRouterSplit", () => {
     }
   });
 
+  it("rejects a reverted FeeRouter payment receipt", async () => {
+    const query = oneCitationQuery();
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      1_000_000n,
+      129n,
+      writes,
+    );
+    Object.assign(publicClient, {
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
+        status: hash === `0x${"c".repeat(64)}` ? "reverted" : "success",
+        transactionHash: hash,
+      }),
+    });
+
+    try {
+      await expect(
+        routeCitationPayments(query, {
+          enabled: true,
+          privateKey: TEST_KEY,
+          publicClient,
+          walletClient,
+          splitRegistryPath: registryPath,
+        }),
+      ).rejects.toThrow("FeeRouter pay transaction failed with status reverted");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a successful replacement of the FeeRouter payment", async () => {
+    const query = oneCitationQuery();
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      1_000_000n,
+      130n,
+      writes,
+    );
+    Object.assign(publicClient, {
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
+        status: "success",
+        transactionHash:
+          hash === `0x${"c".repeat(64)}` ? `0x${"d".repeat(64)}` : hash,
+      }),
+    });
+
+    try {
+      await expect(
+        routeCitationPayments(query, {
+          enabled: true,
+          privateKey: TEST_KEY,
+          publicClient,
+          walletClient,
+          splitRegistryPath: registryPath,
+        }),
+      ).rejects.toThrow("FeeRouter pay transaction was replaced");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("routes the contribution-weighted payout amount", async () => {
     const query = oneCitationQuery();
     query.citations = query.citations.map((citation) => ({
@@ -501,7 +571,10 @@ describe("assertValidFeeRouterSplit", () => {
         };
       },
       getTransactionCount: async () => 200,
-      waitForTransactionReceipt: async () => ({ status: "success" }),
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
+        status: "success",
+        transactionHash: hash,
+      }),
     } as unknown as PublicClient;
     const walletClient = {
       writeContract: async (request: ContractCall) => {

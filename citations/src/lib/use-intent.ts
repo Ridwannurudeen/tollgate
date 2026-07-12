@@ -8,6 +8,7 @@ import {
 } from "viem";
 import { privateKeyToAccount, type LocalAccount } from "viem/accounts";
 import { ARC_CHAIN_ID, ARC_RPC_URL, arcTestnet } from "./chain";
+import { withReservedNonce } from "./fee-router-nonce";
 import { sha256Hex } from "./hash";
 import { tollgateAgentWallet } from "./payments";
 import type { QueryRecord, UseIntentRecord } from "./types";
@@ -382,15 +383,26 @@ export async function anchorUseIntent(
     chain: arcTestnet,
     transport: http(ARC_RPC_URL),
   });
-  const transaction = await walletClient.writeContract({
-    address: built.registryAddress,
-    abi: useReceiptRegistryAbi,
-    functionName: "anchor",
-    args: [contractIntent(built.intent), signature],
-    account,
-    chain: arcTestnet,
+  const transaction = await withReservedNonce(publicClient, account, (nonce) =>
+    walletClient.writeContract({
+      address: built.registryAddress,
+      abi: useReceiptRegistryAbi,
+      functionName: "anchor",
+      args: [contractIntent(built.intent), signature],
+      account,
+      chain: arcTestnet,
+      nonce,
+    }),
+  );
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: transaction,
   });
-  await publicClient.waitForTransactionReceipt({ hash: transaction });
+  if (receipt.transactionHash.toLowerCase() !== transaction.toLowerCase()) {
+    throw new Error("Use-intent anchor transaction was replaced.");
+  }
+  if (receipt.status !== "success") {
+    throw new Error(`Use-intent anchor failed with status ${receipt.status}.`);
+  }
   return transaction;
 }
 
