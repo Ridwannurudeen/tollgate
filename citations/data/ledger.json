@@ -1,6 +1,357 @@
 {
   "queries": [
     {
+      "id": "0x5ffcbffc677f90ea",
+      "question": "How does Tollgate pay creators when an AI answer cites their work?",
+      "answer": "Tollgate pays creators through an on-chain FeeRouter contract that routes USDC payments to creators' wallets based on their basis-point shares in a split. —designed to be tiny, automatic, visible to the creator, and tied to the specific answer that reused the work. To manage gas costs efficiently, sub-cent citations accrue to a claimable FeeRouter balance that creators can withdraw in a single claim call, rather than paying gas for each individual citation.",
+      "queryHash": "0xe9c12acd06ebac68621d9ff5fcbcf29824e7b57d0f2df621c176681f9806f319",
+      "answerHash": "0xeb8b422debe0dbef10c7148cc8c58299c8953b5c383563c3dd5171f91d8ade46",
+      "totalAtomicUsdc": 4100,
+      "citations": [
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "handle": "@sourcepaid",
+          "wallet": "0x6666666666666666666666666666666666666666",
+          "url": "https://example.com/citation-economics",
+          "amountAtomicUsdc": 1200,
+          "reason": "Articulates the principle that citation payments should be automatic, visible, and tied to answers. Foundational to the payment philosophy.",
+          "canonicalUrl": "https://example.com/citation-economics",
+          "previewExcerpt": "A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work.",
+          "paidExcerpt": "Seed/demo content from Indie Researcher. Title: Citation Economics for AI Answers. Excerpt: A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work. Tags: citations, attribution, publishers, answers, economics. Canonical URL: https://example.com/citation-economics.",
+          "sourceContentHash": "0xda9ec57a9234f7a3fccb01848fec4b058289219c0248108457e97da4ce531fb6",
+          "sourceExcerptHash": "0x4249ed2c94867d635e49d478e53dd2ab0123be241c1bdbb8d0f239ee9862fe12",
+          "contentFetchedAt": "2026-07-12T10:30:54.696Z",
+          "sourceKind": "seed",
+          "creatorKind": "seed",
+          "verifiedCreator": false,
+          "ownershipProof": {
+            "method": "seed-demo",
+            "verifiedAt": "2026-06-27T00:00:00.000Z"
+          },
+          "payoutAtomicUsdc": 934
+        },
+        {
+          "sourceId": "feerouter-splits-receipts",
+          "title": "FeeRouter Split Payouts and Receipts",
+          "creator": "Receipt Ledger Notes",
+          "handle": "@receiptledger",
+          "wallet": "0x8888888888888888888888888888888888888888",
+          "url": "https://forum.gudman.xyz/fee-router",
+          "amountAtomicUsdc": 1600,
+          "reason": "Explains the on-chain mechanism (FeeRouter contract, USDC routing, split payouts, receipt ledgers, claimable balances) that executes creator payments. Essential technical detail.",
+          "canonicalUrl": "https://forum.gudman.xyz/fee-router",
+          "previewExcerpt": "The FeeRouter contract pays a creator by routing USDC through an on-chain split keyed to the creator's wallet and basis-point shares, so multi-contributor works divide automaticall",
+          "paidExcerpt": "Seed/demo content from Receipt Ledger Notes. Title: FeeRouter Split Payouts and Receipts. Excerpt: The FeeRouter contract pays a creator by routing USDC through an on-chain split keyed to the creator's wallet and basis-point shares, so multi-contributor works divide automatically. Each payout emits an evidence receipt hash-chained into a tamper-evident ledger. Sub-cent citations accrue to a claimable FeeRouter balance the creator withdraws with a single claim call, which keeps per-citation gas from swamping the payment. Tags: feerouter, splits, receipts, payouts, arc. Canonical URL: https://forum.gudman.xyz/fee-router.",
+          "sourceContentHash": "0x816181cf6896cb2896402fdadeb7345ae1ea5147ab6614e6c59ef90bfa6143e7",
+          "sourceExcerptHash": "0xf73ffb152884c4c63c345dd265793fa0d5a21fcd806a726a8d35a10503f91520",
+          "contentFetchedAt": "2026-07-12T10:30:54.696Z",
+          "sourceKind": "seed",
+          "creatorKind": "seed",
+          "verifiedCreator": false,
+          "ownershipProof": {
+            "method": "seed-demo",
+            "verifiedAt": "2026-06-27T00:00:00.000Z"
+          },
+          "payoutAtomicUsdc": 1866
+        },
+        {
+          "sourceId": "autonomous-source-buying",
+          "title": "How a Source-Buying Answer Agent Works",
+          "creator": "Agent Commerce Notes",
+          "handle": "@agentcommerce",
+          "wallet": "0x9999999999999999999999999999999999999999",
+          "url": "https://example.com/source-buying-agent",
+          "amountAtomicUsdc": 1300,
+          "reason": "Directly explains how Tollgate itself works—the answer agent's appraisal, budget allocation, and payment recording mechanism. Core to understanding the payment flow.",
+          "canonicalUrl": "https://example.com/source-buying-agent",
+          "previewExcerpt": "An autonomous answer agent appraises candidate sources for relevance, allocates a fixed micro-budget to the best grounding-per-USDC, and buys only what it needs. It drafts an answe",
+          "paidExcerpt": "Seed/demo content from Agent Commerce Notes. Title: How a Source-Buying Answer Agent Works. Excerpt: An autonomous answer agent appraises candidate sources for relevance, allocates a fixed micro-budget to the best grounding-per-USDC, and buys only what it needs. It drafts an answer grounded strictly in the purchased content, self-critiques to drop any claim a purchased source does not support, and can buy one more source during reflection. Every step is recorded and hashed into the answer, so the reasoning and the payments are auditable together. Tags: agents, rag, budget, citations, grounding. Canonical URL: https://example.com/source-buying-agent.",
+          "sourceContentHash": "0x7e34318c87315ec20b04225c798ee09b64a83c82fba33ab8a719eb391d7c48e3",
+          "sourceExcerptHash": "0x1f81e45f5264bef09aa6098b0c2d528101dd8c212ba42ce06d15feeb4b7e938e",
+          "contentFetchedAt": "2026-07-12T10:30:54.696Z",
+          "sourceKind": "seed",
+          "creatorKind": "seed",
+          "verifiedCreator": false,
+          "ownershipProof": {
+            "method": "seed-demo",
+            "verifiedAt": "2026-06-27T00:00:00.000Z"
+          },
+          "payoutPolicy": "refund-unused"
+        }
+      ],
+      "agentMode": "llm",
+      "agentModel": "claude-haiku-4-5-20251001",
+      "agentRationale": "PASS: All three claims are directly supported by the purchased sources. Claim 1 is backed by creator-citation-economics; Claims 2 and 3 are both backed by feerouter-splits-receipts. No unsupported assertions detected.",
+      "sourceDecisions": [
+        {
+          "sourceId": "creator-citation-economics",
+          "title": "Citation Economics for AI Answers",
+          "creator": "Indie Researcher",
+          "priceAtomicUsdc": 1200,
+          "score": 12,
+          "valuePerAtomicUsdc": 0.009412,
+          "selected": true,
+          "reason": "Articulates the principle that citation payments should be automatic, visible, and tied to answers. Foundational to the payment philosophy."
+        },
+        {
+          "sourceId": "unverified-source-escrow",
+          "title": "Escrow and Ownership Verification",
+          "creator": "Creator Licensing Desk",
+          "priceAtomicUsdc": 1400,
+          "score": 19,
+          "valuePerAtomicUsdc": 0.006786,
+          "selected": false,
+          "reason": "Covers ownership verification and escrow safeguards, which protect creators but are a secondary concern. The three bought sources already cover the primary payment mechanism and philosophy. Budget exhausted at 3 sources."
+        },
+        {
+          "sourceId": "autonomous-source-buying",
+          "title": "How a Source-Buying Answer Agent Works",
+          "creator": "Agent Commerce Notes",
+          "priceAtomicUsdc": 1300,
+          "score": 12,
+          "valuePerAtomicUsdc": 0.003077,
+          "selected": true,
+          "reason": "Directly explains how Tollgate itself works—the answer agent's appraisal, budget allocation, and payment recording mechanism. Core to understanding the payment flow."
+        },
+        {
+          "sourceId": "feerouter-splits-receipts",
+          "title": "FeeRouter Split Payouts and Receipts",
+          "creator": "Receipt Ledger Notes",
+          "priceAtomicUsdc": 1600,
+          "score": 3,
+          "valuePerAtomicUsdc": 0.001641,
+          "selected": true,
+          "reason": "Explains the on-chain mechanism (FeeRouter contract, USDC routing, split payouts, receipt ledgers, claimable balances) that executes creator payments. Essential technical detail."
+        },
+        {
+          "sourceId": "x402-settlement-schemes",
+          "title": "x402 Settlement Schemes on Arc",
+          "creator": "Payments Protocol Notes",
+          "priceAtomicUsdc": 1300,
+          "score": 1,
+          "valuePerAtomicUsdc": 0.000585,
+          "selected": false,
+          "reason": "Describes HTTP 402 and settlement protocols, which are relevant to *how* payment is triggered but not directly to how Tollgate pays creators. Lower priority given budget constraints and higher-relevance alternatives alre"
+        }
+      ],
+      "agentBudget": {
+        "sourceBudgetAtomicUsdc": 6500,
+        "spentAtomicUsdc": 4100,
+        "remainingAtomicUsdc": 2400,
+        "candidateCount": 5,
+        "purchasedCount": 3
+      },
+      "agentSteps": [
+        {
+          "index": 0,
+          "name": "appraise",
+          "summary": "Appraised 5 candidates: 3 to buy, 2 to skip.",
+          "detail": "autonomous-source-buying: Directly explains how Tollgate itself works—the answer agent's appraisal, budget allocation, and payment recording mechanism. Core to understanding the payment flow. | creator-citation-economics: Articulates the principle that citation payments should be automatic, visible, and tied to answers. Foundational to the payment philosophy. | feerouter-splits-receipts: Explains the on-chain mechanism (FeeRouter contract, USDC routing, split payouts, receipt ledgers, claimable balances) that executes creator payments. Essential technical detail."
+        },
+        {
+          "index": 1,
+          "name": "allocate",
+          "summary": "Allocated the budget to 3 sources by best yield-adjusted grounding-per-USDC.",
+          "detail": "Citation Economics for AI Answers, FeeRouter Split Payouts and Receipts, How a Source-Buying Answer Agent Works",
+          "spentAtomicUsdc": 4100
+        },
+        {
+          "index": 2,
+          "name": "draft",
+          "summary": "Drafted an answer with 3 grounded claims.",
+          "detail": "Every claim is tied to a purchased sourceId."
+        },
+        {
+          "index": 3,
+          "name": "critique",
+          "summary": "Verified every claim is backed by a purchased source.",
+          "detail": "PASS: All three claims are directly supported by the purchased sources. Claim 1 is backed by creator-citation-economics; Claims 2 and 3 are both backed by feerouter-splits-receipts. No unsupported assertions detected."
+        }
+      ],
+      "traceHash": "0xc11267285b435d06a2ce4af3dc50463ed6deafc3e443ebe984a835fb2f208fa3",
+      "receiptHashes": [
+        "0x8198bc0310fafcb8b4298d735f29d49b363c95c0fe21ff4379d69f41dee3295e",
+        "0x8ec0a997e1684a7ecc22de38b9016426a44323428bc7123941cd8c8cea0ecef1",
+        "0x10e4448ee7111f9677631370000d6e2a1a7763276c5e98932e04f725ae6e4133"
+      ],
+      "readerPayment": {
+        "amountAtomicUsdc": 10000,
+        "settlementMode": "x402-settled",
+        "payTo": "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836",
+        "paymentResource": "/api/paid-query",
+        "payer": "0x9d2d80946a60f22143143eb466f22032b0cef6b2",
+        "transaction": "0x2adc8df2a3f077411f680eafe87d5bdc4482aa31639dfd1d2d4f3cd48892e12e",
+        "actorClass": "operator",
+        "paymentHash": "0xaff33f0532158ba1fe61926ae3c55cf0695b1ac1f96fd84beffe1c107bd97034"
+      },
+      "refundSummary": {
+        "boughtCount": 3,
+        "citedCount": 2,
+        "refundedCount": 1,
+        "refundedAtomicUsdc": 1300
+      },
+      "createdAt": "2026-07-12T10:30:54.696Z",
+      "agentServerMode": "judge-strict",
+      "claimSupport": [
+        {
+          "claim": "Tollgate pays creators through an on-chain FeeRouter contract that routes USDC payments to creators' wallets based on their basis-point shares in a split",
+          "sourceId": "feerouter-splits-receipts",
+          "span": "The FeeRouter contract pays a creator by routing USDC through an on-chain split keyed to the creator's wallet and basis-point shares, so multi-contributor works divide automatically.",
+          "status": "supported"
+        },
+        {
+          "claim": "When an AI answer cites a creator's work, a source payment is triggered",
+          "sourceId": null,
+          "span": null,
+          "status": "unsupported"
+        },
+        {
+          "claim": "designed to be tiny, automatic, visible to the creator, and tied to the specific answer that reused the work",
+          "sourceId": "creator-citation-economics",
+          "span": "A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work.",
+          "status": "supported"
+        },
+        {
+          "claim": "To manage gas costs efficiently, sub-cent citations accrue to a claimable FeeRouter balance that creators can withdraw in a single claim call, rather than paying gas for each individual citation",
+          "sourceId": "feerouter-splits-receipts",
+          "span": "Sub-cent citations accrue to a claimable FeeRouter balance the creator withdraws with a single claim call, which keeps per-citation gas from swamping the payment.",
+          "status": "supported"
+        }
+      ],
+      "contributionScores": [
+        {
+          "sourceId": "creator-citation-economics",
+          "marginalContribution": 1,
+          "rewardAtomicUsdc": 934,
+          "fallback": false
+        },
+        {
+          "sourceId": "feerouter-splits-receipts",
+          "marginalContribution": 2,
+          "rewardAtomicUsdc": 1866,
+          "fallback": false
+        }
+      ],
+      "contributionProof": {
+        "method": "leave-one-out-v1",
+        "purchasedSourceIds": [
+          "autonomous-source-buying",
+          "creator-citation-economics",
+          "feerouter-splits-receipts"
+        ],
+        "eligibleSourceIds": [
+          "creator-citation-economics",
+          "feerouter-splits-receipts"
+        ],
+        "counterfactuals": [
+          {
+            "omittedSourceId": "autonomous-source-buying",
+            "claimSupport": [
+              {
+                "claim": "Tollgate pays creators through an on-chain FeeRouter contract that routes USDC payments to creators' wallets based on their basis-point shares in a split",
+                "sourceId": "feerouter-splits-receipts",
+                "span": "The FeeRouter contract pays a creator by routing USDC through an on-chain split keyed to the creator's wallet and basis-point shares, so multi-contributor works divide automatically.",
+                "status": "supported"
+              },
+              {
+                "claim": "When an AI answer cites a creator's work, a source payment is triggered",
+                "sourceId": null,
+                "span": null,
+                "status": "unsupported"
+              },
+              {
+                "claim": "designed to be tiny, automatic, visible to the creator, and tied to the specific answer that reused the work",
+                "sourceId": "creator-citation-economics",
+                "span": "A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work.",
+                "status": "supported"
+              },
+              {
+                "claim": "To manage gas costs efficiently, sub-cent citations accrue to a claimable FeeRouter balance that creators can withdraw in a single claim call, rather than paying gas for each individual citation",
+                "sourceId": "feerouter-splits-receipts",
+                "span": "Sub-cent citations accrue to a claimable FeeRouter balance the creator withdraws with a single claim call, which keeps per-citation gas from swamping the payment.",
+                "status": "supported"
+              }
+            ]
+          },
+          {
+            "omittedSourceId": "creator-citation-economics",
+            "claimSupport": [
+              {
+                "claim": "Tollgate pays creators through an on-chain FeeRouter contract that routes USDC payments to creators' wallets based on their basis-point shares in a split",
+                "sourceId": "feerouter-splits-receipts",
+                "span": "The FeeRouter contract pays a creator by routing USDC through an on-chain split keyed to the creator's wallet and basis-point shares, so multi-contributor works divide automatically.",
+                "status": "supported"
+              },
+              {
+                "claim": "When an AI answer cites a creator's work, a source payment is triggered",
+                "sourceId": null,
+                "span": null,
+                "status": "unsupported"
+              },
+              {
+                "claim": "designed to be tiny, automatic, visible to the creator, and tied to the specific answer that reused the work",
+                "sourceId": null,
+                "span": null,
+                "status": "unsupported"
+              },
+              {
+                "claim": "To manage gas costs efficiently, sub-cent citations accrue to a claimable FeeRouter balance that creators can withdraw in a single claim call, rather than paying gas for each individual citation",
+                "sourceId": "feerouter-splits-receipts",
+                "span": "Sub-cent citations accrue to a claimable FeeRouter balance the creator withdraws with a single claim call, which keeps per-citation gas from swamping the payment.",
+                "status": "supported"
+              }
+            ]
+          },
+          {
+            "omittedSourceId": "feerouter-splits-receipts",
+            "claimSupport": [
+              {
+                "claim": "Tollgate pays creators through an on-chain FeeRouter contract that routes USDC payments to creators' wallets based on their basis-point shares in a split",
+                "sourceId": null,
+                "span": null,
+                "status": "unsupported"
+              },
+              {
+                "claim": "When an AI answer cites a creator's work, a source payment is triggered",
+                "sourceId": null,
+                "span": null,
+                "status": "unsupported"
+              },
+              {
+                "claim": "designed to be tiny, automatic, visible to the creator, and tied to the specific answer that reused the work",
+                "sourceId": "creator-citation-economics",
+                "span": "A source payment should be tiny, automatic, visible to the creator, and tied to the answer that reused the work.",
+                "status": "supported"
+              },
+              {
+                "claim": "To manage gas costs efficiently, sub-cent citations accrue to a claimable FeeRouter balance that creators can withdraw in a single claim call, rather than paying gas for each individual citation",
+                "sourceId": null,
+                "span": null,
+                "status": "unsupported"
+              }
+            ]
+          }
+        ]
+      },
+      "claimSupportRoot": "0xd469a14756476536934d94165dbbc5d12d9476fe6245fff2d72253584b372737",
+      "useIntent": {
+        "digest": "0x4b6d8f6b7f286453aba7eb39656148cc388a7dcd4362a712dbb8a3a1f069af44",
+        "signature": "0x330a125363e8715de2bc880311f4bf808f4697c258aae47986e97ae03b0c7186000a164cf88c12edecb9428754f8a6fe21f38686218d3c93666193bc7c63fb531b",
+        "chainId": 5042002,
+        "registryAddress": "0xfa44bd7de2c79ab6a52ce4d5af289718b1dcb56a",
+        "nonce": "138872040838308786076284543570217567763",
+        "anchorTx": "0xc98e55a2f1dd4b636a32251b5fe644509e15d4feb69e0f513b8a0d5da7427da6",
+        "maxSpendAtomicUsdc": "2800",
+        "expiry": "1783853169",
+        "candidateSetRoot": "0xba046c7e7d045153aa52b39a08e8e3a0d8dd4dc659233b9cf4e86ef8820c3232",
+        "selectedSourcesRoot": "0x6ad8df70006979c765a0a006e965db847c74d76eb07daaf4e4fdb6fe162bf89c",
+        "decisionTraceHash": "0xc11267285b435d06a2ce4af3dc50463ed6deafc3e443ebe984a835fb2f208fa3",
+        "claimSupportRoot": "0xd469a14756476536934d94165dbbc5d12d9476fe6245fff2d72253584b372737"
+      }
+    },
+    {
       "id": "0x9d384ead87d98c91",
       "question": "How does Tollgate pay creators when an AI answer cites their work?",
       "answer": "Tollgate pays creators through an on-chain FeeRouter contract that routes USDC payments to creators' wallets based on their basis-point shares in a split. —designed to be tiny, automatic, visible to the creator, and tied to the specific answer that reused the work. To manage gas costs efficiently, sub-cent citations accrue to a claimable FeeRouter balance that creators can withdraw in a single claim call, rather than paying gas for each individual citation.",
@@ -42020,6 +42371,84 @@
       "refundReason": "Bought source was not cited in the final answer.",
       "queryPaymentHash": "0x5533641f3b87b94ca1f9d880fadde8f8aaa9dd71d3707add58a3d2cb019e94d0",
       "receiptHash": "0x3df01e4a1aaa28caa8ec7efb6f0f8d630f0ca86602ef4eb79098fcf0369a96d1"
+    },
+    {
+      "id": "0x8198bc0310fafcb8",
+      "queryId": "0x5ffcbffc677f90ea",
+      "sourceId": "creator-citation-economics",
+      "creator": "Indie Researcher",
+      "wallet": "0x6666666666666666666666666666666666666666",
+      "amountAtomicUsdc": 934,
+      "settlementMode": "forum-routed",
+      "previousHash": "0x3df01e4a1aaa28caa8ec7efb6f0f8d630f0ca86602ef4eb79098fcf0369a96d1",
+      "createdAt": "2026-07-12T10:30:54.696Z",
+      "payer": "0x4164F5B52ecc6F847f03071A287b0B59954cbcEe",
+      "transaction": "0xbfa6925a27f237a06cd3d85476c3ab0ce44ef30085de5dbbf1f5781e8cffe397",
+      "paymentResource": "forum-fee-router:0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59",
+      "feeRouterSplitId": "135",
+      "feeRouterCreateSplitTx": "0x1996f99d81993ecbb1749c6b6bc40b5eb5b81b46510cb03c0f4a4c1d03829c20",
+      "feeRouterPayTx": "0xbfa6925a27f237a06cd3d85476c3ab0ce44ef30085de5dbbf1f5781e8cffe397",
+      "canonicalUrl": "https://example.com/citation-economics",
+      "sourceContentHash": "0xda9ec57a9234f7a3fccb01848fec4b058289219c0248108457e97da4ce531fb6",
+      "sourceExcerptHash": "0x4249ed2c94867d635e49d478e53dd2ab0123be241c1bdbb8d0f239ee9862fe12",
+      "contentFetchedAt": "2026-07-12T10:30:54.696Z",
+      "ownershipProof": {
+        "method": "seed-demo",
+        "verifiedAt": "2026-06-27T00:00:00.000Z"
+      },
+      "queryPaymentHash": "0xaff33f0532158ba1fe61926ae3c55cf0695b1ac1f96fd84beffe1c107bd97034",
+      "receiptHash": "0x8198bc0310fafcb8b4298d735f29d49b363c95c0fe21ff4379d69f41dee3295e"
+    },
+    {
+      "id": "0x8ec0a997e1684a7e",
+      "queryId": "0x5ffcbffc677f90ea",
+      "sourceId": "feerouter-splits-receipts",
+      "creator": "Receipt Ledger Notes",
+      "wallet": "0x8888888888888888888888888888888888888888",
+      "amountAtomicUsdc": 1866,
+      "settlementMode": "forum-routed",
+      "previousHash": "0x8198bc0310fafcb8b4298d735f29d49b363c95c0fe21ff4379d69f41dee3295e",
+      "createdAt": "2026-07-12T10:30:54.696Z",
+      "payer": "0x4164F5B52ecc6F847f03071A287b0B59954cbcEe",
+      "transaction": "0xe654749a75bd396f1f85648c6ca4de2acf8021d521aac2f18b98349fcc376548",
+      "paymentResource": "forum-fee-router:0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59",
+      "feeRouterSplitId": "167",
+      "feeRouterCreateSplitTx": "0xc4836ef141348486cd75461ba8ca4ed898bd773383cd1e4df1d132ac3044a2bf",
+      "feeRouterPayTx": "0xe654749a75bd396f1f85648c6ca4de2acf8021d521aac2f18b98349fcc376548",
+      "canonicalUrl": "https://forum.gudman.xyz/fee-router",
+      "sourceContentHash": "0x816181cf6896cb2896402fdadeb7345ae1ea5147ab6614e6c59ef90bfa6143e7",
+      "sourceExcerptHash": "0xf73ffb152884c4c63c345dd265793fa0d5a21fcd806a726a8d35a10503f91520",
+      "contentFetchedAt": "2026-07-12T10:30:54.696Z",
+      "ownershipProof": {
+        "method": "seed-demo",
+        "verifiedAt": "2026-06-27T00:00:00.000Z"
+      },
+      "queryPaymentHash": "0xaff33f0532158ba1fe61926ae3c55cf0695b1ac1f96fd84beffe1c107bd97034",
+      "receiptHash": "0x8ec0a997e1684a7ecc22de38b9016426a44323428bc7123941cd8c8cea0ecef1"
+    },
+    {
+      "id": "0x10e4448ee7111f96",
+      "queryId": "0x5ffcbffc677f90ea",
+      "sourceId": "autonomous-source-buying",
+      "creator": "Agent Commerce Notes",
+      "wallet": "0x9999999999999999999999999999999999999999",
+      "amountAtomicUsdc": 1300,
+      "settlementMode": "refunded",
+      "previousHash": "0x8ec0a997e1684a7ecc22de38b9016426a44323428bc7123941cd8c8cea0ecef1",
+      "createdAt": "2026-07-12T10:30:54.696Z",
+      "paymentResource": "tollgate-refund:unused-source",
+      "canonicalUrl": "https://example.com/source-buying-agent",
+      "sourceContentHash": "0x7e34318c87315ec20b04225c798ee09b64a83c82fba33ab8a719eb391d7c48e3",
+      "sourceExcerptHash": "0x1f81e45f5264bef09aa6098b0c2d528101dd8c212ba42ce06d15feeb4b7e938e",
+      "contentFetchedAt": "2026-07-12T10:30:54.696Z",
+      "ownershipProof": {
+        "method": "seed-demo",
+        "verifiedAt": "2026-06-27T00:00:00.000Z"
+      },
+      "payoutPolicy": "refund-unused",
+      "refundReason": "Bought source was not cited in the final answer.",
+      "queryPaymentHash": "0xaff33f0532158ba1fe61926ae3c55cf0695b1ac1f96fd84beffe1c107bd97034",
+      "receiptHash": "0x10e4448ee7111f9677631370000d6e2a1a7763276c5e98932e04f725ae6e4133"
     }
   ]
 }
