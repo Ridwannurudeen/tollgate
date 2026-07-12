@@ -1,8 +1,8 @@
 # Tollgate - demo video
 
-**A first cut exists**: `tollgate-demo-video-2026-07-12.mp4` (66s, silent/captioned, no voiceover — this session had no audio-synthesis capability). It leads with judge-strict agency, counterfactual contribution, PayGate's atomic anchor+pay, the no-secret verifier, and the measured benchmark, in that order — the material that survived a hostile two-pass audit this session, not the broadest feature tour. Every screenshot and number in it is real, captured live against production the same day (queries `0x985d71b75fd8d992` and `0xf69327b2cce382a4`, PayGate tx `0x45169aec...2df2da316`, `judge:verify` 23/23).
+**A first cut exists**: `tollgate-demo-video-2026-07-12.mp4` (~110s, with narration via Windows SAPI text-to-speech, "Microsoft David Desktop" voice). It leads with judge-strict agency, counterfactual contribution, PayGate's atomic anchor+pay, the no-secret verifier, and the measured benchmark, in that order — the material that survived a hostile two-pass audit this session, not the broadest feature tour. Every screenshot and number in it is real, captured live against production the same day (queries `0x985d71b75fd8d992` and `0xf69327b2cce382a4`, PayGate tx `0x45169aec...2df2da316`, `judge:verify` 23/23). The narration is synthesized speech, not a human voice — replace with a real recorded voiceover before treating this as submission-final.
 
-**If a proper voiceover cut is recorded, follow this script** — same structure, spoken narration instead of on-screen captions. Target 2:00-2:30. Lead with the creator problem, close with the URL.
+**If a human voiceover cut is recorded, follow this script** — same structure, real narration instead of TTS. Target 2:00-2:30. Lead with the creator problem, close with the URL.
 
 **Tabs to pre-open:** `tollgate.gudman.xyz` (scroll to the "Run the verified judge demonstration" panel), `tollgate.gudman.xyz/answers/<queryId-from-your-live-run>`, a terminal with `npm run judge:verify` ready to run, `testnet.arcscan.app` (for the PayGate tx).
 
