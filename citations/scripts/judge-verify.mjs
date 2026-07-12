@@ -1,17 +1,31 @@
 import { verifyLedger } from "./verify-ledger.mjs";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { hashTypedData, keccak256, recoverAddress, toHex } from "viem";
+import {
+  encodeFunctionData,
+  hashTypedData,
+  keccak256,
+  recoverAddress,
+  toHex,
+} from "viem";
 import {
   allTransactionsFollow,
   confirmedReceiptPosition,
 } from "./transaction-order.mjs";
+import {
+  PAY_GATE_GETTER_SELECTORS,
+  feeRouterSplitAtAbi,
+  verifyPayGateConfigurationEvidence,
+  verifyPayGateEvidence,
+} from "./pay-gate-evidence.mjs";
 
 const DEFAULT_TARGET_URL = "https://tollgate.gudman.xyz";
 const ARC_RPC_URL =
   process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network";
 const FEE_ROUTER_ADDRESS =
   "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59".toLowerCase();
+const ARC_USDC_ADDRESS =
+  "0x3600000000000000000000000000000000000000".toLowerCase();
 const USE_INTENT_DOMAIN_NAME = "Tollgate UseReceipt Registry";
 const USE_INTENT_DOMAIN_VERSION = "1";
 const USE_INTENT_TYPES = {
@@ -29,9 +43,10 @@ const USE_INTENT_TYPES = {
 const USE_INTENT_ANCHORED_TOPIC = keccak256(
   toHex("UseIntentAnchored(bytes32,bytes32,address)"),
 ).toLowerCase();
-const AGENT_WALLET_SELECTOR = keccak256(
-  toHex("tollgateAgentWallet()"),
-).slice(0, 10);
+const AGENT_WALLET_SELECTOR = keccak256(toHex("tollgateAgentWallet()")).slice(
+  0,
+  10,
+);
 const ACTOR_CLASSES = [
   "operator",
   "fixture",
@@ -79,7 +94,9 @@ async function fetchJson(url) {
   const response = await fetch(url);
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`${url} returned HTTP ${response.status}: ${text.slice(0, 240)}`);
+    throw new Error(
+      `${url} returned HTTP ${response.status}: ${text.slice(0, 240)}`,
+    );
   }
   try {
     return JSON.parse(text);
@@ -105,12 +122,13 @@ async function rpcRequest(method, params) {
 }
 
 function actualAgentCounts(ledger) {
-  const decisions = ledger.queries.flatMap((query) => query.sourceDecisions ?? []);
+  const decisions = ledger.queries.flatMap(
+    (query) => query.sourceDecisions ?? [],
+  );
   return {
     strictLlmRuns: ledger.queries.filter(
       (query) =>
-        query.agentMode === "llm" &&
-        query.agentServerMode === "judge-strict",
+        query.agentMode === "llm" && query.agentServerMode === "judge-strict",
     ).length,
     llmRuns: ledger.queries.filter((query) => query.agentMode === "llm").length,
     deterministicRuns: ledger.queries.filter(
@@ -169,7 +187,10 @@ function actualActorMetrics(ledger) {
     byClass[actorClass].paymentCount += 1;
     byClass[actorClass].atomicUsdc += payment.amountAtomicUsdc;
     totalAtomicUsdc += payment.amountAtomicUsdc;
-    if (typeof payment.payer === "string" && /^0x[0-9a-fA-F]{40}$/.test(payment.payer)) {
+    if (
+      typeof payment.payer === "string" &&
+      /^0x[0-9a-fA-F]{40}$/.test(payment.payer)
+    ) {
       const payer = payment.payer.toLowerCase();
       walletsByClass.get(actorClass).add(payer);
       totalWallets.add(payer);
@@ -181,7 +202,8 @@ function actualActorMetrics(ledger) {
     }
   }
   for (const actorClass of ACTOR_CLASSES) {
-    byClass[actorClass].uniquePayerWallets = walletsByClass.get(actorClass).size;
+    byClass[actorClass].uniquePayerWallets =
+      walletsByClass.get(actorClass).size;
   }
   return {
     byClass,
@@ -308,7 +330,7 @@ function hasIntentAnchorLog(
   });
 }
 
-async function verifyUseIntent(query, agentWallet, rpc) {
+async function verifyUseIntent(query, agentWallet, rpc, paymentReceipts = []) {
   const record = query.useIntent;
   if (!record) return { ok: true };
   try {
@@ -333,7 +355,10 @@ async function verifyUseIntent(query, agentWallet, rpc) {
     };
     for (const [field, value] of Object.entries(storedRoots)) {
       if (normalizedBytes32(value) !== message[field].toLowerCase()) {
-        return { ok: false, detail: `${field} differs from ledger recomputation` };
+        return {
+          ok: false,
+          detail: `${field} differs from ledger recomputation`,
+        };
       }
     }
     const digest = hashTypedData({
@@ -348,12 +373,17 @@ async function verifyUseIntent(query, agentWallet, rpc) {
       message,
     });
     if (normalizedBytes32(record.digest) !== digest.toLowerCase()) {
-      return { ok: false, detail: "stored digest differs from recomputed digest" };
+      return {
+        ok: false,
+        detail: "stored digest differs from recomputed digest",
+      };
     }
     if (normalizedBytes32(message.queryHash) === null) {
       return { ok: false, detail: "queryHash is not bytes32" };
     }
-    if (BigInt(record.maxSpendAtomicUsdc) < BigInt(intentSpendAtomicUsdc(query))) {
+    if (
+      BigInt(record.maxSpendAtomicUsdc) < BigInt(intentSpendAtomicUsdc(query))
+    ) {
       return { ok: false, detail: "intent max spend is below settled spend" };
     }
     const recovered = await recoverAddress({
@@ -361,7 +391,10 @@ async function verifyUseIntent(query, agentWallet, rpc) {
       signature: record.signature,
     });
     if (recovered.toLowerCase() !== agentWallet.toLowerCase()) {
-      return { ok: false, detail: `signature recovers ${recovered}, not agent wallet` };
+      return {
+        ok: false,
+        detail: `signature recovers ${recovered}, not agent wallet`,
+      };
     }
     const registryCode = await rpc("eth_getCode", [registryAddress, "latest"]);
     if (typeof registryCode !== "string" || registryCode === "0x") {
@@ -372,20 +405,23 @@ async function verifyUseIntent(query, agentWallet, rpc) {
       "latest",
     ]);
     const onchainSigner =
-      typeof configuredSigner === "string" && /^0x[0-9a-fA-F]{64}$/.test(configuredSigner)
+      typeof configuredSigner === "string" &&
+      /^0x[0-9a-fA-F]{64}$/.test(configuredSigner)
         ? `0x${configuredSigner.slice(-40)}`
         : null;
     if (onchainSigner?.toLowerCase() !== agentWallet.toLowerCase()) {
-      return { ok: false, detail: "registry authorized signer does not match the proof pack" };
+      return {
+        ok: false,
+        detail: "registry authorized signer does not match the proof pack",
+      };
     }
     const receipt = await rpc("eth_getTransactionReceipt", [record.anchorTx]);
     if (!isSuccessfulReceipt(receipt)) {
       return { ok: false, detail: "anchor transaction is not confirmed" };
     }
-    const transaction = await rpc("eth_getTransactionByHash", [record.anchorTx]);
-    if (transaction?.to?.toLowerCase() !== registryAddress.toLowerCase()) {
-      return { ok: false, detail: "anchor transaction target is not the registry" };
-    }
+    const transaction = await rpc("eth_getTransactionByHash", [
+      record.anchorTx,
+    ]);
     if (
       !hasIntentAnchorLog(
         receipt,
@@ -395,7 +431,100 @@ async function verifyUseIntent(query, agentWallet, rpc) {
         agentWallet,
       )
     ) {
-      return { ok: false, detail: "registry anchor event is missing or mismatched" };
+      return {
+        ok: false,
+        detail: "registry anchor event is missing or mismatched",
+      };
+    }
+    if (record.payGate === true) {
+      if (
+        typeof record.payGateAddress !== "string" ||
+        !/^0x[0-9a-fA-F]{40}$/.test(record.payGateAddress)
+      ) {
+        return {
+          ok: false,
+          detail: "PayGate intent record has no stored PayGate address",
+        };
+      }
+      const payGateAddress = record.payGateAddress;
+      const [code, registryResult, feeRouterResult, usdcResult, payerResult] =
+        await Promise.all([
+          rpc("eth_getCode", [payGateAddress, "latest"]),
+          rpc("eth_call", [
+            { to: payGateAddress, data: PAY_GATE_GETTER_SELECTORS.registry },
+            "latest",
+          ]),
+          rpc("eth_call", [
+            { to: payGateAddress, data: PAY_GATE_GETTER_SELECTORS.feeRouter },
+            "latest",
+          ]),
+          rpc("eth_call", [
+            { to: payGateAddress, data: PAY_GATE_GETTER_SELECTORS.usdc },
+            "latest",
+          ]),
+          rpc("eth_call", [
+            { to: payGateAddress, data: PAY_GATE_GETTER_SELECTORS.payer },
+            "latest",
+          ]),
+        ]);
+      const configuration = verifyPayGateConfigurationEvidence({
+        payGateAddress,
+        registryAddress,
+        feeRouterAddress: FEE_ROUTER_ADDRESS,
+        usdcAddress: ARC_USDC_ADDRESS,
+        payerAddress: transaction?.from,
+        code,
+        registryResult,
+        feeRouterResult,
+        usdcResult,
+        payerResult,
+      });
+      if (!configuration.ok) return configuration;
+
+      const routedPayments = await Promise.all(
+        paymentReceipts
+          .filter((candidate) => candidate.settlementMode === "forum-routed")
+          .map(async (candidate) => ({
+            splitId: candidate.feeRouterSplitId,
+            amountAtomicUsdc: candidate.amountAtomicUsdc,
+            transactionHash: candidate.feeRouterPayTx,
+            evidenceTransactionHash: candidate.transaction,
+            payer: candidate.payer,
+            wallet: candidate.wallet,
+            contributors: candidate.contributors,
+            splitAtResult: await rpc("eth_call", [
+              {
+                to: FEE_ROUTER_ADDRESS,
+                data: encodeFunctionData({
+                  abi: feeRouterSplitAtAbi,
+                  functionName: "splitAt",
+                  args: [BigInt(candidate.feeRouterSplitId)],
+                }),
+              },
+              "latest",
+            ]),
+          })),
+      );
+      return verifyPayGateEvidence({
+        payGateAddress,
+        registryAddress,
+        feeRouterAddress: FEE_ROUTER_ADDRESS,
+        transactionHash: record.anchorTx,
+        transaction,
+        receipt,
+        intent: message,
+        signature: record.signature,
+        digest,
+        signer: agentWallet,
+        payerAddress: configuration.payerAddress,
+        payments: routedPayments,
+      });
+    }
+    if (transaction?.to?.toLowerCase() !== registryAddress.toLowerCase()) {
+      return {
+        ok: false,
+        detail: "anchor transaction target is not the registry",
+      };
     }
     return { ok: true };
   } catch (error) {
@@ -408,9 +537,7 @@ async function verifyUseIntent(query, agentWallet, rpc) {
 
 function isSuccessfulReceipt(receipt) {
   return Boolean(
-    receipt &&
-      receipt.transactionHash &&
-      receipt.status === "0x1",
+    receipt && receipt.transactionHash && receipt.status === "0x1",
   );
 }
 
@@ -431,7 +558,8 @@ async function main() {
   else fail("proof pack project", `got ${proof.project ?? "missing"}`);
 
   if (localVerification.ok) pass("local ledger hash chain");
-  else fail("local ledger hash chain", JSON.stringify(localVerification.issues));
+  else
+    fail("local ledger hash chain", JSON.stringify(localVerification.issues));
 
   if (ledgerEnvelope.verification?.ok === localVerification.ok) {
     pass("API ledger integrity agrees with local verification");
@@ -449,7 +577,8 @@ async function main() {
   }
 
   if (
-    proof.ledger?.verification?.receiptCount === localVerification.receiptCount &&
+    proof.ledger?.verification?.receiptCount ===
+      localVerification.receiptCount &&
     proof.ledger?.verification?.queryCount === localVerification.queryCount
   ) {
     pass("proof counts agree with fetched ledger");
@@ -461,8 +590,13 @@ async function main() {
   }
 
   const agentCounts = actualAgentCounts(ledger);
-  if (sameJson(proof.agent, agentCounts)) pass("agent counts agree with ledger");
-  else fail("agent counts agree with ledger", `proof=${JSON.stringify(proof.agent)} actual=${JSON.stringify(agentCounts)}`);
+  if (sameJson(proof.agent, agentCounts))
+    pass("agent counts agree with ledger");
+  else
+    fail(
+      "agent counts agree with ledger",
+      `proof=${JSON.stringify(proof.agent)} actual=${JSON.stringify(agentCounts)}`,
+    );
 
   const settlementCounts = actualSettlementCounts(ledger);
   if (
@@ -513,14 +647,28 @@ async function main() {
   }
 
   const useIntentQueries = ledger.queries.filter((query) => query.useIntent);
-  if (
-    proof.useIntent?.anchoredCount === useIntentQueries.length
-  ) {
+  const payGateQueries = useIntentQueries.filter(
+    (query) => query.useIntent?.payGate === true,
+  );
+  if (proof.useIntent?.anchoredCount === useIntentQueries.length) {
     pass("use-intent count agrees with ledger");
   } else {
     fail(
       "use-intent count agrees with ledger",
       `proof=${proof.useIntent?.anchoredCount ?? "missing"} actual=${useIntentQueries.length}`,
+    );
+  }
+
+  const proofPayGateCount = proof.useIntent?.payGateSettledCount;
+  if (
+    proofPayGateCount === payGateQueries.length ||
+    (proofPayGateCount === undefined && payGateQueries.length === 0)
+  ) {
+    pass("PayGate settlement count agrees with ledger");
+  } else {
+    fail(
+      "PayGate settlement count agrees with ledger",
+      `proof=${proofPayGateCount ?? "missing"} actual=${payGateQueries.length}`,
     );
   }
 
@@ -532,16 +680,22 @@ async function main() {
       typeof agentWallet !== "string" ||
       !/^0x[0-9a-fA-F]{40}$/.test(agentWallet)
     ) {
-      fail("use-intent registry configuration", "public registry and agent addresses are missing");
+      fail(
+        "use-intent registry configuration",
+        "public registry and agent addresses are missing",
+      );
     } else {
       for (const query of useIntentQueries) {
         const result = await verifyUseIntent(
           query,
           agentWallet,
           rpcRequest,
+          ledger.receipts.filter((receipt) => receipt.queryId === query.id),
         );
         if (result.ok) {
-          pass(`use-intent digest, signature, and anchor verified for ${query.id}`);
+          pass(
+            `use-intent digest, signature, and anchor verified for ${query.id}`,
+          );
         } else {
           fail(
             `use-intent digest, signature, and anchor verified for ${query.id}`,
@@ -558,11 +712,12 @@ async function main() {
         query.readerPayment?.transaction && !query.readerPayment.refund,
     )
     .slice()
-    .sort((left, right) =>
-      right.createdAt.localeCompare(left.createdAt),
-    )[0];
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
   if (!latestPaidQuery) {
-    fail("latest settled paid query exists", "no paid query with a transaction was found");
+    fail(
+      "latest settled paid query exists",
+      "no paid query with a transaction was found",
+    );
   } else {
     pass("latest settled paid query exists");
     const readerReceipt = await rpcRequest("eth_getTransactionReceipt", [
@@ -607,23 +762,50 @@ async function main() {
       } else {
         fail("latest FeeRouter payout transactions are confirmed on Arc");
       }
+      const latestUsesPayGate = latestPaidQuery.useIntent?.payGate === true;
+      const storedPayGateAddress = latestPaidQuery.useIntent?.payGateAddress;
+      const payoutTargetAddress = latestUsesPayGate
+        ? typeof storedPayGateAddress === "string" &&
+          /^0x[0-9a-fA-F]{40}$/.test(storedPayGateAddress)
+          ? storedPayGateAddress.toLowerCase()
+          : null
+        : FEE_ROUTER_ADDRESS;
+      const payoutTargetLabel = latestUsesPayGate ? "PayGate" : "FeeRouter";
       if (
+        payoutTargetAddress &&
         payouts.every(
           (payout) =>
             normalizedBytes32(payout.transactionRecord?.hash) ===
               payout.transaction &&
-            payout.transactionRecord?.to?.toLowerCase() === FEE_ROUTER_ADDRESS,
+            payout.transactionRecord?.to?.toLowerCase() === payoutTargetAddress,
         )
       ) {
-        pass("latest FeeRouter payout transactions target FeeRouter");
+        pass(
+          `latest FeeRouter payout transactions target ${payoutTargetLabel}`,
+        );
       } else {
-        fail("latest FeeRouter payout transactions target FeeRouter");
+        fail(
+          `latest FeeRouter payout transactions target ${payoutTargetLabel}`,
+        );
       }
 
       const anchorTransaction = normalizedBytes32(
         latestPaidQuery.useIntent?.anchorTx,
       );
-      if (!anchorTransaction) {
+      if (latestUsesPayGate) {
+        if (
+          anchorTransaction &&
+          payouts.every((payout) => payout.transaction === anchorTransaction)
+        ) {
+          pass(
+            "latest use-intent anchor and FeeRouter payouts share one PayGate transaction",
+          );
+        } else {
+          fail(
+            "latest use-intent anchor and FeeRouter payouts share one PayGate transaction",
+          );
+        }
+      } else if (!anchorTransaction) {
         fail(
           "latest use-intent anchor precedes every FeeRouter payout",
           "latest paid query has no valid anchor transaction",
@@ -661,15 +843,23 @@ async function main() {
   }
 
   for (const check of checks) {
-    console.log(`- ${check.ok ? "PASS" : "FAIL"} ${check.label}${check.detail ? `: ${check.detail}` : ""}`);
+    console.log(
+      `- ${check.ok ? "PASS" : "FAIL"} ${check.label}${check.detail ? `: ${check.detail}` : ""}`,
+    );
   }
   const failed = checks.filter((check) => !check.ok);
-  console.log(failed.length === 0 ? "PASS: judge proof verified" : `FAIL: ${failed.length} check(s) failed`);
+  console.log(
+    failed.length === 0
+      ? "PASS: judge proof verified"
+      : `FAIL: ${failed.length} check(s) failed`,
+  );
   if (failed.length > 0) process.exitCode = 1;
 }
 
 main().catch((error) => {
-  console.log(`- FAIL verifier execution: ${error instanceof Error ? error.message : String(error)}`);
+  console.log(
+    `- FAIL verifier execution: ${error instanceof Error ? error.message : String(error)}`,
+  );
   console.log("FAIL: judge proof could not be verified");
   process.exitCode = 1;
 });

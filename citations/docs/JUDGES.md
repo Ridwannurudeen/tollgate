@@ -1,7 +1,6 @@
 # Judge verification
 
-Run the no-secret verifier against any deployment that exposes the WS2 proof
-pack:
+Run the no-secret verifier against any deployment that exposes the proof pack:
 
 ```bash
 npm run judge:verify -- --url https://target.example
@@ -12,11 +11,11 @@ integrity/on-chain mismatch is a failure, not a skipped check.
 
 ## Deployment status
 
-The current public branch is the pre-roadmap baseline `507abc7`. On 2026-07-11,
-`https://tollgate.gudman.xyz/` and `/proof` returned HTTP 200, while
-`/api/judge-proof.json` returned HTTP 404. Run the flow below against a local or
-future deployment that contains WS1–WS5; do not interpret the current public
-404 as a passing proof-pack check.
+The current public deployment reports commit `4e6edd2`. On 2026-07-12,
+`https://tollgate.gudman.xyz/`, `/proof`, and `/api/judge-proof.json` returned
+HTTP 200, and the proof pack reported a valid ledger. That deployment contains
+the WS8 anchor-before-payment path. PayGate remains opt-in and undeployed until
+an operator deploys the contract and sets `LEPTONWEB_PAYGATE_ADDRESS`.
 
 ## 90-second flow
 
@@ -71,30 +70,31 @@ the response to one error string. `/api/judge-demo` preserves any downstream
 stage string and forwards returned `readerPayment`, `query`, `receipts`, and
 other evidence on non-2xx responses.
 
-| Stage                               | Meaning                                                                                                                                     | Evidence that can remain visible                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `configuration`                     | Judge-strict mode, FeeRouter, use-intent anchoring, or the registry address is not configured. The sponsored payment route is not called.   | Fixed question and configuration error.                                                                             |
-| `sponsorship`                       | The sponsored wallet route, balance guard, rate limit, or its transport failed before a more precise downstream stage was returned.         | Any structured body returned by the sponsored route.                                                                |
-| `appraise`                          | Strict model source appraisal failed.                                                                                                       | Settled reader-payment evidence and refund evidence when the refund completed.                                      |
-| `draft`                             | Strict grounded-answer drafting failed.                                                                                                     | Reader payment/refund plus any partial query field returned by the API.                                             |
-| `critique`                          | Strict self-critique failed.                                                                                                                | The same structured payment/query evidence returned downstream.                                                     |
-| `reflect`                           | Strict reflection failed.                                                                                                                   | The same structured payment/query evidence returned downstream.                                                     |
-| `escalate`                          | Strict external-assist merge failed.                                                                                                        | The same structured payment/query evidence returned downstream.                                                     |
-| `agent-mode`                        | A paid result did not record `agentMode: "llm"`.                                                                                            | Full returned settlement body plus check `query.agentMode=llm`.                                                     |
-| `agent-server-mode`                 | A paid result did not record judge-strict server mode.                                                                                      | Full returned settlement body plus check `query.agentServerMode=judge-strict`.                                      |
-| `source-decisions`                  | The result did not cover exactly the fixed five-source pool, or lacked either a buy or a skip.                                              | The returned query and its available decisions, receipts, and ledger.                                               |
-| `claim-verification`                | Claim verification failed downstream or no supported literal span from the fixed pool was returned.                                         | Reader payment, partial/full query, receipts, and ledger when returned.                                             |
-| `source-refund`                     | The completed paid result did not record at least one unused-source refund.                                                                 | Full returned settlement body and refund summary.                                                                   |
-| `reader-payment`                    | The result was not an exact x402 settlement or lacked the reader-payment transaction required by the completion gate.                       | Query, receipts, ledger, and any payment fields that were returned.                                                 |
-| `configuration` + actor-class check | The paid result was not classified as operator activity, indicating that `CIRCLE_PAYER_ADDRESS` did not match the verified sponsored payer. | The full paid result remains visible with check `query.readerPayment.actorClass=operator`.                          |
-| `reader-refund`                     | A required reader refund itself failed.                                                                                                     | Current reader payment plus `priorFailure`, which names the original stage and message.                             |
-| `use-intent-signing`                | Intent preparation failed or a completion result lacked its digest.                                                                         | Paid query and settlement evidence returned before the intent requirement failed.                                   |
-| `use-intent-anchoring`              | Intent anchoring failed before creator routing began, or a completion result lacked `anchorTx`.                                             | Paid reader-payment evidence and the prepared query, or the incomplete completion evidence.                         |
-| `fee-router-settlement`             | FeeRouter settlement failed while use-intent anchoring was disabled, or no returned receipt had `feeRouterPayTx`.                           | Paid query, receipts, ledger, and any transaction evidence returned.                                                |
-| `fee-router-settlement-post-anchor` | The intent anchor confirmed, then FeeRouter routing failed. Because routing is sequential, zero or more creator payouts may have settled.   | The query retains `useIntent.anchorTx`; completed partial payout evidence is not inferred when routing throws.      |
-| `creator-balance`                   | The pre/post FeeRouter reads failed, the fixed pool was incomplete, or no routed creator had a verified positive claimable-balance delta.   | Settled query and receipts plus the pre-settlement balances when the post-settlement read failed.                   |
-| `client-transport`                  | The browser itself could not reach `/api/judge-demo`; this label is local to the panel.                                                     | Browser error only, because no API body arrived.                                                                    |
-| `complete`                          | The sponsored paid route returned success and all fourteen completion checks passed.                                                        | Model, buy/skip decisions, claim support, refunds, intent, creator balance change, receipts, ledger, and Arc links. |
+| Stage                               | Meaning                                                                                                                                                     | Evidence that can remain visible                                                                                             |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `configuration`                     | Judge-strict mode, FeeRouter, use-intent anchoring, or the registry address is not configured. The sponsored payment route is not called.                   | Fixed question and configuration error.                                                                                      |
+| `sponsorship`                       | The sponsored wallet route, balance guard, rate limit, or its transport failed before a more precise downstream stage was returned.                         | Any structured body returned by the sponsored route.                                                                         |
+| `appraise`                          | Strict model source appraisal failed.                                                                                                                       | Settled reader-payment evidence and refund evidence when the refund completed.                                               |
+| `draft`                             | Strict grounded-answer drafting failed.                                                                                                                     | Reader payment/refund plus any partial query field returned by the API.                                                      |
+| `critique`                          | Strict self-critique failed.                                                                                                                                | The same structured payment/query evidence returned downstream.                                                              |
+| `reflect`                           | Strict reflection failed.                                                                                                                                   | The same structured payment/query evidence returned downstream.                                                              |
+| `escalate`                          | Strict external-assist merge failed.                                                                                                                        | The same structured payment/query evidence returned downstream.                                                              |
+| `agent-mode`                        | A paid result did not record `agentMode: "llm"`.                                                                                                            | Full returned settlement body plus check `query.agentMode=llm`.                                                              |
+| `agent-server-mode`                 | A paid result did not record judge-strict server mode.                                                                                                      | Full returned settlement body plus check `query.agentServerMode=judge-strict`.                                               |
+| `source-decisions`                  | The result did not cover exactly the fixed five-source pool, or lacked either a buy or a skip.                                                              | The returned query and its available decisions, receipts, and ledger.                                                        |
+| `claim-verification`                | Claim verification failed downstream or no supported literal span from the fixed pool was returned.                                                         | Reader payment, partial/full query, receipts, and ledger when returned.                                                      |
+| `source-refund`                     | The completed paid result did not record at least one unused-source refund.                                                                                 | Full returned settlement body and refund summary.                                                                            |
+| `reader-payment`                    | The result was not an exact x402 settlement or lacked the reader-payment transaction required by the completion gate.                                       | Query, receipts, ledger, and any payment fields that were returned.                                                          |
+| `configuration` + actor-class check | The paid result was not classified as operator activity, indicating that `CIRCLE_PAYER_ADDRESS` did not match the verified sponsored payer.                 | The full paid result remains visible with check `query.readerPayment.actorClass=operator`.                                   |
+| `reader-refund`                     | A required reader refund itself failed.                                                                                                                     | Current reader payment plus `priorFailure`, which names the original stage and message.                                      |
+| `use-intent-signing`                | Intent preparation failed or a completion result lacked its digest.                                                                                         | Paid query and settlement evidence returned before the intent requirement failed.                                            |
+| `use-intent-anchoring`              | Intent anchoring failed before creator routing began, or a completion result lacked `anchorTx`.                                                             | Paid reader-payment evidence and the prepared query, or the incomplete completion evidence.                                  |
+| `pay-gate-settlement`               | PayGate preparation or submission failed. A reverted outer call rolls back its inner anchor and every creator payment; no PayGate ledger record is written. | Paid reader-payment evidence and the prepared query; prerequisite approval or split-creation transactions can already exist. |
+| `fee-router-settlement`             | FeeRouter settlement failed while use-intent anchoring was disabled, or no returned receipt had `feeRouterPayTx`.                                           | Paid query, receipts, ledger, and any transaction evidence returned.                                                         |
+| `fee-router-settlement-post-anchor` | The intent anchor confirmed, then FeeRouter routing failed. Because routing is sequential, zero or more creator payouts may have settled.                   | The query retains `useIntent.anchorTx`; completed partial payout evidence is not inferred when routing throws.               |
+| `creator-balance`                   | The pre/post FeeRouter reads failed, the fixed pool was incomplete, or no routed creator had a verified positive claimable-balance delta.                   | Settled query and receipts plus the pre-settlement balances when the post-settlement read failed.                            |
+| `client-transport`                  | The browser itself could not reach `/api/judge-demo`; this label is local to the panel.                                                                     | Browser error only, because no API body arrived.                                                                             |
+| `complete`                          | The sponsored paid route returned success and all fourteen completion checks passed.                                                                        | Model, buy/skip decisions, claim support, refunds, intent, creator balance change, receipts, ledger, and Arc links.          |
 
 If the API returns no stage, the judge route labels the sponsored boundary as
 `sponsorship`; the panel states that no more precise stage was returned. A
@@ -121,17 +121,55 @@ The command fetches `/api/judge-proof.json`, `/api/ledger`, and `/api/sources`;
 recomputes the receipt hash chain and decision trace hashes; cross-checks proof
 counts; verifies a settled reader payment and FeeRouter payout on Arc; checks
 FeeRouter bytecode; and, when present, recomputes and verifies the EIP-712 use
-intent and anchor receipt. For the latest paid query, it also requires that the
-confirmed anchor precede every FeeRouter payout by canonical block and
-transaction index. It requires no API key, wallet, or signing secret.
-The ordering check is scoped to the latest paid query so legacy ledger records
-remain readable; after deploying this change, run a fresh judge demonstration
-before treating the verifier as evidence of anchor-before-payment behavior.
+intent and anchor receipt. For the latest paid WS8 query, it requires the
+confirmed anchor to precede every FeeRouter payout by canonical block and
+transaction index. For every PayGate record, it instead requires one successful
+outer transaction whose calldata, Registry anchor event, `PaidWithIntent`
+event, and complete FeeRouter `Routed` event multiset match the stored intent
+and creator receipts. It reads each referenced FeeRouter split and matches its
+recipient/BPS layout to the ledger wallet or contributor list. It also checks
+the historical PayGate address's bytecode and immutable Registry, FeeRouter,
+USDC, and authorized-payer wiring. It requires no API key, wallet, or signing
+secret.
 
 Any missing endpoint, count mismatch, tampered hash, absent bytecode, failed
-receipt, signer mismatch, anchor mismatch, or reversed anchor/payout ordering is
-a verifier failure. The current public deployment's proof-pack 404 therefore
-fails by design until WS2+ is deployed.
+receipt, signer mismatch, anchor mismatch, or invalid anchor/payout relationship
+is a verifier failure.
+
+## PayGate guarantee and boundary
+
+When `LEPTONWEB_PAYGATE_ADDRESS` is unset, settlement keeps the deployed WS8
+sequence: confirm the Registry anchor first, then submit FeeRouter payouts. When
+it is set, the application records `useIntent.payGate: true`, the historical
+PayGate address, and one transaction hash for the inner anchor and every routed
+creator payment. Unsetting the variable restores WS8 without making old PayGate
+records unverifiable.
+
+PayGate enforces these properties for every call routed through it:
+
+- the Registry accepts the same signed, unexpired, unused EIP-712 intent;
+- the positive aggregate payment total does not exceed the intent's
+  `maxSpendAtomicUsdc`;
+- the anchor, USDC pull, and every FeeRouter call succeed or revert together;
+- only the immutable authorized payer can submit through PayGate, preventing a
+  third party from pairing a copied signature with attacker-selected PayGate
+  payments.
+
+The boundary is intentionally narrower than a global payment firewall. The
+signed intent caps the total but does not commit to split IDs or per-split
+amounts, so the authorized payer still chooses the recipient breakdown. The
+authorized wallet can also call the permissionless FeeRouter directly or change
+its allowances, and the intent signer can sign a higher cap. PayGate therefore
+proves that a recorded PayGate transaction obeyed its signed cap; it does not
+prove that a compromised signer or payer wallet could never bypass the gate.
+The Registry's standalone `anchor()` remains permissionless: a third party that
+sees a pending signature can submit that exact intent directly, consume its
+nonce, and make the later PayGate call revert. This is a settlement
+denial-of-service; it cannot redirect or overspend the authorized payer's funds.
+First-use payer approval and split creation are prerequisite transactions, and
+track-record publication may be a later transaction. If filtering leaves no
+positive creator payout, the application uses the normal standalone WS8 anchor
+because PayGate rejects an empty payment batch.
 
 ## Manual proof links
 

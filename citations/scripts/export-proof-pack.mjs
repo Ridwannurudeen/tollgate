@@ -6,13 +6,20 @@ import { fileURLToPath } from "node:url";
 import { readLedger } from "./ledger-store.mjs";
 import { verifyLedger } from "./verify-ledger.mjs";
 
-const appDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-);
+const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const execFileAsync = promisify(execFile);
 
-const ACTOR_CLASSES = ["operator", "fixture", "volume-engine", "reciprocal-partner", "sponsored-cold-human", "self-funded-cold-human", "external-agent", "external-integrator", "unclassified"];
+const ACTOR_CLASSES = [
+  "operator",
+  "fixture",
+  "volume-engine",
+  "reciprocal-partner",
+  "sponsored-cold-human",
+  "self-funded-cold-human",
+  "external-agent",
+  "external-integrator",
+  "unclassified",
+];
 const DEFAULT_AGENT_WALLET = "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836";
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 
@@ -22,6 +29,15 @@ function normalizeAddress(value) {
 
 function isAddress(value) {
   return typeof value === "string" && ADDRESS_PATTERN.test(value);
+}
+
+function payGateAddress() {
+  const configured = process.env.LEPTONWEB_PAYGATE_ADDRESS?.trim();
+  if (!configured) return null;
+  if (!isAddress(configured)) {
+    throw new Error("LEPTONWEB_PAYGATE_ADDRESS must be a 20-byte EVM address.");
+  }
+  return configured;
 }
 
 function isIndependentActorClass(actorClass) {
@@ -102,7 +118,8 @@ function actorPaymentMetrics(payments, actorClasses) {
     }
   }
   for (const actorClass of ACTOR_CLASSES) {
-    byClass[actorClass].uniquePayerWallets = walletsByClass.get(actorClass).size;
+    byClass[actorClass].uniquePayerWallets =
+      walletsByClass.get(actorClass).size;
   }
   return {
     byClass,
@@ -133,7 +150,10 @@ function preferredCreatorKind(current, next) {
 }
 
 function isCreatorEarnedReceipt(receipt) {
-  return receipt.settlementMode !== "escrowed" && receipt.settlementMode !== "refunded";
+  return (
+    receipt.settlementMode !== "escrowed" &&
+    receipt.settlementMode !== "refunded"
+  );
 }
 
 function summarizeCreators(ledger, queryById) {
@@ -235,6 +255,10 @@ async function main() {
     (query) => query.sourceDecisions ?? [],
   );
   const useIntentQueries = ledger.queries.filter((query) => query.useIntent);
+  const payGateQueries = useIntentQueries.filter(
+    (query) => query.useIntent?.payGate === true,
+  );
+  const configuredPayGateAddress = payGateAddress();
   const feeRouterPayouts = ledger.receipts.filter(
     (receipt) => receipt.settlementMode === "forum-routed",
   );
@@ -258,14 +282,15 @@ async function main() {
         (query) =>
           query.agentMode === "llm" && query.agentServerMode === "judge-strict",
       ).length,
-      llmRuns: ledger.queries.filter((query) => query.agentMode === "llm").length,
+      llmRuns: ledger.queries.filter((query) => query.agentMode === "llm")
+        .length,
       deterministicRuns: ledger.queries.filter(
         (query) => query.agentMode === "deterministic",
       ).length,
-      buyDecisions: sourceDecisions.filter((decision) => decision.selected).length,
-      skipDecisions: sourceDecisions.filter(
-        (decision) => !decision.selected,
-      ).length,
+      buyDecisions: sourceDecisions.filter((decision) => decision.selected)
+        .length,
+      skipDecisions: sourceDecisions.filter((decision) => !decision.selected)
+        .length,
       abstentions: ledger.queries.filter(
         (query) => (query.citations ?? []).length === 0,
       ).length,
@@ -293,7 +318,14 @@ async function main() {
     },
     useIntent: {
       enabled: process.env.LEPTONWEB_USE_INTENT_ENABLED === "1",
-      registryAddress: process.env.LEPTONWEB_USE_RECEIPT_REGISTRY_ADDRESS ?? null,
+      registryAddress:
+        process.env.LEPTONWEB_USE_RECEIPT_REGISTRY_ADDRESS ?? null,
+      ...(configuredPayGateAddress || payGateQueries.length > 0
+        ? {
+            payGateAddress: configuredPayGateAddress,
+            payGateSettledCount: payGateQueries.length,
+          }
+        : {}),
       agentWallet: tollgateAgentWallet(),
       anchoredCount: useIntentQueries.length,
       latestDigest: useIntentQueries.at(0)?.useIntent?.digest ?? null,
@@ -303,11 +335,13 @@ async function main() {
       externalSources: sources.filter(
         (source) => source.sourceKind === "external",
       ).length,
-      seedSources: sources.filter((source) => source.sourceKind === "seed").length,
+      seedSources: sources.filter((source) => source.sourceKind === "seed")
+        .length,
       internalTestSources: sources.filter(
         (source) => source.sourceKind === "internal-test",
       ).length,
-      verifiedCreators: sources.filter((source) => source.verifiedCreator).length,
+      verifiedCreators: sources.filter((source) => source.verifiedCreator)
+        .length,
       paidQueries: actorMetrics.independent.paymentCount,
       independentPaidQueries: actorMetrics.independent.paymentCount,
       totalPaidQueries: actorMetrics.total.paymentCount,

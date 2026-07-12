@@ -5,6 +5,7 @@ import { actorClassCounts, summarizeActorPayments } from "./actor-class";
 import { readFeeRouterSplitRegistry } from "./fee-router";
 import { readLedger, summarizeCreators, verifyLedgerIntegrity } from "./ledger";
 import { tollgateAgentWallet } from "./payments";
+import { payGateAddress } from "./pay-gate";
 
 const execFileAsync = promisify(execFile);
 
@@ -45,6 +46,10 @@ export async function buildProofPack() {
     (receipt) => receipt.settlementMode === "forum-routed",
   );
   const useIntentQueries = ledger.queries.filter((query) => query.useIntent);
+  const payGateQueries = useIntentQueries.filter(
+    (query) => query.useIntent?.payGate === true,
+  );
+  const configuredPayGateAddress = payGateAddress();
   const creatorClaimedSources = sources.filter(
     (source) => source.creatorClaimed === true,
   );
@@ -99,6 +104,12 @@ export async function buildProofPack() {
       enabled: process.env.LEPTONWEB_USE_INTENT_ENABLED === "1",
       registryAddress:
         process.env.LEPTONWEB_USE_RECEIPT_REGISTRY_ADDRESS ?? null,
+      ...(configuredPayGateAddress || payGateQueries.length > 0
+        ? {
+            payGateAddress: configuredPayGateAddress,
+            payGateSettledCount: payGateQueries.length,
+          }
+        : {}),
       agentWallet: tollgateAgentWallet(),
       anchoredCount: useIntentQueries.length,
       latestDigest: useIntentQueries.at(0)?.useIntent?.digest ?? null,

@@ -27,6 +27,7 @@ import {
   readLedger,
 } from "./ledger";
 import { publishTrackRecordForAnswer } from "./track-record";
+import { payCitationsWithIntent, payGateAddress } from "./pay-gate";
 import {
   anchorUseIntent,
   assertSpendWithinIntent,
@@ -56,6 +57,7 @@ type SettleOptions = {
 type PreparedUseIntent = {
   built: BuiltUseIntent;
   signature: `0x${string}`;
+  payGateAddress: `0x${string}` | null;
 };
 
 export class PaidQueryAgentError extends Error {
@@ -121,8 +123,7 @@ export async function applyContributionProof(
   }
   const verifierConfig = {
     ...plannerConfig,
-    model:
-      process.env.LEPTONWEB_VERIFIER_MODEL?.trim() || plannerConfig.model,
+    model: process.env.LEPTONWEB_VERIFIER_MODEL?.trim() || plannerConfig.model,
   };
   const plannerLlm: ClaimLlm = (messages) =>
     completeChat(messages, plannerConfig);
@@ -287,10 +288,35 @@ export async function settleQuestion(
     agent.serverMode,
   );
   const preparedUseIntent = await prepareUseIntent(query);
-  const anchoredQuery = await anchorPreparedUseIntent(
-    query,
-    preparedUseIntent,
-  );
+  if (preparedUseIntent?.payGateAddress) {
+    const payGateSettlement = await payCitationsWithIntent(
+      query,
+      preparedUseIntent.built,
+      preparedUseIntent.signature,
+      { address: preparedUseIntent.payGateAddress },
+    );
+    if (payGateSettlement.transaction && payGateSettlement.payGateAddress) {
+      const payGateQuery = attachPayGateUseIntent(
+        query,
+        preparedUseIntent,
+        payGateSettlement.transaction,
+        payGateSettlement.payGateAddress,
+      );
+      return settleAndAnchorTrackRecord(
+        payGateQuery,
+        payGateSettlement.evidenceBySourceId,
+      );
+    }
+    const anchoredQuery = await anchorPreparedUseIntent(
+      query,
+      preparedUseIntent,
+    );
+    return settleAndAnchorTrackRecord(
+      anchoredQuery,
+      payGateSettlement.evidenceBySourceId,
+    );
+  }
+  const anchoredQuery = await anchorPreparedUseIntent(query, preparedUseIntent);
   const receiptEvidence = await routeCitationPayments(anchoredQuery);
   return settleAndAnchorTrackRecord(anchoredQuery, receiptEvidence);
 }
@@ -412,7 +438,10 @@ export async function settlePaidQuestion(
         query.readerPayment,
         "reader-refund",
         query,
-        { stage: "no-answer", message: "No source-backed answer was produced." },
+        {
+          stage: "no-answer",
+          message: "No source-backed answer was produced.",
+        },
       );
     }
   }
@@ -429,28 +458,68 @@ export async function settlePaidQuestion(
     );
   }
   let anchoredQuery: QueryRecord;
-  try {
-    anchoredQuery = await anchorPreparedUseIntent(query, preparedUseIntent);
-  } catch (error) {
-    throw new PaidQueryAgentError(
-      error,
-      query.readerPayment ?? readerPayment,
-      "use-intent-anchoring",
-      query,
-    );
-  }
   let receiptEvidence: Awaited<ReturnType<typeof routeCitationPayments>>;
-  try {
-    receiptEvidence = await routeCitationPayments(anchoredQuery);
-  } catch (error) {
-    throw new PaidQueryAgentError(
-      error,
-      anchoredQuery.readerPayment ?? readerPayment,
-      preparedUseIntent
-        ? "fee-router-settlement-post-anchor"
-        : "fee-router-settlement",
-      anchoredQuery,
-    );
+  if (preparedUseIntent?.payGateAddress) {
+    let payGateSettlement: Awaited<ReturnType<typeof payCitationsWithIntent>>;
+    try {
+      payGateSettlement = await payCitationsWithIntent(
+        query,
+        preparedUseIntent.built,
+        preparedUseIntent.signature,
+        { address: preparedUseIntent.payGateAddress },
+      );
+    } catch (error) {
+      throw new PaidQueryAgentError(
+        error,
+        query.readerPayment ?? readerPayment,
+        "pay-gate-settlement",
+        query,
+      );
+    }
+    if (payGateSettlement.transaction && payGateSettlement.payGateAddress) {
+      anchoredQuery = attachPayGateUseIntent(
+        query,
+        preparedUseIntent,
+        payGateSettlement.transaction,
+        payGateSettlement.payGateAddress,
+      );
+      receiptEvidence = payGateSettlement.evidenceBySourceId;
+    } else {
+      try {
+        anchoredQuery = await anchorPreparedUseIntent(query, preparedUseIntent);
+      } catch (error) {
+        throw new PaidQueryAgentError(
+          error,
+          query.readerPayment ?? readerPayment,
+          "use-intent-anchoring",
+          query,
+        );
+      }
+      receiptEvidence = payGateSettlement.evidenceBySourceId;
+    }
+  } else {
+    try {
+      anchoredQuery = await anchorPreparedUseIntent(query, preparedUseIntent);
+    } catch (error) {
+      throw new PaidQueryAgentError(
+        error,
+        query.readerPayment ?? readerPayment,
+        "use-intent-anchoring",
+        query,
+      );
+    }
+    try {
+      receiptEvidence = await routeCitationPayments(anchoredQuery);
+    } catch (error) {
+      throw new PaidQueryAgentError(
+        error,
+        anchoredQuery.readerPayment ?? readerPayment,
+        preparedUseIntent
+          ? "fee-router-settlement-post-anchor"
+          : "fee-router-settlement",
+        anchoredQuery,
+      );
+    }
   }
   try {
     return await settleAndAnchorTrackRecord(anchoredQuery, receiptEvidence);
@@ -471,9 +540,13 @@ export function filterSourcesForSettlement(
   let filtered = sources;
   if (options.sourceIds) {
     const sourceById = new Map(sources.map((source) => [source.id, source]));
-    const missing = options.sourceIds.filter((sourceId) => !sourceById.has(sourceId));
+    const missing = options.sourceIds.filter(
+      (sourceId) => !sourceById.has(sourceId),
+    );
     if (missing.length > 0) {
-      throw new Error(`Judge demo sources are unavailable: ${missing.join(", ")}.`);
+      throw new Error(
+        `Judge demo sources are unavailable: ${missing.join(", ")}.`,
+      );
     }
     filtered = options.sourceIds.map((sourceId) => sourceById.get(sourceId)!);
   }
@@ -496,7 +569,13 @@ function envPositiveInteger(name: string, fallback: number): number {
 async function prepareUseIntent(
   query: QueryRecord,
 ): Promise<PreparedUseIntent | null> {
-  if (!useIntentEnabled()) return null;
+  const configuredPayGate = payGateAddress();
+  if (!useIntentEnabled()) {
+    if (configuredPayGate) {
+      throw new Error("PayGate settlement requires use-intent signing.");
+    }
+    return null;
+  }
   if (process.env.LEPTONWEB_FEE_ROUTER_ENABLED !== "1") {
     throw new Error(
       "Use-intent anchoring requires LEPTONWEB_FEE_ROUTER_ENABLED=1.",
@@ -508,7 +587,7 @@ async function prepareUseIntent(
     chainId: built.chainId,
     registryAddress: built.registryAddress,
   });
-  return { built, signature };
+  return { built, signature, payGateAddress: configuredPayGate };
 }
 
 async function anchorPreparedUseIntent(
@@ -520,6 +599,22 @@ async function anchorPreparedUseIntent(
   return {
     ...query,
     useIntent: useIntentRecord(prepared.built, prepared.signature, anchorTx),
+  };
+}
+
+function attachPayGateUseIntent(
+  query: QueryRecord,
+  prepared: PreparedUseIntent,
+  transaction: `0x${string}`,
+  address: `0x${string}`,
+): QueryRecord {
+  return {
+    ...query,
+    useIntent: {
+      ...useIntentRecord(prepared.built, prepared.signature, transaction),
+      payGate: true,
+      payGateAddress: address,
+    },
   };
 }
 

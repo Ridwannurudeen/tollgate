@@ -5,6 +5,16 @@ export const FEE_ROUTER_ADDRESS =
 
 export const feeRouterV1Abi = [
   {
+    type: "event",
+    name: "SplitCreated",
+    inputs: [
+      { name: "splitId", type: "uint256", indexed: true },
+      { name: "creator", type: "address", indexed: true },
+      { name: "recipients", type: "address[]", indexed: false },
+      { name: "bps", type: "uint16[]", indexed: false },
+    ],
+  },
+  {
     type: "function",
     name: "splitCount",
     stateMutability: "view",

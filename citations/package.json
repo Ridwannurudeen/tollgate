@@ -19,6 +19,8 @@
     "judge:verify": "node scripts/judge-verify.mjs",
     "deploy:use-intent": "node scripts/deploy-use-receipt-registry.mjs",
     "test:use-intent-contract": "node scripts/test-use-receipt-registry.mjs",
+    "deploy:pay-gate": "node scripts/deploy-pay-gate.mjs",
+    "test:pay-gate-contract": "node scripts/test-pay-gate.mjs",
     "migrate:ledger": "node scripts/migrate-ledger.mjs",
     "discover:sources": "node ../scripts/discover-sources.mjs --write",
     "export:proof-pack": "node scripts/export-proof-pack.mjs",
