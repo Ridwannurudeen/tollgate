@@ -65,6 +65,11 @@ async function reserveNonce(
   return run;
 }
 
+function isNonceTooLowError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /nonce too low|lower than the current nonce/i.test(message);
+}
+
 export async function withReservedNonce<T>(
   publicClient: PublicClient,
   account: FeeRouterNonceAccount,
@@ -74,6 +79,13 @@ export async function withReservedNonce<T>(
   const release = await acquireSubmissionSlot();
   try {
     return await task(nonce);
+  } catch (error) {
+    if (!isNonceTooLowError(error)) throw error;
+    // Another process sharing this wallet advanced the chain nonce past our
+    // cache. Reseed from the chain and retry once.
+    nonceStates.delete(account.address.toLowerCase());
+    const freshNonce = await reserveNonce(publicClient, account);
+    return await task(freshNonce);
   } finally {
     release();
   }

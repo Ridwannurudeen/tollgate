@@ -170,7 +170,9 @@ if (!execute) {
     nonce += 1n;
   }
   const now = BigInt(Math.floor(Date.now() / 1000));
-  const expiredIntent = intent(now - 1n, nonce);
+  // Well in the past so the check holds even though block.timestamp lags
+  // the local clock by a few seconds.
+  const expiredIntent = intent(now - 3600n, nonce);
   const expiredSignature = await wallet.account.signTypedData({
     domain: domain(registry),
     types: useIntentTypes,
@@ -220,7 +222,10 @@ if (!execute) {
     account: wallet.address,
     chain: arcTestnet,
   });
-  const anchorTx = await walletClient.writeContract(request);
+  const anchorTx = await walletClient.writeContract({
+    ...request,
+    account: wallet.account,
+  });
   await publicClient.waitForTransactionReceipt({ hash: anchorTx });
   const used = await publicClient.readContract({
     address: registry,
