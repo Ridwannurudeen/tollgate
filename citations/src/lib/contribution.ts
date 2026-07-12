@@ -4,6 +4,8 @@ import { buildSourceContent } from "./source-content";
 import type { ChatMessage } from "./agent";
 import type {
   ClaimSupport,
+  ContributionCounterfactual,
+  ContributionProof,
   ContributionScore,
   CreatorSource,
 } from "./types";
@@ -215,10 +217,11 @@ export async function verifyClaims(
   });
 }
 
-function allocatePool(
+export function allocatePool(
   sourceIds: string[],
   weights: Map<string, number>,
   poolAtomicUsdc: number,
+  positiveWeightRemainderOnly = false,
 ): Map<string, number> {
   const totalWeight = sourceIds.reduce(
     (sum, sourceId) => sum + Math.max(0, weights.get(sourceId) ?? 0),
@@ -238,12 +241,47 @@ function allocatePool(
     allocated += reward;
   }
   let remainder = poolAtomicUsdc - allocated;
-  for (const sourceId of sourceIds) {
+  const remainderSourceIds = positiveWeightRemainderOnly
+    ? sourceIds.filter((sourceId) => (weights.get(sourceId) ?? 0) > 0)
+    : sourceIds;
+  for (const sourceId of remainderSourceIds) {
     if (remainder <= 0) break;
     rewards.set(sourceId, (rewards.get(sourceId) ?? 0) + 1);
     remainder -= 1;
   }
   return rewards;
+}
+
+function allocateContributionScores(
+  sourceIds: string[],
+  marginal: Map<string, number>,
+  poolAtomicUsdc: number,
+  fallbackAmounts: Record<string, number>,
+  positiveWeightRemainderOnly = false,
+): ContributionScore[] {
+  const hasPositiveContribution = sourceIds.some(
+    (sourceId) => (marginal.get(sourceId) ?? 0) > 0,
+  );
+  const weights = hasPositiveContribution
+    ? marginal
+    : new Map(
+        sourceIds.map((sourceId) => [
+          sourceId,
+          Math.max(0, fallbackAmounts[sourceId] ?? 0) || 1,
+        ]),
+      );
+  const rewards = allocatePool(
+    sourceIds,
+    weights,
+    Math.max(0, Math.floor(poolAtomicUsdc)),
+    positiveWeightRemainderOnly,
+  );
+  return sourceIds.map((sourceId) => ({
+    sourceId,
+    marginalContribution: Math.max(0, marginal.get(sourceId) ?? 0),
+    rewardAtomicUsdc: rewards.get(sourceId) ?? 0,
+    fallback: !hasPositiveContribution,
+  }));
 }
 
 export function scoreContribution(
@@ -270,28 +308,212 @@ export function scoreContribution(
         supported.filter((support) => support.sourceId !== sourceId).length,
     ]),
   );
-  const hasPositiveContribution = sourceIds.some(
-    (sourceId) => (marginal.get(sourceId) ?? 0) > 0,
+  return allocateContributionScores(
+    sourceIds,
+    marginal,
+    poolAtomicUsdc,
+    fallbackAmounts,
   );
-  const weights = hasPositiveContribution
-    ? marginal
+}
+
+function supportedCount(claimSupport: ClaimSupport[]): number {
+  return claimSupport.filter((support) => support.status === "supported")
+    .length;
+}
+
+function isValidEvidenceRow(
+  value: unknown,
+  purchasedSourceIds: Set<string>,
+  omittedSourceId?: string,
+): value is ClaimSupport {
+  if (!value || typeof value !== "object") return false;
+  const support = value as Partial<ClaimSupport>;
+  if (typeof support.claim !== "string") return false;
+  if (support.status === "supported") {
+    return (
+      typeof support.sourceId === "string" &&
+      purchasedSourceIds.has(support.sourceId) &&
+      support.sourceId !== omittedSourceId &&
+      typeof support.span === "string" &&
+      support.span.length > 0
+    );
+  }
+  return (
+    (support.status === "unsupported" ||
+      support.status === "unable-to-verify") &&
+    support.sourceId === null &&
+    support.span === null
+  );
+}
+
+function assertLeaveOneOutProof(
+  baseline: ClaimSupport[],
+  proof: ContributionProof,
+  expectedPurchasedSourceIds: string[],
+  eligibleSourceIds: string[],
+): void {
+  if (!proof || proof.method !== "leave-one-out-v1") {
+    throw new Error("Unsupported contribution proof method.");
+  }
+  if (
+    expectedPurchasedSourceIds.length < 1 ||
+    expectedPurchasedSourceIds.length > 3 ||
+    new Set(expectedPurchasedSourceIds).size !==
+      expectedPurchasedSourceIds.length
+  ) {
+    throw new Error(
+      "Leave-one-out contribution scoring requires 1 to 3 sources.",
+    );
+  }
+  const expectedPurchasedSourceSet = new Set(expectedPurchasedSourceIds);
+  if (
+    !Array.isArray(baseline) ||
+    !Array.isArray(proof.purchasedSourceIds) ||
+    !Array.isArray(proof.eligibleSourceIds) ||
+    !Array.isArray(proof.counterfactuals) ||
+    proof.purchasedSourceIds.length !== expectedPurchasedSourceIds.length ||
+    new Set(proof.purchasedSourceIds).size !==
+      proof.purchasedSourceIds.length ||
+    proof.purchasedSourceIds.some(
+      (sourceId) => !expectedPurchasedSourceSet.has(sourceId),
+    ) ||
+    proof.eligibleSourceIds.length !== eligibleSourceIds.length ||
+    proof.eligibleSourceIds.some(
+      (sourceId, index) => sourceId !== eligibleSourceIds[index],
+    ) ||
+    eligibleSourceIds.some(
+      (sourceId) => !proof.purchasedSourceIds.includes(sourceId),
+    ) ||
+    proof.counterfactuals.length !== proof.purchasedSourceIds.length ||
+    proof.counterfactuals.some(
+      (counterfactual, index) =>
+        !counterfactual ||
+        counterfactual.omittedSourceId !== proof.purchasedSourceIds[index] ||
+        !Array.isArray(counterfactual.claimSupport),
+    )
+  ) {
+    throw new Error(
+      "Leave-one-out contribution proof has invalid source coverage.",
+    );
+  }
+  const purchasedSourceSet = new Set(proof.purchasedSourceIds);
+  if (
+    baseline.some((support) => !isValidEvidenceRow(support, purchasedSourceSet))
+  ) {
+    throw new Error(
+      "Leave-one-out contribution proof has invalid baseline evidence.",
+    );
+  }
+  for (const counterfactual of proof.counterfactuals) {
+    if (
+      counterfactual.claimSupport.length !== baseline.length ||
+      counterfactual.claimSupport.some(
+        (support, index) =>
+          !isValidEvidenceRow(
+            support,
+            purchasedSourceSet,
+            counterfactual.omittedSourceId,
+          ) || support.claim !== baseline[index]?.claim,
+      )
+    ) {
+      throw new Error(
+        "Leave-one-out contribution proof does not match the baseline claims.",
+      );
+    }
+  }
+}
+
+export function scoreContributionFromProof(
+  baseline: ClaimSupport[],
+  proof: ContributionProof,
+  poolAtomicUsdc: number,
+  fallbackAmounts: Record<string, number>,
+  purchasedSourceIds: string[],
+): ContributionScore[] {
+  const eligibleSourceIds = Object.keys(fallbackAmounts);
+  assertLeaveOneOutProof(
+    baseline,
+    proof,
+    purchasedSourceIds,
+    eligibleSourceIds,
+  );
+  const hasUnableEvidence =
+    baseline.some((support) => support.status === "unable-to-verify") ||
+    proof.counterfactuals.some((counterfactual) =>
+      counterfactual.claimSupport.some(
+        (support) => support.status === "unable-to-verify",
+      ),
+    );
+  const baselineQuality = supportedCount(baseline);
+  const marginal = hasUnableEvidence
+    ? new Map(eligibleSourceIds.map((sourceId) => [sourceId, 0]))
     : new Map(
-        sourceIds.map((sourceId) => [
-          sourceId,
-          Math.max(0, fallbackAmounts[sourceId] ?? 0) || 1,
+        proof.counterfactuals.map((counterfactual) => [
+          counterfactual.omittedSourceId,
+          baselineQuality - supportedCount(counterfactual.claimSupport),
         ]),
       );
-  const rewards = allocatePool(
-    sourceIds,
-    weights,
-    Math.max(0, Math.floor(poolAtomicUsdc)),
+  return allocateContributionScores(
+    eligibleSourceIds,
+    marginal,
+    poolAtomicUsdc,
+    fallbackAmounts,
+    true,
   );
-  return sourceIds.map((sourceId) => ({
-    sourceId,
-    marginalContribution: Math.max(0, marginal.get(sourceId) ?? 0),
-    rewardAtomicUsdc: rewards.get(sourceId) ?? 0,
-    fallback: !hasPositiveContribution,
-  }));
+}
+
+export async function scoreContributionLeaveOneOut(
+  claims: string[],
+  purchasedSources: CreatorSource[],
+  verifierLlm: ClaimLlm,
+  baseline: ClaimSupport[],
+  poolAtomicUsdc: number,
+  fallbackAmounts: Record<string, number>,
+): Promise<{
+  contributionScores: ContributionScore[];
+  contributionProof: ContributionProof;
+}> {
+  if (purchasedSources.length < 1 || purchasedSources.length > 3) {
+    throw new Error(
+      "Leave-one-out contribution scoring requires 1 to 3 sources.",
+    );
+  }
+  const purchasedSourceIds = purchasedSources.map((source) => source.id);
+  const eligibleSourceIds = Object.keys(fallbackAmounts);
+  if (
+    new Set(purchasedSourceIds).size !== purchasedSourceIds.length ||
+    eligibleSourceIds.some((sourceId) => !purchasedSourceIds.includes(sourceId))
+  ) {
+    throw new Error(
+      "Leave-one-out contribution proof has invalid source coverage.",
+    );
+  }
+  const counterfactuals: ContributionCounterfactual[] = await Promise.all(
+    purchasedSources.map(async (omittedSource) => ({
+      omittedSourceId: omittedSource.id,
+      claimSupport: await verifyClaims(
+        claims,
+        purchasedSources.filter((source) => source.id !== omittedSource.id),
+        verifierLlm,
+      ),
+    })),
+  );
+  const contributionProof: ContributionProof = {
+    method: "leave-one-out-v1",
+    purchasedSourceIds,
+    eligibleSourceIds,
+    counterfactuals,
+  };
+  return {
+    contributionScores: scoreContributionFromProof(
+      baseline,
+      contributionProof,
+      poolAtomicUsdc,
+      fallbackAmounts,
+      purchasedSourceIds,
+    ),
+    contributionProof,
+  };
 }
 
 export function removeUnsupportedClaims(
@@ -314,6 +536,17 @@ export function removeUnsupportedClaims(
     : normalized;
 }
 
-export function claimSupportRoot(claimSupport: ClaimSupport[]): string {
-  return sha256Hex(claimSupport);
+export function claimSupportRoot(
+  claimSupport: ClaimSupport[],
+  contributionProof?: ContributionProof,
+): string {
+  return contributionProof
+    ? sha256Hex({
+        method: contributionProof.method,
+        baselineClaimSupport: claimSupport,
+        purchasedSourceIds: contributionProof.purchasedSourceIds,
+        eligibleSourceIds: contributionProof.eligibleSourceIds,
+        counterfactuals: contributionProof.counterfactuals,
+      })
+    : sha256Hex(claimSupport);
 }

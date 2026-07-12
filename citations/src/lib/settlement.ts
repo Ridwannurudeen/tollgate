@@ -13,6 +13,7 @@ import {
   extractClaims,
   removeUnsupportedClaims,
   scoreContribution,
+  scoreContributionLeaveOneOut,
   verifyClaims,
   type ClaimLlm,
 } from "./contribution";
@@ -93,6 +94,19 @@ export function contributionPayoutsEnabled(
   );
 }
 
+export function leaveOneOutContributionEnabled(
+  serverMode: AgentServerMode,
+  purchasedSourceCount: number,
+): boolean {
+  if (!contributionPayoutsEnabled(serverMode)) return false;
+  if (purchasedSourceCount < 1 || purchasedSourceCount > 3) return false;
+  return (
+    process.env.LEPTONWEB_LEAVE_ONE_OUT_CONTRIBUTION === "1" ||
+    (serverMode === "judge-strict" &&
+      process.env.LEPTONWEB_LEAVE_ONE_OUT_CONTRIBUTION !== "0")
+  );
+}
+
 export async function applyContributionProof(
   query: QueryRecord,
   sources: CreatorSource[],
@@ -144,11 +158,26 @@ export async function applyContributionProof(
     (sum, amount) => sum + amount,
     0,
   );
-  const contributionScores = scoreContribution(
-    claimSupport,
-    poolAtomicUsdc,
-    fallbackAmounts,
-  );
+  let contributionProof: QueryRecord["contributionProof"];
+  let contributionScores: ReturnType<typeof scoreContribution>;
+  if (leaveOneOutContributionEnabled(serverMode, purchasedSources.length)) {
+    const leaveOneOut = await scoreContributionLeaveOneOut(
+      claims,
+      purchasedSources,
+      verifierLlm,
+      claimSupport,
+      poolAtomicUsdc,
+      fallbackAmounts,
+    );
+    contributionScores = leaveOneOut.contributionScores;
+    contributionProof = leaveOneOut.contributionProof;
+  } else {
+    contributionScores = scoreContribution(
+      claimSupport,
+      poolAtomicUsdc,
+      fallbackAmounts,
+    );
+  }
   const scoreBySourceId = new Map(
     contributionScores.map((score) => [score.sourceId, score]),
   );
@@ -165,7 +194,7 @@ export async function applyContributionProof(
     return { ...citation, payoutAtomicUsdc: score.rewardAtomicUsdc };
   });
   const sanitizedAnswer = removeUnsupportedClaims(query.answer, claimSupport);
-  const supportRoot = claimSupportRoot(claimSupport);
+  const supportRoot = claimSupportRoot(claimSupport, contributionProof);
   const refundSummary = {
     boughtCount: citations.length,
     citedCount: citations.filter(
@@ -210,6 +239,7 @@ export async function applyContributionProof(
     citations,
     claimSupport,
     contributionScores,
+    ...(contributionProof ? { contributionProof } : {}),
     claimSupportRoot: supportRoot,
     refundSummary,
   };

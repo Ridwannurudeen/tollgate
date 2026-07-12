@@ -242,6 +242,18 @@ function sha256Hex(value) {
   return `0x${createHash("sha256").update(stableStringify(value)).digest("hex")}`;
 }
 
+function claimSupportRoot(query) {
+  return query.contributionProof
+    ? sha256Hex({
+        method: query.contributionProof.method,
+        baselineClaimSupport: query.claimSupport ?? [],
+        purchasedSourceIds: query.contributionProof.purchasedSourceIds,
+        eligibleSourceIds: query.contributionProof.eligibleSourceIds,
+        counterfactuals: query.contributionProof.counterfactuals,
+      })
+    : sha256Hex(query.claimSupport ?? []);
+}
+
 function normalizedBytes32(value) {
   return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value)
     ? value.toLowerCase()
@@ -258,7 +270,7 @@ function intentMessage(query) {
       query.citations.map((citation) => citation.sourceId),
     ),
     decisionTraceHash: query.traceHash ?? sha256Hex(query.agentSteps ?? []),
-    claimSupportRoot: sha256Hex(query.claimSupport ?? []),
+    claimSupportRoot: claimSupportRoot(query),
     maxSpendAtomicUsdc: BigInt(record.maxSpendAtomicUsdc),
     expiry: BigInt(record.expiry),
     nonce: BigInt(record.nonce),

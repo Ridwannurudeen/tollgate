@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { claimSupportRoot, scoreContribution } from "./contribution";
+import {
+  claimSupportRoot,
+  scoreContribution,
+  scoreContributionFromProof,
+} from "./contribution";
 import { sha256Hex } from "./hash";
 import { notifyCreatorReceipts } from "./notify";
 import type {
@@ -930,15 +934,33 @@ export function verifyLedgerIntegrity(ledger: Ledger): LedgerVerification {
     const hasContributionProof =
       query.claimSupport !== undefined ||
       query.contributionScores !== undefined ||
+      query.contributionProof !== undefined ||
       query.claimSupportRoot !== undefined;
     if (hasContributionProof) {
-      if (!query.claimSupport || !query.claimSupportRoot) {
+      const rawContributionProof = query.contributionProof as unknown;
+      const malformedContributionProof =
+        rawContributionProof !== undefined &&
+        (!rawContributionProof ||
+          typeof rawContributionProof !== "object" ||
+          Array.isArray(rawContributionProof));
+      const contributionProof = malformedContributionProof
+        ? undefined
+        : query.contributionProof;
+      if (malformedContributionProof) {
+        issues.push({
+          index: -1,
+          reason: `query ${query.id} has an invalid leave-one-out contribution proof: invalid proof shape.`,
+        });
+      }
+      if (!Array.isArray(query.claimSupport) || !query.claimSupportRoot) {
         issues.push({
           index: -1,
           reason: `query ${query.id} has incomplete claim-support evidence.`,
         });
       } else if (
-        claimSupportRoot(query.claimSupport) !== query.claimSupportRoot
+        !malformedContributionProof &&
+        claimSupportRoot(query.claimSupport, contributionProof) !==
+          query.claimSupportRoot
       ) {
         issues.push({
           index: -1,
@@ -947,37 +969,100 @@ export function verifyLedgerIntegrity(ledger: Ledger): LedgerVerification {
         });
       }
 
-      if (!query.claimSupport || !query.contributionScores) {
+      if (
+        !Array.isArray(query.claimSupport) ||
+        !Array.isArray(query.contributionScores)
+      ) {
         issues.push({
           index: -1,
           reason: `query ${query.id} has incomplete contribution scores.`,
         });
       } else {
-        const scoredSourceIds = new Set(
-          query.contributionScores.map((score) => score.sourceId),
-        );
-        const fallbackAmounts = Object.fromEntries(
-          query.citations
-            .filter((citation) => scoredSourceIds.has(citation.sourceId))
-            .map((citation) => [citation.sourceId, citation.amountAtomicUsdc]),
-        );
-        const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
-          (sum, amount) => sum + amount,
-          0,
-        );
-        const expectedScores = scoreContribution(
-          query.claimSupport,
-          poolAtomicUsdc,
-          fallbackAmounts,
-        );
-        if (sha256Hex(expectedScores) !== sha256Hex(query.contributionScores)) {
+        let expectedScores: ReturnType<typeof scoreContribution> | null = null;
+        try {
+          if (rawContributionProof !== undefined) {
+            if (
+              malformedContributionProof ||
+              !contributionProof ||
+              !Array.isArray(contributionProof.eligibleSourceIds)
+            ) {
+              throw new Error("invalid proof shape");
+            }
+            const eligibleSourceIds = new Set(
+              contributionProof.eligibleSourceIds,
+            );
+            if (
+              query.citations.some(
+                (citation) =>
+                  citation.payoutPolicy !== "refund-unused" &&
+                  !eligibleSourceIds.has(citation.sourceId),
+              )
+            ) {
+              throw new Error("proof omits a payout-eligible citation");
+            }
+            const citationBySourceId = new Map(
+              query.citations.map((citation) => [citation.sourceId, citation]),
+            );
+            const fallbackAmounts = Object.fromEntries(
+              contributionProof.eligibleSourceIds.flatMap((sourceId) => {
+                const citation = citationBySourceId.get(sourceId);
+                return citation
+                  ? [[sourceId, citation.amountAtomicUsdc] as const]
+                  : [];
+              }),
+            );
+            const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
+              (sum, amount) => sum + amount,
+              0,
+            );
+            expectedScores = scoreContributionFromProof(
+              query.claimSupport,
+              contributionProof,
+              poolAtomicUsdc,
+              fallbackAmounts,
+              query.citations.map((citation) => citation.sourceId),
+            );
+          } else {
+            const scoredSourceIds = new Set(
+              query.contributionScores.map((score) => score.sourceId),
+            );
+            const fallbackAmounts = Object.fromEntries(
+              query.citations
+                .filter((citation) => scoredSourceIds.has(citation.sourceId))
+                .map((citation) => [
+                  citation.sourceId,
+                  citation.amountAtomicUsdc,
+                ]),
+            );
+            const poolAtomicUsdc = Object.values(fallbackAmounts).reduce(
+              (sum, amount) => sum + amount,
+              0,
+            );
+            expectedScores = scoreContribution(
+              query.claimSupport,
+              poolAtomicUsdc,
+              fallbackAmounts,
+            );
+          }
+        } catch (error) {
+          issues.push({
+            index: -1,
+            reason: `query ${query.id} has an invalid leave-one-out contribution proof: ${
+              error instanceof Error ? error.message : "unknown error"
+            }`,
+          });
+        }
+        if (
+          expectedScores &&
+          sha256Hex(expectedScores) !== sha256Hex(query.contributionScores)
+        ) {
           issues.push({
             index: -1,
             reason: `query ${query.id} has contribution scores that do not match its claim-support table.`,
           });
         }
 
-        for (const score of expectedScores) {
+        for (const score of expectedScores ?? []) {
           const citation = query.citations.find(
             (candidate) => candidate.sourceId === score.sourceId,
           );
@@ -992,7 +1077,8 @@ export function verifyLedgerIntegrity(ledger: Ledger): LedgerVerification {
           if (
             (shouldRefund && citation.payoutPolicy !== "refund-unused") ||
             (!shouldRefund &&
-              citation.payoutAtomicUsdc !== score.rewardAtomicUsdc)
+              (citation.payoutPolicy === "refund-unused" ||
+                citation.payoutAtomicUsdc !== score.rewardAtomicUsdc))
           ) {
             issues.push({
               index: -1,
