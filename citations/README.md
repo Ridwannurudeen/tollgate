@@ -20,10 +20,12 @@ the model call.
 - No-secret verifier: `npm run judge:verify -- --url <deployment>`.
 - [Public repository](https://github.com/Ridwannurudeen/tollgate).
 
-Deployment boundary: the public proof pack reports commit `4e6edd2`, which
-contains the WS8 anchor-before-payment path. The WS9 PayGate source is opt-in
-and has no public contract address until an operator deploys it and sets
-`LEPTONWEB_PAYGATE_ADDRESS`. No public demo-video URL has been verified.
+Deployment boundary: the public proof pack reports commit `04c5e3c`. WS9
+PayGate is deployed on Arc testnet at
+`0x5B0C7ff19e71185843269Bb4f15788c005Ce693c` and enabled via
+`LEPTONWEB_PAYGATE_ADDRESS`: every settlement now anchors its use intent and
+pays creators atomically in one transaction. No public demo-video URL has
+been verified.
 
 ![Tollgate Citations answer workbench](docs/screenshots/stranger-ready/ask-desktop.png)
 
@@ -143,7 +145,8 @@ against Arc RPC. It does not read a signing key.
 - USDC: `0x3600000000000000000000000000000000000000`
 - FeeRouter: `0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59`
 - UseReceiptRegistry: `0xFA44bD7De2C79AB6A52ce4D5aF289718B1DcB56a`
-- PayGate: opt-in via `LEPTONWEB_PAYGATE_ADDRESS`; no public deployment claimed
+- PayGate: `0x5B0C7ff19e71185843269Bb4f15788c005Ce693c`, enabled via
+  `LEPTONWEB_PAYGATE_ADDRESS`
 - explorer: `https://testnet.arcscan.app`
 
 ## Limitations

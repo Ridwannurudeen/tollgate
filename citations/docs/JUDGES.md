@@ -11,11 +11,14 @@ integrity/on-chain mismatch is a failure, not a skipped check.
 
 ## Deployment status
 
-The current public deployment reports commit `4e6edd2`. On 2026-07-12,
+The current public deployment reports commit `04c5e3c`. On 2026-07-12,
 `https://tollgate.gudman.xyz/`, `/proof`, and `/api/judge-proof.json` returned
-HTTP 200, and the proof pack reported a valid ledger. That deployment contains
-the WS8 anchor-before-payment path. PayGate remains opt-in and undeployed until
-an operator deploys the contract and sets `LEPTONWEB_PAYGATE_ADDRESS`.
+HTTP 200, and the proof pack reported a valid ledger. PayGate is deployed at
+`0x5B0C7ff19e71185843269Bb4f15788c005Ce693c` (Arc testnet) and enabled via
+`LEPTONWEB_PAYGATE_ADDRESS` — every settlement now anchors its use intent and
+pays creators in one atomic transaction. `npm run judge:verify` confirmed this
+live for query `0x985d71b75fd8d992` (see the ledger and proof pack for the
+transaction hash).
 
 ## 90-second flow
 
