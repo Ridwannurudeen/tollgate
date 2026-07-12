@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ChatMessage } from "./agent";
 import {
   extractClaims,
   removeUnsupportedClaims,
@@ -8,6 +9,7 @@ import {
 import { buildSourceContent } from "./source-content";
 import { applyContributionProof } from "./settlement";
 import { createQueryRecord } from "./engine";
+import { REPAIR_PROMPT } from "./json-parse";
 import type { ClaimSupport, CreatorSource } from "./types";
 
 const SOURCE: CreatorSource = {
@@ -85,6 +87,87 @@ describe("proof of useful citation", () => {
     expect(claims).toEqual([
       "The receipt chain binds each useful claim to a source record.",
     ]);
+  });
+
+  it("repairs one malformed claim-extraction response", async () => {
+    const answer = "The receipt chain binds each useful claim to a source record.";
+    const calls: ChatMessage[][] = [];
+    const claims = await extractClaims(answer, async (messages) => {
+      calls.push(messages);
+      return calls.length === 1
+        ? "not json"
+        : JSON.stringify({ claims: [answer] });
+    });
+
+    expect(claims).toEqual([answer]);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.slice(-2)).toEqual([
+      { role: "assistant", content: "not json" },
+      { role: "user", content: REPAIR_PROMPT },
+    ]);
+  });
+
+  it("fails claim extraction after one unsuccessful repair attempt", async () => {
+    const calls: ChatMessage[][] = [];
+
+    await expect(
+      extractClaims(
+        "The receipt chain binds each useful claim to a source record.",
+        async (messages) => {
+          calls.push(messages);
+          return calls.length === 1 ? "not json" : "still not json";
+        },
+      ),
+    ).rejects.toThrow("LLM did not return JSON.");
+    expect(calls).toHaveLength(2);
+  });
+
+  it("repairs one malformed claim-verification response", async () => {
+    const claim = "The receipt binds the claim.";
+    const span = "Excerpt: Verified source content.";
+    const calls: ChatMessage[][] = [];
+    const support = await verifyClaims([claim], [SOURCE], async (messages) => {
+      calls.push(messages);
+      return calls.length === 1
+        ? "not json"
+        : JSON.stringify({
+            supports: [{ claim, sourceId: SOURCE.id, span }],
+          });
+    });
+
+    expect(support[0]).toMatchObject({
+      claim,
+      sourceId: SOURCE.id,
+      span,
+      status: "supported",
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.slice(-2)).toEqual([
+      { role: "assistant", content: "not json" },
+      { role: "user", content: REPAIR_PROMPT },
+    ]);
+  });
+
+  it("marks claims unable to verify after one unsuccessful repair attempt", async () => {
+    const calls: ChatMessage[][] = [];
+    const support = await verifyClaims(
+      ["The receipt binds the claim."],
+      [SOURCE],
+      async (messages) => {
+        calls.push(messages);
+        return calls.length === 1 ? "not json" : "still not json";
+      },
+    );
+
+    expect(support).toEqual([
+      {
+        claim: "The receipt binds the claim.",
+        sourceId: null,
+        span: null,
+        status: "unable-to-verify",
+      },
+    ]);
+    expect(calls).toHaveLength(2);
   });
 
   it("adds an omitted answer sentence so every sentence is verified", async () => {

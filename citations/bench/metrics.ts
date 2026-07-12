@@ -73,6 +73,7 @@ export type BenchmarkRun = {
   unusedPurchases: number | null;
   budgetViolation: boolean | null;
   abstentionCorrect: boolean | null;
+  repairAttempted?: boolean;
   error?: string;
 };
 

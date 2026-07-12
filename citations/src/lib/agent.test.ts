@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentPlanningError,
   createAgentQueryRecord,
+  type ChatMessage,
 } from "./agent";
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
 import { NO_SOURCE_ANSWER } from "./engine";
@@ -9,6 +10,7 @@ import {
   EscalationPaidError,
   type ExternalProvider,
 } from "./external-providers";
+import { REPAIR_PROMPT } from "./json-parse";
 import type { CreatorSource } from "./types";
 
 const LLM_CONFIG = {
@@ -112,6 +114,58 @@ describe("createAgentQueryRecord", () => {
     );
   });
 
+  it("repairs one malformed appraisal response and then succeeds", async () => {
+    const calls: ChatMessage[][] = [];
+    const completeChat = async (messages: ChatMessage[]) => {
+      calls.push(messages);
+      if (calls.length === 1) return "not json";
+      return JSON.stringify({
+        appraisals: [
+          {
+            sourceId: "forum-mandates",
+            verdict: "skip",
+            relevance: 0,
+            reason: "Not relevant to this test question.",
+          },
+        ],
+      });
+    };
+
+    const query = await createAgentQueryRecord(
+      "What source should this repair test buy?",
+      "2026-07-12T00:00:00.000Z",
+      DEFAULT_CREATOR_SOURCES,
+      undefined,
+      { llmConfig: LLM_CONFIG, completeChat, strictMode: true },
+    );
+
+    expect(query.agentMode).toBe("llm");
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.slice(-2)).toEqual([
+      { role: "assistant", content: "not json" },
+      { role: "user", content: REPAIR_PROMPT },
+    ]);
+  });
+
+  it("fails after one repair attempt when both appraisal responses are malformed", async () => {
+    const calls: ChatMessage[][] = [];
+    const completeChat = async (messages: ChatMessage[]) => {
+      calls.push(messages);
+      return calls.length === 1 ? "not json" : "still not json";
+    };
+
+    await expect(
+      createAgentQueryRecord(
+        "What source should this bounded repair test buy?",
+        "2026-07-12T00:01:00.000Z",
+        DEFAULT_CREATOR_SOURCES,
+        undefined,
+        { llmConfig: LLM_CONFIG, completeChat, strictMode: true },
+      ),
+    ).rejects.toThrow("Judge-strict mode failed during appraise");
+    expect(calls).toHaveLength(2);
+  });
+
   it("falls back to the deterministic policy with a trace when no LLM is configured", async () => {
     const query = await createAgentQueryRecord(
       "How does Forum bound agent spending for paid citations?",
@@ -163,7 +217,7 @@ describe("createAgentQueryRecord", () => {
 
   it("runs the appraise/allocate/draft/critique loop when all claims are grounded", async () => {
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
@@ -231,7 +285,7 @@ describe("createAgentQueryRecord", () => {
   it("returns an honest no-source record when the LLM buys nothing", async () => {
     const stages: string[] = [];
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       stages.push(stage);
@@ -293,7 +347,7 @@ describe("createAgentQueryRecord", () => {
 
   it("keeps only grounded claims when an unsupported claim cannot be bought", async () => {
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
@@ -354,7 +408,7 @@ describe("createAgentQueryRecord", () => {
   it("escalates to a paid external provider when gated on and unsupported claims remain", async () => {
     const stages: string[] = [];
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       stages.push(stage);
@@ -444,7 +498,7 @@ describe("createAgentQueryRecord", () => {
       },
     };
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
@@ -517,7 +571,7 @@ describe("createAgentQueryRecord", () => {
   it("does not escalate by default when the env gate is off", async () => {
     const stages: string[] = [];
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       stages.push(stage);
@@ -582,7 +636,7 @@ describe("createAgentQueryRecord", () => {
   it("does not escalate when there are no unsupported claims", async () => {
     const stages: string[] = [];
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       stages.push(stage);
@@ -644,7 +698,7 @@ describe("createAgentQueryRecord", () => {
   it("does not escalate when the cap is below the provider price", async () => {
     const stages: string[] = [];
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       stages.push(stage);
@@ -709,7 +763,7 @@ describe("createAgentQueryRecord", () => {
   it("reflects by buying one more source to ground an unsupported claim", async () => {
     let draftCalls = 0;
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
@@ -792,7 +846,7 @@ describe("createAgentQueryRecord", () => {
 
   it("allocates by grounding-per-USDC, dropping a costlier lower-value source", async () => {
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
@@ -938,7 +992,7 @@ describe("createAgentQueryRecord", () => {
       ]),
     );
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
@@ -992,7 +1046,7 @@ describe("createAgentQueryRecord", () => {
 
   it("marks bought-but-unused sources for refund before payout", async () => {
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
@@ -1062,7 +1116,7 @@ describe("createAgentQueryRecord", () => {
 
   it("treats sources omitted from sourceUsage as used and never refunds them", async () => {
     const completeChat = async (
-      messages: { role: "system" | "user"; content: string }[],
+      messages: ChatMessage[],
     ) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {

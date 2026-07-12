@@ -1,5 +1,9 @@
 import { NO_SOURCE_ANSWER } from "./engine";
 import { sha256Hex } from "./hash";
+import {
+  completeAndParseWithLlm,
+  parseJsonObject,
+} from "./json-parse";
 import { buildSourceContent } from "./source-content";
 import type { ChatMessage } from "./agent";
 import type {
@@ -22,17 +26,6 @@ function clean(value: unknown, maxLength: number): string {
   return typeof value === "string"
     ? value.replace(/\s+/g, " ").trim().slice(0, maxLength)
     : "";
-}
-
-function parseJsonObject(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start < 0 || end <= start) throw new Error("Claim LLM did not return JSON.");
-    return JSON.parse(text.slice(start, end + 1));
-  }
 }
 
 function claimMessages(answer: string): ChatMessage[] {
@@ -117,7 +110,11 @@ export async function extractClaims(
 ): Promise<string[]> {
   const normalizedAnswer = clean(answer, 1_600);
   if (!normalizedAnswer) return [];
-  const claims = parseExtractedClaims(await llm(claimMessages(normalizedAnswer)));
+  const claims = await completeAndParseWithLlm(
+    claimMessages(normalizedAnswer),
+    llm,
+    parseExtractedClaims,
+  );
   const exactClaims = claims.filter((claim) => normalizedAnswer.includes(claim));
   const uncoveredSentences = sentenceClaims(normalizedAnswer).filter(
     (sentence) => !exactClaims.some((claim) => sentence.includes(claim)),
@@ -147,8 +144,10 @@ export async function verifyClaims(
   if (claims.length === 0) return [];
   let rows: unknown[] | null;
   try {
-    rows = parseVerificationRows(
-      await verifierLlm(verificationMessages(claims, sources)),
+    rows = await completeAndParseWithLlm(
+      verificationMessages(claims, sources),
+      verifierLlm,
+      parseVerificationRows,
     );
   } catch {
     return claims.map((claim) => ({

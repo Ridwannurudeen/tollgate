@@ -17,6 +17,7 @@ import {
   NO_SOURCE_ANSWER,
   planCitationMarket,
 } from "../src/lib/engine";
+import { REPAIR_PROMPT } from "../src/lib/json-parse";
 import { buildSourceContent } from "../src/lib/source-content";
 import type { CreatorSource, QueryRecord } from "../src/lib/types";
 import { BENCHMARK_EVAL_SET, type BenchmarkCase } from "./eval-set";
@@ -326,6 +327,19 @@ async function runLiveCase(
   config: LlmConfig,
   dependencies: LiveBenchmarkDependencies,
 ): Promise<BenchmarkRun> {
+  let repairAttempted = false;
+  const trackedCompleteChat: CompleteChat = (messages, llmConfig) => {
+    const assistantMessage = messages[messages.length - 2];
+    const repairMessage = messages[messages.length - 1];
+    if (
+      assistantMessage?.role === "assistant" &&
+      repairMessage?.role === "user" &&
+      repairMessage.content === REPAIR_PROMPT
+    ) {
+      repairAttempted = true;
+    }
+    return dependencies.completeChat(messages, llmConfig);
+  };
   try {
     const query: QueryRecord = await dependencies.createAgentQueryRecord(
       testCase.question,
@@ -334,7 +348,7 @@ async function runLiveCase(
       undefined,
       {
         llmConfig: config,
-        completeChat: dependencies.completeChat,
+        completeChat: trackedCompleteChat,
         strictMode: true,
         serverMode: "judge-strict",
       },
@@ -349,13 +363,13 @@ async function runLiveCase(
       query.citations.some((citation) => citation.sourceId === source.id),
     );
     const liveClaimExtractor: ClaimLlm = (messages) =>
-      dependencies.completeChat(messages, config);
+      trackedCompleteChat(messages, config);
     const verifierConfig = {
       ...config,
       model: process.env.LEPTONWEB_VERIFIER_MODEL?.trim() || config.model,
     };
     const liveClaimVerifier: ClaimLlm = (messages) =>
-      dependencies.completeChat(messages, verifierConfig);
+      trackedCompleteChat(messages, verifierConfig);
     const measurement = await analyzeAnswer(
       testCase,
       selectedSources,
@@ -364,14 +378,17 @@ async function runLiveCase(
       liveClaimVerifier,
       true,
     );
-    return measuredRun(
-      testCase,
-      "full-llm",
-      pool,
-      selectedSources,
-      measurement,
-      query.agentModel ?? config.model,
-    );
+    return {
+      ...measuredRun(
+        testCase,
+        "full-llm",
+        pool,
+        selectedSources,
+        measurement,
+        query.agentModel ?? config.model,
+      ),
+      repairAttempted,
+    };
   } catch (error) {
     const message =
       error instanceof AgentPlanningError
@@ -379,14 +396,17 @@ async function runLiveCase(
         : error instanceof Error
           ? error.message
           : "Full-LLM benchmark case failed.";
-    return incompleteRun(
-      testCase,
-      "full-llm",
-      "error",
-      pool,
-      message,
-      config.model,
-    );
+    return {
+      ...incompleteRun(
+        testCase,
+        "full-llm",
+        "error",
+        pool,
+        message,
+        config.model,
+      ),
+      repairAttempted,
+    };
   }
 }
 
