@@ -287,11 +287,11 @@ export async function settleQuestion(
     agent.serverMode,
   );
   const preparedUseIntent = await prepareUseIntent(query);
-  const receiptEvidence = await routeCitationPayments(query);
   const anchoredQuery = await anchorPreparedUseIntent(
     query,
     preparedUseIntent,
   );
+  const receiptEvidence = await routeCitationPayments(anchoredQuery);
   return settleAndAnchorTrackRecord(anchoredQuery, receiptEvidence);
 }
 
@@ -428,17 +428,6 @@ export async function settlePaidQuestion(
       query,
     );
   }
-  let receiptEvidence: Awaited<ReturnType<typeof routeCitationPayments>>;
-  try {
-    receiptEvidence = await routeCitationPayments(query);
-  } catch (error) {
-    throw new PaidQueryAgentError(
-      error,
-      query.readerPayment ?? readerPayment,
-      "fee-router-settlement",
-      query,
-    );
-  }
   let anchoredQuery: QueryRecord;
   try {
     anchoredQuery = await anchorPreparedUseIntent(query, preparedUseIntent);
@@ -448,6 +437,19 @@ export async function settlePaidQuestion(
       query.readerPayment ?? readerPayment,
       "use-intent-anchoring",
       query,
+    );
+  }
+  let receiptEvidence: Awaited<ReturnType<typeof routeCitationPayments>>;
+  try {
+    receiptEvidence = await routeCitationPayments(anchoredQuery);
+  } catch (error) {
+    throw new PaidQueryAgentError(
+      error,
+      anchoredQuery.readerPayment ?? readerPayment,
+      preparedUseIntent
+        ? "fee-router-settlement-post-anchor"
+        : "fee-router-settlement",
+      anchoredQuery,
     );
   }
   try {

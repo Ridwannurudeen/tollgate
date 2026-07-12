@@ -1,12 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   recoverTypedDataAddress,
   type Address,
   type Hex,
+  type PublicClient,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createQueryRecord } from "./engine";
 import {
+  resetFeeRouterNonceStateForTests,
+  withReservedNonce,
+} from "./fee-router-nonce";
+import {
+  anchorUseIntent,
   assertSpendWithinIntent,
   assertUseIntentNotExpired,
   buildUseIntent,
@@ -15,10 +21,34 @@ import {
   useIntentDomain,
   useIntentRecord,
   useIntentTypes,
+  type BuiltUseIntent,
   type TollgateUseIntent,
 } from "./use-intent";
 
+const clients = vi.hoisted(() => ({
+  getTransactionCount: vi.fn(),
+  waitForTransactionReceipt: vi.fn(),
+  writeContract: vi.fn(),
+}));
+
+vi.mock("viem", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("viem")>();
+  return {
+    ...actual,
+    createPublicClient: () => ({
+      getTransactionCount: clients.getTransactionCount,
+      waitForTransactionReceipt: clients.waitForTransactionReceipt,
+    }),
+    createWalletClient: () => ({ writeContract: clients.writeContract }),
+  };
+});
+
 const REGISTRY = "0x1111111111111111111111111111111111111111" as Address;
+const PRIVATE_KEY = generatePrivateKey();
+const ACCOUNT = privateKeyToAccount(PRIVATE_KEY);
+const ANCHOR_TX = `0x${"c".repeat(64)}` as Hex;
+let previousPrivateKey: string | undefined;
+let previousAgentWallet: string | undefined;
 
 function intent(): TollgateUseIntent {
   return {
@@ -32,6 +62,44 @@ function intent(): TollgateUseIntent {
     nonce: 7n,
   };
 }
+
+function builtUseIntent(): BuiltUseIntent {
+  return {
+    intent: intent(),
+    digest: `0x${"a".repeat(64)}` as Hex,
+    plannedSpendAtomicUsdc: 100,
+    registryAddress: REGISTRY,
+    chainId: 5_042_002,
+  };
+}
+
+beforeEach(() => {
+  previousPrivateKey = process.env.LEPTONWEB_USE_INTENT_PRIVATE_KEY;
+  previousAgentWallet = process.env.LEPTONWEB_AGENT_WALLET;
+  process.env.LEPTONWEB_USE_INTENT_PRIVATE_KEY = PRIVATE_KEY;
+  process.env.LEPTONWEB_AGENT_WALLET = ACCOUNT.address;
+  resetFeeRouterNonceStateForTests();
+  vi.resetAllMocks();
+  clients.getTransactionCount.mockResolvedValue(41);
+  clients.waitForTransactionReceipt.mockResolvedValue({
+    status: "success",
+    transactionHash: ANCHOR_TX,
+  });
+  clients.writeContract.mockResolvedValue(ANCHOR_TX);
+});
+
+afterEach(() => {
+  if (previousPrivateKey === undefined) {
+    delete process.env.LEPTONWEB_USE_INTENT_PRIVATE_KEY;
+  } else {
+    process.env.LEPTONWEB_USE_INTENT_PRIVATE_KEY = previousPrivateKey;
+  }
+  if (previousAgentWallet === undefined) {
+    delete process.env.LEPTONWEB_AGENT_WALLET;
+  } else {
+    process.env.LEPTONWEB_AGENT_WALLET = previousAgentWallet;
+  }
+});
 
 describe("TollgateUseIntent", () => {
   it("produces a deterministic EIP-712 digest", () => {
@@ -101,13 +169,7 @@ describe("TollgateUseIntent", () => {
   });
 
   it("serializes the signed fields for the public ledger", () => {
-    const built = {
-      intent: intent(),
-      digest: `0x${"a".repeat(64)}` as Hex,
-      plannedSpendAtomicUsdc: 100,
-      registryAddress: REGISTRY,
-      chainId: 5_042_002,
-    };
+    const built = builtUseIntent();
     const record = useIntentRecord(
       built,
       `0x${"b".repeat(130)}` as Hex,
@@ -122,5 +184,71 @@ describe("TollgateUseIntent", () => {
       maxSpendAtomicUsdc: "1000",
       anchorTx: `0x${"c".repeat(64)}`,
     });
+  });
+
+  it("submits an anchor with a reserved pending nonce", async () => {
+    const transaction = await anchorUseIntent(
+      builtUseIntent(),
+      `0x${"b".repeat(130)}` as Hex,
+    );
+
+    expect(transaction).toBe(ANCHOR_TX);
+    expect(clients.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ nonce: 41 }),
+    );
+    expect(clients.waitForTransactionReceipt).toHaveBeenCalledWith({
+      hash: ANCHOR_TX,
+    });
+  });
+
+  it("rejects a reverted anchor receipt", async () => {
+    clients.waitForTransactionReceipt.mockResolvedValue({
+      status: "reverted",
+      transactionHash: ANCHOR_TX,
+    });
+
+    await expect(
+      anchorUseIntent(
+        builtUseIntent(),
+        `0x${"b".repeat(130)}` as Hex,
+      ),
+    ).rejects.toThrow("Use-intent anchor failed with status reverted");
+  });
+
+  it("rejects a successful replacement transaction", async () => {
+    clients.waitForTransactionReceipt.mockResolvedValue({
+      status: "success",
+      transactionHash: `0x${"d".repeat(64)}`,
+    });
+
+    await expect(
+      anchorUseIntent(
+        builtUseIntent(),
+        `0x${"b".repeat(130)}` as Hex,
+      ),
+    ).rejects.toThrow("Use-intent anchor transaction was replaced");
+  });
+
+  it("shares nonce reservations with other submissions from the signer", async () => {
+    const publicClient = {
+      getTransactionCount: clients.getTransactionCount,
+    } as unknown as PublicClient;
+    const [transaction, otherNonce] = await Promise.all([
+      anchorUseIntent(
+        builtUseIntent(),
+        `0x${"b".repeat(130)}` as Hex,
+      ),
+      withReservedNonce(publicClient, ACCOUNT, async (nonce) => nonce),
+    ]);
+    const anchorNonce = clients.writeContract.mock.calls[0]?.[0]?.nonce;
+    if (typeof anchorNonce !== "number") {
+      throw new Error("anchor submission did not include a nonce");
+    }
+
+    expect(transaction).toBe(ANCHOR_TX);
+    expect([anchorNonce, otherNonce].sort((left, right) => left - right)).toEqual(
+      [41, 42],
+    );
+    expect(clients.getTransactionCount).toHaveBeenCalledTimes(1);
   });
 });

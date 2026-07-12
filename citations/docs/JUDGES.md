@@ -89,8 +89,9 @@ other evidence on non-2xx responses.
 | `configuration` + actor-class check | The paid result was not classified as operator activity, indicating that `CIRCLE_PAYER_ADDRESS` did not match the verified sponsored payer. | The full paid result remains visible with check `query.readerPayment.actorClass=operator`.                          |
 | `reader-refund`                     | A required reader refund itself failed.                                                                                                     | Current reader payment plus `priorFailure`, which names the original stage and message.                             |
 | `use-intent-signing`                | Intent preparation failed or a completion result lacked its digest.                                                                         | Paid query and settlement evidence returned before the intent requirement failed.                                   |
-| `use-intent-anchoring`              | Intent anchoring failed or a completion result lacked `anchorTx`.                                                                           | Paid query, receipts, and any prepared intent evidence.                                                             |
-| `fee-router-settlement`             | FeeRouter settlement failed or no returned receipt had `feeRouterPayTx`.                                                                    | Paid query, receipts, ledger, and any transaction evidence returned.                                                |
+| `use-intent-anchoring`              | Intent anchoring failed before creator routing began, or a completion result lacked `anchorTx`.                                             | Paid reader-payment evidence and the prepared query, or the incomplete completion evidence.                         |
+| `fee-router-settlement`             | FeeRouter settlement failed while use-intent anchoring was disabled, or no returned receipt had `feeRouterPayTx`.                           | Paid query, receipts, ledger, and any transaction evidence returned.                                                |
+| `fee-router-settlement-post-anchor` | The intent anchor confirmed, then FeeRouter routing failed. Because routing is sequential, zero or more creator payouts may have settled.   | The query retains `useIntent.anchorTx`; completed partial payout evidence is not inferred when routing throws.      |
 | `creator-balance`                   | The pre/post FeeRouter reads failed, the fixed pool was incomplete, or no routed creator had a verified positive claimable-balance delta.   | Settled query and receipts plus the pre-settlement balances when the post-settlement read failed.                   |
 | `client-transport`                  | The browser itself could not reach `/api/judge-demo`; this label is local to the panel.                                                     | Browser error only, because no API body arrived.                                                                    |
 | `complete`                          | The sponsored paid route returned success and all fourteen completion checks passed.                                                        | Model, buy/skip decisions, claim support, refunds, intent, creator balance change, receipts, ledger, and Arc links. |
@@ -120,12 +121,17 @@ The command fetches `/api/judge-proof.json`, `/api/ledger`, and `/api/sources`;
 recomputes the receipt hash chain and decision trace hashes; cross-checks proof
 counts; verifies a settled reader payment and FeeRouter payout on Arc; checks
 FeeRouter bytecode; and, when present, recomputes and verifies the EIP-712 use
-intent and anchor receipt. It requires no API key, wallet, or signing secret.
+intent and anchor receipt. For the latest paid query, it also requires that the
+confirmed anchor precede every FeeRouter payout by canonical block and
+transaction index. It requires no API key, wallet, or signing secret.
+The ordering check is scoped to the latest paid query so legacy ledger records
+remain readable; after deploying this change, run a fresh judge demonstration
+before treating the verifier as evidence of anchor-before-payment behavior.
 
 Any missing endpoint, count mismatch, tampered hash, absent bytecode, failed
-receipt, signer mismatch, or anchor mismatch is a verifier failure. The current
-public deployment's proof-pack 404 therefore fails by design until WS2+ is
-deployed.
+receipt, signer mismatch, anchor mismatch, or reversed anchor/payout ordering is
+a verifier failure. The current public deployment's proof-pack 404 therefore
+fails by design until WS2+ is deployed.
 
 ## Manual proof links
 
