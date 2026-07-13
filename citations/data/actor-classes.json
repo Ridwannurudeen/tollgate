@@ -1,5 +1,16 @@
 {
   "wallets": {
-    "0x12f25b721cc21c38495e33a4c8524dd0b647ba03": "fixture"
+    "0x12f25b721cc21c38495e33a4c8524dd0b647ba03": "fixture",
+    "0x5389688243328c26a92b301faeeab5fbf9aff105": "self-funded-cold-human",
+    "0xea33a2f3e1c0afb04f1911702827d37c31793882": "self-funded-cold-human",
+    "0xfe3f3ceab7266b5de5ae8738727b6cf82f7be76c": "self-funded-cold-human",
+    "0x328ce9ee34ab3ac7a9e0596b025d6eb45683ddbc": "self-funded-cold-human",
+    "0xdc01ca917f0328f567d718ea25179815fae2db91": "self-funded-cold-human",
+    "0xb73ba0aab9eeeb2c0b8b1f9bebdea29599a9e2bf": "self-funded-cold-human",
+    "0x43553caee153496200d37644ce28775b2b2b522e": "self-funded-cold-human",
+    "0x9cbe147fb6661e237c694e436c09ff7ca43743ac": "self-funded-cold-human",
+    "0xa90d7374447b64d180e70c296f5decce1049cd30": "self-funded-cold-human",
+    "0x26f866013a057bbcbaea2356f2d390bcdbccc0e0": "self-funded-cold-human",
+    "0x9e210daea5b622d1bbca3389ac8c6e83fa960a06": "self-funded-cold-human"
   }
 }

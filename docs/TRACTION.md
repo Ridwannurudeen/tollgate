@@ -2,6 +2,16 @@
 
 All figures below were read live from the deployed ledger and verified on-chain on Arc testnet (chain `5042002`). Refresh before submission via `/api/settlement/status`, `/api/sources`, and `npm run verify:ledger`.
 
+## ⭐ 2026-07-13 (LATEST) — independent reader demand reclassified from 0 to real
+
+The proof pack's `actorClassCounts` previously showed every payer wallet as `operator`/`fixture`/`unclassified` — independent traction read as literally zero, even though real external readers had been paying. That has been corrected: **12 payer wallets classified as `self-funded-cold-human`** (real external people, each funding and spending on their own initiative — founder-confirmed identity, not project test wallets).
+
+Verification depth, stated precisely:
+- **4 of the 12 have independent on-chain corroboration**: for each, the wallet's first incoming USDC transfer was traced via `eth_getLogs` on the Arc USDC contract, and in every case the funding sender does **not** match any wallet in this repo's local keystore, the FeeRouter payer, the x402 facilitator, or the agent wallet — i.e., verifiably not funded by the operator. These four: `0x5389…F105` (CitePay Markets — see below), `0xea33…3882`, `0xfe3f…e76c`, `0xb73b…E2BF`.
+- **The other 8 could not be traced this way** — their funding transaction wasn't found within a multi-million-block on-chain search window, likely because they were funded through a path (e.g. a Circle W3S custodial deposit bundled with the spend) that doesn't leave a simple traceable ERC-20 Transfer. Their classification rests on the founder's direct knowledge of who these payers are, not on independent on-chain proof. Stated here plainly rather than presented as equally verified.
+
+Updated headline numbers (`/api/judge-proof.json`, `traction.actorMetrics.independent`): **13 independent paid queries, 11 unique independent payer wallets, ~$0.094 of independent test USDC routed** — up from 0 before this reclassification. `npm run judge:verify` and the actor-class counts in the live proof pack are the source of truth going forward; treat the older sections below as historical record of how each traction claim was originally built up.
+
 ## Headline: real external creators, paid on-chain
 
 Three independent external creators onboarded through the public self-serve flow, each proved wallet control with a signed ownership message (`verifiedCreator: true`), and each has been cited by the live answer agent and paid in USDC on Arc through the on-chain FeeRouter. This count of 3 has held since the creators first onboarded; what's new as of 2026-07-10 is that **all three, not two**, have now autonomously claimed their FeeRouter balance with zero hand-holding — CitePay and qdee claimed earlier and also registered a new verified source unaided; Rising Technology was the outstanding one and closed that gap today (`0xe16b1ef5…1bbdb`, block 51139386), verified independently via `eth_getTransactionReceipt` and `totalClaimableOf` reading `0` afterward.
