@@ -1,0 +1,25 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "UseReceiptRegistry.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.24;\n\ncontract UseReceiptRegistry {\n    struct TollgateUseIntent {\n        bytes32 queryHash;\n        bytes32 candidateSetRoot;\n        bytes32 selectedSourcesRoot;\n        bytes32 decisionTraceHash;\n        bytes32 claimSupportRoot;\n        uint256 maxSpendAtomicUsdc;\n        uint256 expiry;\n        uint256 nonce;\n    }\n\n    bytes32 public constant INTENT_TYPEHASH = keccak256(\n        \"TollgateUseIntent(bytes32 queryHash,bytes32 candidateSetRoot,bytes32 selectedSourcesRoot,bytes32 decisionTraceHash,bytes32 claimSupportRoot,uint256 maxSpendAtomicUsdc,uint256 expiry,uint256 nonce)\"\n    );\n    bytes32 private constant DOMAIN_TYPEHASH = keccak256(\n        \"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)\"\n    );\n    bytes32 private constant NAME_HASH = keccak256(\n        \"Tollgate UseReceipt Registry\"\n    );\n    bytes32 private constant VERSION_HASH = keccak256(\"1\");\n    uint256 private constant SECP256K1N_HALF_ORDER =\n        0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;\n\n    bytes32 public immutable DOMAIN_SEPARATOR;\n    address public immutable tollgateAgentWallet;\n    mapping(uint256 => bool) public usedNonces;\n\n    event UseIntentAnchored(\n        bytes32 indexed queryHash,\n        bytes32 indexed digest,\n        address indexed signer\n    );\n\n    constructor(address agentWallet) {\n        require(agentWallet != address(0), \"agent wallet is zero\");\n        tollgateAgentWallet = agentWallet;\n        DOMAIN_SEPARATOR = keccak256(\n            abi.encode(\n                DOMAIN_TYPEHASH,\n                NAME_HASH,\n                VERSION_HASH,\n                block.chainid,\n                address(this)\n            )\n        );\n    }\n\n    function hashIntent(\n        TollgateUseIntent calldata intent\n    ) public view returns (bytes32) {\n        bytes32 structHash = keccak256(\n            abi.encode(\n                INTENT_TYPEHASH,\n                intent.queryHash,\n                intent.candidateSetRoot,\n                intent.selectedSourcesRoot,\n                intent.decisionTraceHash,\n                intent.claimSupportRoot,\n                intent.maxSpendAtomicUsdc,\n                intent.expiry,\n                intent.nonce\n            )\n        );\n        return keccak256(abi.encodePacked(\"\\x19\\x01\", DOMAIN_SEPARATOR, structHash));\n    }\n\n    function anchor(\n        TollgateUseIntent calldata intent,\n        bytes calldata signature\n    ) external returns (bytes32 digest) {\n        require(block.timestamp <= intent.expiry, \"intent expired\");\n        require(!usedNonces[intent.nonce], \"intent nonce used\");\n\n        digest = hashIntent(intent);\n        require(_recover(digest, signature) == tollgateAgentWallet, \"invalid intent signer\");\n        usedNonces[intent.nonce] = true;\n        emit UseIntentAnchored(intent.queryHash, digest, tollgateAgentWallet);\n    }\n\n    function _recover(\n        bytes32 digest,\n        bytes memory signature\n    ) private pure returns (address signer) {\n        require(signature.length == 65, \"invalid signature length\");\n        bytes32 r;\n        bytes32 s;\n        uint8 v;\n        assembly {\n            r := mload(add(signature, 32))\n            s := mload(add(signature, 64))\n            v := byte(0, mload(add(signature, 96)))\n        }\n        if (v < 27) v += 27;\n        require(v == 27 || v == 28, \"invalid signature v\");\n        require(uint256(s) <= SECP256K1N_HALF_ORDER, \"invalid signature s\");\n        signer = ecrecover(digest, v, r, s);\n        require(signer != address(0), \"invalid signature\");\n    }\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "evmVersion": "cancun",
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "metadata"
+        ]
+      }
+    }
+  }
+}
