@@ -4,6 +4,8 @@
 
 Tollgate turns reuse into revenue: one Arc settlement core, six integration surfaces, and proof pages that bind each paid use to a hash-linked receipt.
 
+**Demo video:** https://youtu.be/YyAoYv9AOI0 · **Live:** https://tollgate.gudman.xyz
+
 ## Judge path: 5-minute review
 
 1. Open the unified overview: `https://tollgate.gudman.xyz/core`.
