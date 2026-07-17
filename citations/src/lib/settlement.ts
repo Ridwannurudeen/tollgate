@@ -553,6 +553,12 @@ export function filterSourcesForSettlement(
       );
     }
     filtered = options.sourceIds.map((sourceId) => sourceById.get(sourceId)!);
+  } else {
+    // Organic path (agent picks freely): never cite or pay seed demo sources. Their
+    // wallets are unclaimable placeholders, so an unscoped buy must only ever pay a
+    // real, claimable creator. Seed sources remain available only when named
+    // explicitly via sourceIds — i.e. the labeled judge demonstration.
+    filtered = filtered.filter((source) => source.sourceKind !== "seed");
   }
   if (!options.creatorWallet) return filtered;
   const creatorWallet = options.creatorWallet.toLowerCase();

@@ -482,6 +482,42 @@ describe("LeptonWeb settlement engine", () => {
     ).toThrow("No sources");
   });
 
+  it("excludes seed demo sources from the organic (unscoped) buy path", () => {
+    const realCreator: CreatorSource = {
+      id: "real-creator",
+      title: "Real Creator",
+      creator: "Real Creator",
+      handle: "@real",
+      wallet: "0xabc0000000000000000000000000000000000abc",
+      url: "https://example.com/real",
+      summary: "A real external creator with a claimable wallet.",
+      tags: ["arc"],
+      priceAtomicUsdc: 1_000,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: true,
+    };
+    const seed: CreatorSource = {
+      ...realCreator,
+      id: "seed-placeholder",
+      title: "Seed Placeholder",
+      wallet: "0x5555555555555555555555555555555555555555",
+      sourceKind: "seed",
+      creatorKind: "seed",
+    };
+
+    // Organic path: no sourceIds -> seed demo sources must be dropped so a buy can
+    // only ever pay a claimable creator.
+    const organic = filterSourcesForSettlement([realCreator, seed], {});
+    expect(organic.map((source) => source.id)).toEqual(["real-creator"]);
+
+    // Explicit judge-demo path: named seed sources are still honored.
+    const judge = filterSourcesForSettlement([realCreator, seed], {
+      sourceIds: ["seed-placeholder"],
+    });
+    expect(judge.map((source) => source.id)).toEqual(["seed-placeholder"]);
+  });
+
   it("pins a judge profile to the requested source order", () => {
     const sources = selectSources(
       "How should AI agents pay creators with x402?",
