@@ -5,7 +5,7 @@ import {
   actorClassForPayment,
   isIndependentActorClass,
 } from "@/lib/actor-class";
-import { readSources } from "@/lib/catalog";
+import { publicSource, readSources } from "@/lib/catalog";
 import { readCovenantEnvelope } from "@/lib/covenant";
 import {
   formatBudgetUtilization,
@@ -57,12 +57,13 @@ function sourceStats(ledger: Ledger): SourceStat[] {
 }
 
 export default async function ProofPage() {
-  const [proof, sources, covenant, slashBond] = await Promise.all([
+  const [proof, rawSources, covenant, slashBond] = await Promise.all([
     buildProofPack(),
     readSources(),
     readCovenantEnvelope().catch(() => null),
     readCachedSlashBondStatus().catch(() => null),
   ]);
+  const sources = rawSources.map((source) => publicSource(source));
   const ledger = { queries: proof.queries, receipts: proof.receipts };
   const creators = proof.creators;
   const verification = proof.integrity;

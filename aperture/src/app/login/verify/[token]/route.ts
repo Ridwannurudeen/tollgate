@@ -9,7 +9,7 @@ import {
   verifySignupToken,
 } from "../../../../lib/account";
 import { registerCreator } from "../../../../lib/onboarding";
-import type { WalletRegistryEntry } from "../../../../lib/types";
+import { aperturePublicOrigin } from "../../../../lib/public-origin";
 
 export const runtime = "nodejs";
 
@@ -99,29 +99,12 @@ function displayNameFromEmail(email: string): string {
   return local || "New creator";
 }
 
-const CANONICAL_ORIGIN = "https://tollgate.gudman.xyz";
-
-// `request.url` resolves to the internal bind address (localhost:3036) behind
-// the nginx proxy, so the post-verify redirect must be built from the
-// forwarded Host header (which nginx sets to the real public host) — the same
-// way the emailed magic-link URL is built.
-function publicOrigin(request: NextRequest): string {
-  const host = request.headers.get("host")?.trim();
-  if (!host) return CANONICAL_ORIGIN;
-  const proto = request.headers.get("x-forwarded-proto")?.trim() || "https";
-  return `${proto}://${host}`;
-}
-
-function redirectWithSession(
-  request: NextRequest,
-  basePath: string,
-  ownerId: string,
-) {
+function redirectWithSession(basePath: string, ownerId: string) {
   const cookieValue = signSession(ownerId);
   if (!cookieValue) return unavailablePage();
 
   const response = NextResponse.redirect(
-    new URL(`${basePath}/dashboard`, publicOrigin(request)),
+    new URL(`${basePath}/dashboard`, aperturePublicOrigin()),
   );
   response.cookies.set(
     SESSION_COOKIE_NAME,
@@ -129,22 +112,6 @@ function redirectWithSession(
     sessionCookieOptions(),
   );
   return response;
-}
-
-async function ownerForSignupEmail(
-  email: string,
-): Promise<WalletRegistryEntry | null> {
-  const existing = await findOwnerByEmail(email).catch(() => null);
-  if (existing) return existing;
-  try {
-    return await registerCreator({
-      ownerId: `link-${randomUUID()}`,
-      displayName: displayNameFromEmail(email),
-      email,
-    });
-  } catch {
-    return findOwnerByEmail(email).catch(() => null);
-  }
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
@@ -155,11 +122,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const { token } = await context.params;
   const owner = await redeemLoginToken(token);
-  if (owner) return redirectWithSession(request, basePath, owner.ownerId);
+  if (owner) return redirectWithSession(basePath, owner.ownerId);
 
   const signupEmail = verifySignupToken(token);
   if (!signupEmail) return invalidPage(basePath);
-  const signupOwner = await ownerForSignupEmail(signupEmail);
-  if (!signupOwner) return signupFailedPage(basePath);
-  return redirectWithSession(request, basePath, signupOwner.ownerId);
+  if (await findOwnerByEmail(signupEmail).catch(() => null)) {
+    return invalidPage(basePath);
+  }
+  try {
+    const signupOwner = await registerCreator({
+      ownerId: `link-${randomUUID()}`,
+      displayName: displayNameFromEmail(signupEmail),
+      email: signupEmail,
+    });
+    return redirectWithSession(basePath, signupOwner.ownerId);
+  } catch {
+    return signupFailedPage(basePath);
+  }
 }

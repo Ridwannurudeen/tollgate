@@ -8,9 +8,13 @@ const mocks = vi.hoisted(() => ({
   safeFetch: vi.fn(),
 }));
 
-vi.mock("@/lib/safe-fetch", () => ({
-  safeFetch: mocks.safeFetch,
-}));
+vi.mock("@/lib/safe-fetch", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/safe-fetch")>();
+  return {
+    ...actual,
+    safeFetch: mocks.safeFetch,
+  };
+});
 
 vi.mock("@/lib/catalog", () => {
   class SourceRegistryError extends Error {
@@ -160,6 +164,27 @@ describe("POST /api/sources/discover", () => {
       }),
     );
     expect(body.count).toBe(1);
+  });
+
+  it("does not expose Circle request details from registration failures", async () => {
+    mocks.safeFetch.mockResolvedValueOnce(
+      response(JSON.stringify(declaration)),
+    );
+    mocks.appendSource.mockRejectedValue(
+      new Error(
+        "Circle request /wallets/private-circle-wallet-id failed: upstream-secret-body",
+      ),
+    );
+
+    const result = await POST(
+      request("https://publisher.example", "198.51.100.16"),
+    );
+    const body = await result.json();
+
+    expect(result.status).toBe(400);
+    expect(body.error).toBe("Source discovery failed.");
+    expect(JSON.stringify(body)).not.toContain("private-circle-wallet-id");
+    expect(JSON.stringify(body)).not.toContain("upstream-secret-body");
   });
 
   it("returns 404 when no declaration is found", async () => {

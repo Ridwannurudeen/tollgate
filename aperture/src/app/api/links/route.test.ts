@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LinkRegistryError } from "../../../lib/link-registry";
 import { GET, POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
@@ -68,13 +69,24 @@ function requestWithBody(
 }
 
 describe("POST /api/links", () => {
+  const savedPublicOrigin = process.env.APERTURE_PUBLIC_ORIGIN;
+
   beforeEach(() => {
+    process.env.APERTURE_PUBLIC_ORIGIN = "https://tollgate.gudman.xyz";
     mocks.handleLinkRegistration.mockReset();
     mocks.getSessionOwner.mockReset();
     mocks.signSession.mockReset();
     mocks.listPublicLinks.mockReset();
     mocks.getSessionOwner.mockResolvedValue(null);
     mocks.signSession.mockReturnValue("owner-1.signature");
+  });
+
+  afterEach(() => {
+    if (savedPublicOrigin === undefined) {
+      delete process.env.APERTURE_PUBLIC_ORIGIN;
+    } else {
+      process.env.APERTURE_PUBLIC_ORIGIN = savedPublicOrigin;
+    }
   });
 
   it("rate-limits the eleventh registration per IP", async () => {
@@ -121,6 +133,33 @@ describe("POST /api/links", () => {
     expect(mocks.signSession).toHaveBeenCalledWith("owner-1");
   });
 
+  it("redacts the public creator response after signing the raw owner session", async () => {
+    mocks.handleLinkRegistration.mockResolvedValue({
+      accountKey: "aptr_key",
+      link: {
+        id: "link-private",
+        title: "Contact archive@example.com",
+        ownerId: "owner-archive@example.com",
+        priceAtomicUsdc: 2500,
+      },
+      registered: {
+        ownerId: "owner-archive@example.com",
+        displayName: "Archive archive@example.com",
+        wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+        createdAt: "2026-07-06T00:00:00.000Z",
+        approvalStatus: "operator-approved",
+      },
+      shareUrl: "https://tollgate.gudman.xyz/aperture/link/link-private",
+    });
+
+    const response = await POST(request("198.51.100.206"));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(JSON.stringify(body)).not.toContain("archive@example.com");
+    expect(mocks.signSession).toHaveBeenCalledWith("owner-archive@example.com");
+  });
+
   it("passes an existing session owner into link registration", async () => {
     mocks.getSessionOwner.mockResolvedValue({
       ownerId: "existing-owner",
@@ -147,7 +186,7 @@ describe("POST /api/links", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
-  it("passes login email only for logged-out registration", async () => {
+  it("does not bind a caller-provided email for logged-out registration", async () => {
     mocks.handleLinkRegistration.mockResolvedValue({
       accountKey: "aptr_key",
       link: { id: "link-3", title: "Photo", priceAtomicUsdc: 2500 },
@@ -170,9 +209,63 @@ describe("POST /api/links", () => {
     );
 
     expect(mocks.handleLinkRegistration).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "jane@example.com" }),
+      expect.objectContaining({ email: undefined }),
       expect.not.objectContaining({ sessionOwnerId: expect.any(String) }),
     );
+  });
+
+  it("uses the configured public origin instead of request host headers", async () => {
+    process.env.APERTURE_PUBLIC_ORIGIN = "https://canonical.example";
+    mocks.handleLinkRegistration.mockResolvedValue({
+      link: { id: "link-4", title: "Photo", priceAtomicUsdc: 2500 },
+      registered: {
+        ownerId: "owner-4",
+        displayName: "Jane Lens",
+        wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+        approvalStatus: "operator-approved",
+      },
+      shareUrl: "https://canonical.example/aperture/link/link-4",
+    });
+    const hostileRequest = request("198.51.100.205");
+    hostileRequest.headers.set("host", "evil.example");
+    hostileRequest.headers.set("x-forwarded-host", "also-evil.example");
+    hostileRequest.headers.set("x-forwarded-proto", "http");
+
+    await POST(hostileRequest);
+
+    expect(mocks.handleLinkRegistration).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ origin: "https://canonical.example" }),
+    );
+  });
+
+  it("does not expose Circle request details in registration errors", async () => {
+    mocks.handleLinkRegistration.mockRejectedValue(
+      new Error(
+        "Circle request /wallets/private-circle-wallet-id failed: upstream-secret-body",
+      ),
+    );
+
+    const response = await POST(request("198.51.100.207"));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({ error: "photo link registration failed" });
+    expect(JSON.stringify(body)).not.toContain("private-circle-wallet-id");
+    expect(JSON.stringify(body)).not.toContain("upstream-secret-body");
+  });
+
+  it("preserves LinkRegistryError messages and status codes", async () => {
+    mocks.handleLinkRegistration.mockRejectedValue(
+      new LinkRegistryError("photo URL already registered.", 409),
+    );
+
+    const response = await POST(request("198.51.100.208"));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "photo URL already registered.",
+    });
   });
 });
 

@@ -9,9 +9,15 @@ const ACCOUNT = {
   address: "0x7777777777777777777777777777777777777777" as Address,
 };
 
-function publicClient(startNonce: number): PublicClient {
+function publicClient(...nonces: number[]): PublicClient {
+  let index = 0;
   return {
-    getTransactionCount: vi.fn(async () => startNonce),
+    getTransactionCount: vi.fn(async () => {
+      const nonce = nonces[Math.min(index, nonces.length - 1)];
+      index += 1;
+      if (nonce === undefined) throw new Error("missing test nonce");
+      return nonce;
+    }),
   } as unknown as PublicClient;
 }
 
@@ -32,8 +38,8 @@ describe("withReservedNonce", () => {
     expect(client.getTransactionCount).toHaveBeenCalledTimes(1);
   });
 
-  it("does not reuse a nonce after a failed submission task", async () => {
-    const client = publicClient(10);
+  it("reconciles a nonce after a pre-broadcast submission failure", async () => {
+    const client = publicClient(10, 10);
     const seen: number[] = [];
 
     await expect(
@@ -42,14 +48,43 @@ describe("withReservedNonce", () => {
         throw new Error("rpc rejected");
       }),
     ).rejects.toThrow("rpc rejected");
-    const next = await withReservedNonce(client, ACCOUNT, async (nonce) => {
+    await withReservedNonce(client, ACCOUNT, async (nonce) => {
+      seen.push(nonce);
+    });
+
+    expect(seen).toEqual([10, 10]);
+    expect(client.getTransactionCount).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps queued calls on one state when reconciliation also fails", async () => {
+    const getTransactionCount = vi
+      .fn()
+      .mockResolvedValueOnce(10)
+      .mockRejectedValueOnce(new Error("nonce rpc unavailable"))
+      .mockResolvedValueOnce(10);
+    const client = { getTransactionCount } as unknown as PublicClient;
+    const seen: number[] = [];
+
+    const failed = withReservedNonce(client, ACCOUNT, async (nonce) => {
+      seen.push(nonce);
+      throw new Error("submission failed");
+    });
+    const queued = withReservedNonce(client, ACCOUNT, async (nonce) => {
       seen.push(nonce);
       return nonce;
     });
 
-    expect(next).toBe(11);
-    expect(seen).toEqual([10, 11]);
-    expect(client.getTransactionCount).toHaveBeenCalledTimes(1);
+    await expect(failed).rejects.toThrow(
+      "submission and nonce reconciliation both failed",
+    );
+    await expect(queued).resolves.toBe(10);
+    await expect(
+      withReservedNonce(client, ACCOUNT, async (nonce) => {
+        seen.push(nonce);
+        return nonce;
+      }),
+    ).resolves.toBe(11);
+    expect(seen).toEqual([10, 10, 11]);
   });
 
   it("bounds concurrent submission tasks", async () => {
@@ -57,10 +92,13 @@ describe("withReservedNonce", () => {
     const client = publicClient(100);
     let active = 0;
     let maxActive = 0;
+    const accounts = Array.from({ length: 5 }, (_, index) => ({
+      address: `0x${(index + 1).toString(16).padStart(40, "0")}` as Address,
+    }));
 
     await Promise.all(
-      Array.from({ length: 5 }, () =>
-        withReservedNonce(client, ACCOUNT, async () => {
+      accounts.map((account) =>
+        withReservedNonce(client, account, async () => {
           active += 1;
           maxActive = Math.max(maxActive, active);
           await new Promise((resolve) => setTimeout(resolve, 20));

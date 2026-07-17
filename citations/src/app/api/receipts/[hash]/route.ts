@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readLedger } from "@/lib/ledger";
+import { publicPaymentReceipt, publicQueryRecord } from "@/lib/public-data";
 
 export const runtime = "nodejs";
 
@@ -19,5 +20,8 @@ export async function GET(_request: Request, context: Context) {
   const query = ledger.queries.find(
     (candidate) => candidate.id === receipt.queryId,
   );
-  return NextResponse.json({ receipt, query: query ?? null });
+  return NextResponse.json({
+    receipt: publicPaymentReceipt(receipt),
+    query: query ? publicQueryRecord(query) : null,
+  });
 }

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -84,14 +84,28 @@ async function withRegistrationFetchDisabled<T>(
 }
 
 describe("LeptonWeb settlement engine", () => {
+  it("never persists raw provider errors in refund evidence", async () => {
+    const source = await readFile(
+      new URL("./settlement.ts", import.meta.url),
+      "utf8",
+    );
+    const refundBoundary = source.match(
+      /async function attachReaderRefund[\s\S]*?(?=async function refundFailedPaidQuery)/,
+    )?.[0];
+
+    expect(refundBoundary).toBeDefined();
+    expect(refundBoundary).not.toContain("error.message");
+    expect(refundBoundary).toContain(
+      'message: "Reader refund settlement failed."',
+    );
+  });
+
   it("gates leave-one-out contribution scoring by mode, env, and source cap", () => {
     const envNames = [
       "LEPTONWEB_CONTRIBUTION_PAYOUTS",
       "LEPTONWEB_LEAVE_ONE_OUT_CONTRIBUTION",
     ];
-    const previous = new Map(
-      envNames.map((name) => [name, process.env[name]]),
-    );
+    const previous = new Map(envNames.map((name) => [name, process.env[name]]));
 
     try {
       for (const name of envNames) delete process.env[name];
@@ -125,9 +139,7 @@ describe("LeptonWeb settlement engine", () => {
       "LEPTONWEB_LLM_MODEL",
       "LEPTONWEB_LLM_BASE_URL",
     ];
-    const previous = new Map(
-      envNames.map((name) => [name, process.env[name]]),
-    );
+    const previous = new Map(envNames.map((name) => [name, process.env[name]]));
     const before = await readLedger();
     for (const name of envNames) delete process.env[name];
     process.env.LEPTONWEB_AGENT_MODE = "judge-strict";
@@ -408,6 +420,33 @@ describe("LeptonWeb settlement engine", () => {
     }
   });
 
+  it("keeps historical creator self-claims probationary", () => {
+    const source: CreatorSource = {
+      id: "historical-self-claim",
+      title: "Historical Self Claim",
+      creator: "Claim Lab",
+      handle: "@claim",
+      wallet: "0x3333333333333333333333333333333333333333",
+      url: "https://example.com/historical-self-claim",
+      summary: "A historical source with an unverified self-attestation.",
+      tags: ["claim"],
+      priceAtomicUsdc: 1_000,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: false,
+      creatorClaimed: true,
+      probation: false,
+      ownershipProof: {
+        method: "creator-claimed",
+        verifiedAt: "2026-07-07T00:00:00.000Z",
+      },
+    };
+
+    expect(
+      sourcesForAgent([source], { queries: [], receipts: [] })[0]?.probation,
+    ).toBe(true);
+  });
+
   it("filters widget answers to one creator wallet", () => {
     const first: CreatorSource = {
       id: "creator-widget-a",
@@ -484,6 +523,35 @@ describe("LeptonWeb settlement engine", () => {
     expect(creators.length).toBeGreaterThan(0);
     expect(creators[0]?.earnedAtomicUsdc).toBeGreaterThan(0);
     expect(creators[0]?.citationCount).toBeGreaterThan(0);
+  });
+
+  it("groups historical wallet case variants into one creator row", () => {
+    const query = createQueryRecord(
+      "How should creator totals handle wallet casing?",
+      "2026-06-16T12:00:00.000Z",
+    );
+    const receipt = createReceipts(query, [])[0];
+    if (!receipt) throw new Error("missing test receipt");
+    const walletLower =
+      "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd" as `0x${string}`;
+    const walletUpper =
+      "0xABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD" as `0x${string}`;
+    const receipts = [
+      { ...receipt, wallet: walletLower },
+      {
+        ...receipt,
+        id: "case-variant",
+        wallet: walletUpper,
+        receiptHash: `0x${"f".repeat(64)}` as `0x${string}`,
+      },
+    ];
+
+    const creators = summarizeCreators({ queries: [query], receipts });
+
+    expect(creators).toHaveLength(1);
+    expect(creators[0]?.wallet).toBe(walletLower);
+    expect(creators[0]?.citationCount).toBe(2);
+    expect(creators[0]?.earnedAtomicUsdc).toBe(receipt.amountAtomicUsdc * 2);
   });
 
   it("builds shareable creator and source evidence from receipts", () => {
@@ -781,7 +849,7 @@ describe("LeptonWeb settlement engine", () => {
     }
   });
 
-  it("releases escrow for creator-claimed sources without setting verified", async () => {
+  it("does not release escrow for historical creator self-claims", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-claim-escrow-"));
     const filePath = path.join(dir, "ledger.json");
     const source: CreatorSource = {
@@ -831,19 +899,17 @@ describe("LeptonWeb settlement engine", () => {
         enabled: false,
       });
       const releasedLedger = await readLedger(filePath);
-      const releaseReceipt = releasedLedger.receipts.at(-1);
-
       expect(claimedSource.verifiedCreator).toBe(false);
-      expect(release.released).toBe(true);
-      expect(release.amountAtomicUsdc).toBe(source.priceAtomicUsdc);
-      expect(releaseReceipt?.payoutPolicy).toBe("escrow-release");
-      expect(releaseReceipt?.ownershipProof?.method).toBe("creator-claimed");
-      expect(releaseReceipt?.releasedReceiptHashes).toEqual([
-        escrowSettlement.receipts[0]?.receiptHash,
-      ]);
-      expect(release.settlement?.query.answer).toContain(
-        "self-attested creator claim",
+      expect(release.released).toBe(false);
+      expect(release.amountAtomicUsdc).toBe(0);
+      expect(releasedLedger.receipts).toHaveLength(
+        escrowSettlement.ledger.receipts.length,
       );
+      expect(
+        releasedLedger.receipts.some(
+          (receipt) => receipt.payoutPolicy === "escrow-release",
+        ),
+      ).toBe(false);
       expect(verifyLedgerIntegrity(releasedLedger).ok).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -1008,6 +1074,24 @@ describe("LeptonWeb settlement engine", () => {
     expect(source.priceAtomicUsdc).toBe(2500);
     expect(source.sourceKind).toBe("external");
     expect(source.verifiedCreator).toBe(false);
+  });
+
+  it("does not trust caller-supplied custodial metadata", () => {
+    const source = normalizeSourceInput({
+      title: "Injected Custody",
+      creator: "Source Lab",
+      handle: "sourcelab",
+      wallet: "0x7777777777777777777777777777777777777777",
+      walletId: "attacker-wallet-id",
+      custody: "circle-w3s",
+      url: "https://example.com/injected-custody",
+      summary: "A source attempting to inject server-only custody metadata.",
+      tags: ["security"],
+      priceAtomicUsdc: 2500,
+    });
+
+    expect(source.custody).toBe("self");
+    expect(source.walletId).toBeUndefined();
   });
 
   it("stores wallet-signature proof without granting source verification", async () => {

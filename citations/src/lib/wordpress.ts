@@ -2,17 +2,19 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Address } from "viem";
+import { appendSettlement, readLedger, verifyLedgerIntegrity } from "./ledger";
 import {
-  appendSettlement,
-  readLedger,
-  verifyLedgerIntegrity,
-} from "./ledger";
-import { routeCitationPayments, type FeeRouterRouteOptions } from "./fee-router";
+  routeCitationPayments,
+  type FeeRouterRouteOptions,
+} from "./fee-router";
 import { sha256Hex } from "./hash";
+import { tollgateAgentWallet } from "./payments";
+import { projectPublicData } from "./public-data";
 import type {
   Citation,
   Ledger,
   PaymentReceipt,
+  QueryPaymentEvidence,
   QueryRecord,
 } from "./types";
 
@@ -26,11 +28,13 @@ const MAX_POST_ID_LENGTH = 120;
 const MAX_TITLE_LENGTH = 180;
 const MAX_FINGERPRINT_LENGTH = 240;
 let wordpressRegistryLock: Promise<void> = Promise.resolve();
+const wordpressSettlementLocks = new Map<string, Promise<void>>();
 
 export type WordPressSite = {
   id: string;
   siteUrl: string;
   creatorWallet: Address;
+  priceAtomicUsdc: number;
   apiKeyHash: `0x${string}`;
   registeredAt: string;
 };
@@ -59,6 +63,7 @@ export type WordPressSettlementDeps = {
   routeCitationPayments?: typeof routeCitationPayments;
   ledgerPath?: string;
   feeRouterOptions?: FeeRouterRouteOptions;
+  readerPayment?: Omit<QueryPaymentEvidence, "paymentHash">;
   now?: () => Date;
 };
 
@@ -82,6 +87,7 @@ function isSiteRecord(value: unknown): value is WordPressSite {
     typeof record.id === "string" &&
     typeof record.siteUrl === "string" &&
     isAddress(record.creatorWallet) &&
+    isPriceAtomicUsdc(record.priceAtomicUsdc) &&
     typeof record.apiKeyHash === "string" &&
     /^0x[a-fA-F0-9]{64}$/.test(record.apiKeyHash) &&
     typeof record.registeredAt === "string"
@@ -152,7 +158,9 @@ function siteId(siteUrl: string): string {
 
 function normalizeApiKeySeed(value: unknown): string {
   if (typeof value !== "string" || value.trim().length < 8) {
-    throw new WordPressRegistryError("apiKeySeed must be at least 8 characters.");
+    throw new WordPressRegistryError(
+      "apiKeySeed must be at least 8 characters.",
+    );
   }
   return value.trim();
 }
@@ -171,6 +179,15 @@ function timingSafeHashEquals(left: string, right: string): boolean {
     leftBuffer.byteLength === rightBuffer.byteLength &&
     timingSafeEqual(leftBuffer, rightBuffer)
   );
+}
+
+export function authorizeWordPressRegistration(
+  registrationSecret: string | null,
+): boolean {
+  const expected = process.env.TOLLGATE_WORDPRESS_REGISTRATION_SECRET?.trim();
+  const supplied = registrationSecret?.trim();
+  if (!expected || !supplied) return false;
+  return timingSafeHashEquals(siteKeyHash(supplied), siteKeyHash(expected));
 }
 
 export function generateWordPressSiteKey(
@@ -198,7 +215,9 @@ export async function registerWordPressSite(
   const siteUrl = normalizeSiteUrl(body.siteUrl);
   const creatorWallet = body.creatorWallet;
   if (!isAddress(creatorWallet)) {
-    throw new WordPressRegistryError("creatorWallet must be a valid 0x address.");
+    throw new WordPressRegistryError(
+      "creatorWallet must be a valid 0x address.",
+    );
   }
   const id = siteId(siteUrl);
   const apiKey = generateWordPressSiteKey(
@@ -209,22 +228,25 @@ export async function registerWordPressSite(
     id,
     siteUrl,
     creatorWallet,
+    priceAtomicUsdc: priceAtomicUsdc(body.priceAtomicUsdc),
     apiKeyHash: siteKeyHash(apiKey),
     registeredAt: now.toISOString(),
   };
   await withWordPressRegistryLock(async () => {
     const registry = await readWordPressSites(filePath);
-    await writeWordPressSites(
-      {
-        sites: [record, ...registry.sites.filter((site) => site.id !== id)],
-      },
-      filePath,
-    );
+    if (registry.sites.some((site) => site.id === id)) {
+      throw new WordPressRegistryError(
+        "WordPress site is already registered.",
+        409,
+      );
+    }
+    await writeWordPressSites({ sites: [record, ...registry.sites] }, filePath);
   });
   const publicSite = {
     id: record.id,
     siteUrl: record.siteUrl,
     creatorWallet: record.creatorWallet,
+    priceAtomicUsdc: record.priceAtomicUsdc,
     registeredAt: record.registeredAt,
   };
   return { site: publicSite, apiKey };
@@ -259,14 +281,18 @@ function postId(value: unknown): string {
   return trimmed;
 }
 
+function isPriceAtomicUsdc(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value > 0 &&
+    value <= 1_000_000_000
+  );
+}
+
 function priceAtomicUsdc(value: unknown): number {
   const price = typeof value === "string" ? Number(value) : value;
-  if (
-    typeof price !== "number" ||
-    !Number.isInteger(price) ||
-    price <= 0 ||
-    price > 1_000_000_000
-  ) {
+  if (!isPriceAtomicUsdc(price)) {
     throw new WordPressRegistryError(
       "priceAtomicUsdc must be a positive integer.",
     );
@@ -281,18 +307,7 @@ function optionalText(value: unknown, maxLength: number): string | undefined {
   return trimmed ? trimmed.slice(0, maxLength) : undefined;
 }
 
-function postUrl(site: WordPressSite, postIdValue: string, value: unknown): string {
-  if (typeof value === "string" && value.trim()) {
-    try {
-      const parsed = new URL(value.trim());
-      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-        parsed.hash = "";
-        return parsed.toString();
-      }
-    } catch {
-      // Fall through to the canonical WordPress query URL.
-    }
-  }
+function postUrl(site: WordPressSite, postIdValue: string): string {
   const fallback = new URL(site.siteUrl);
   fallback.searchParams.set("p", postIdValue);
   return fallback.toString();
@@ -316,10 +331,10 @@ export function normalizeWordPressAccessInput(
   const fingerprint = requesterFingerprint(record.requesterFingerprint);
   return {
     postId: normalizedPostId,
-    priceAtomicUsdc: priceAtomicUsdc(record.priceAtomicUsdc),
+    priceAtomicUsdc: site.priceAtomicUsdc,
     requesterFingerprint: fingerprint,
     title: optionalText(record.title, MAX_TITLE_LENGTH),
-    postUrl: postUrl(site, normalizedPostId, record.postUrl),
+    postUrl: postUrl(site, normalizedPostId),
     eventId: `wordpress:${site.id}:${normalizedPostId}:${fingerprint}`,
     sourceId: `wordpress:${site.id}:${normalizedPostId}`,
   };
@@ -391,6 +406,62 @@ function receiptForEvent(
   return ledger.receipts.find((receipt) => receipt.queryId === eventId) ?? null;
 }
 
+function readerPaymentEvidence(
+  site: WordPressSite,
+  postIdValue: string,
+  payment: WordPressSettlementDeps["readerPayment"],
+): QueryPaymentEvidence {
+  const paymentResource = `/api/wordpress/posts/${encodeURIComponent(postIdValue)}/pay`;
+  if (
+    !payment ||
+    payment.settlementMode !== "x402-settled" ||
+    payment.amountAtomicUsdc !== site.priceAtomicUsdc ||
+    !isAddress(payment.payTo) ||
+    payment.payTo.toLowerCase() !== tollgateAgentWallet().toLowerCase() ||
+    !isAddress(payment.payer) ||
+    typeof payment.transaction !== "string" ||
+    !/^0x[a-fA-F0-9]{64}$/.test(payment.transaction) ||
+    payment.paymentResource !== paymentResource
+  ) {
+    throw new WordPressRegistryError(
+      "reader payment authorization required",
+      402,
+    );
+  }
+  const payload = {
+    amountAtomicUsdc: payment.amountAtomicUsdc,
+    settlementMode: payment.settlementMode,
+    payTo: payment.payTo,
+    payer: payment.payer,
+    transaction: payment.transaction,
+    paymentResource,
+  };
+  return {
+    ...payload,
+    actorClass: payment.actorClass,
+    paymentHash: sha256Hex(payload),
+  };
+}
+
+function withWordPressEventLock<T>(
+  eventId: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const previous = wordpressSettlementLocks.get(eventId) ?? Promise.resolve();
+  const run = previous.then(task, task);
+  const settled = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  wordpressSettlementLocks.set(eventId, settled);
+  void settled.then(() => {
+    if (wordpressSettlementLocks.get(eventId) === settled) {
+      wordpressSettlementLocks.delete(eventId);
+    }
+  });
+  return run;
+}
+
 export async function wordpressPostStatus(
   site: WordPressSite,
   postIdValue: string,
@@ -416,47 +487,59 @@ export async function settleWordPressPost(
   receipt: PaymentReceipt;
 }> {
   const input = normalizeWordPressAccessInput(site, postIdValue, body);
-  const read = deps.readLedger ?? readLedger;
-  const ledger = await read(deps.ledgerPath);
-  const existingReceipt = receiptForEvent(ledger, input.eventId);
-  const existingQuery = ledger.queries.find((query) => query.id === input.eventId);
-  if (existingReceipt && existingQuery) {
+  return withWordPressEventLock(input.eventId, async () => {
+    const read = deps.readLedger ?? readLedger;
+    const ledger = await read(deps.ledgerPath);
+    const existingReceipt = receiptForEvent(ledger, input.eventId);
+    const existingQuery = ledger.queries.find(
+      (query) => query.id === input.eventId,
+    );
+    if (existingReceipt && existingQuery) {
+      return {
+        paid: true,
+        created: false,
+        eventId: input.eventId,
+        query: existingQuery,
+        receipt: existingReceipt,
+      };
+    }
+
+    const query = {
+      ...buildWordPressAccessRecord(
+        site,
+        input,
+        (deps.now?.() ?? new Date()).toISOString(),
+      ),
+      readerPayment: readerPaymentEvidence(
+        site,
+        input.postId,
+        deps.readerPayment,
+      ),
+    };
+    const feeRouterOptions = {
+      ...(deps.feeRouterOptions ?? {}),
+      tenantId: site.id,
+    };
+    const evidenceBySourceId = await (
+      deps.routeCitationPayments ?? routeCitationPayments
+    )(query, feeRouterOptions);
+    const settlement = await (deps.appendSettlement ?? appendSettlement)(
+      query,
+      evidenceBySourceId,
+      deps.ledgerPath,
+    );
+    const receipt = settlement.receipts[0];
+    if (!receipt) {
+      throw new Error("WordPress settlement did not create a receipt.");
+    }
     return {
       paid: true,
-      created: false,
+      created: true,
       eventId: input.eventId,
-      query: existingQuery,
-      receipt: existingReceipt,
+      query: settlement.query,
+      receipt,
     };
-  }
-
-  const query = buildWordPressAccessRecord(
-    site,
-    input,
-    (deps.now?.() ?? new Date()).toISOString(),
-  );
-  const feeRouterOptions = {
-    ...(deps.feeRouterOptions ?? {}),
-    tenantId: site.id,
-  };
-  const evidenceBySourceId = await (deps.routeCitationPayments ??
-    routeCitationPayments)(query, feeRouterOptions);
-  const settlement = await (deps.appendSettlement ?? appendSettlement)(
-    query,
-    evidenceBySourceId,
-    deps.ledgerPath,
-  );
-  const receipt = settlement.receipts[0];
-  if (!receipt) {
-    throw new Error("WordPress settlement did not create a receipt.");
-  }
-  return {
-    paid: true,
-    created: true,
-    eventId: input.eventId,
-    query: settlement.query,
-    receipt,
-  };
+  });
 }
 
 export async function buildWordPressProof(
@@ -471,7 +554,7 @@ export async function buildWordPressProof(
   const receipts = ledger.receipts.filter((receipt) =>
     queryIds.has(receipt.queryId),
   );
-  return {
+  return projectPublicData({
     project: "tollgate-wordpress",
     generatedAt: new Date().toISOString(),
     ledger: {
@@ -482,5 +565,5 @@ export async function buildWordPressProof(
     },
     receipts,
     queries,
-  };
+  });
 }

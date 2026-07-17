@@ -27,14 +27,16 @@ function normalizedContentType(contentType: string | null): string | null {
   return mediaType && ALLOWED_IMAGE_TYPES.has(mediaType) ? mediaType : null;
 }
 
-function assertImageResponse(response: Response): string {
+async function assertImageResponse(response: Response): Promise<string> {
   if (!response.ok) {
+    await response.body?.cancel();
     throw new Error("photo URL did not return a successful image response.");
   }
   const contentType = normalizedContentType(
     response.headers.get("content-type"),
   );
   if (!contentType) {
+    await response.body?.cancel();
     throw new Error(
       "photo URL must return jpeg, png, webp, gif, avif, or tiff.",
     );
@@ -43,6 +45,7 @@ function assertImageResponse(response: Response): string {
   if (contentLength) {
     const bytes = Number.parseInt(contentLength, 10);
     if (Number.isFinite(bytes) && bytes > LINK_DOWNLOAD_MAX_BYTES) {
+      await response.body?.cancel();
       throw new Error("photo is larger than the 25 MB download cap.");
     }
   }
@@ -123,7 +126,7 @@ export async function probeImageSource(
     { headers: { range: `bytes=0-${LINK_PROBE_MAX_BYTES - 1}` } },
     options,
   );
-  const contentType = assertImageResponse(response);
+  const contentType = await assertImageResponse(response);
   const bytes = await readCappedResponseBytes(
     response,
     LINK_PROBE_MAX_BYTES,
@@ -141,7 +144,7 @@ export async function fetchImageBytes(
 ): Promise<LinkImageBytes> {
   const url = new URL(sourceUrl);
   const response = await safeFetch(url, {}, options);
-  const contentType = assertImageResponse(response);
+  const contentType = await assertImageResponse(response);
   const bytes = await readCappedResponseBytes(
     response,
     LINK_DOWNLOAD_MAX_BYTES,

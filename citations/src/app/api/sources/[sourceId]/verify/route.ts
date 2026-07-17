@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   SourceRegistryError,
-  claimSourceAsCreator,
   findSource,
+  publicSource,
   verifySourceOwnership,
 } from "@/lib/catalog";
 import { releaseEscrowForSource } from "@/lib/escrow";
@@ -56,15 +56,20 @@ export async function PATCH(request: NextRequest, context: Context) {
     if (!source) {
       return NextResponse.json({ error: "source not found" }, { status: 404 });
     }
+    if (method === "creator-claimed") {
+      throw new SourceRegistryError(
+        "Creator claims require meta-tag or DNS domain ownership proof.",
+        403,
+      );
+    }
     const result =
       method === "meta-tag" || method === "dns-txt"
         ? await verifySourceByWebProof(source, method)
-        : method === "creator-claimed"
-          ? await claimSourceAsCreator(sourceId, body)
-          : await verifySourceOwnership(sourceId, body);
+        : await verifySourceOwnership(sourceId, body);
     const escrowRelease = await releaseEscrowForSource(result.source);
     return NextResponse.json({
-      ...result,
+      source: publicSource(result.source),
+      sources: result.sources.map(publicSource),
       escrowRelease,
     });
   } catch (error) {
@@ -75,10 +80,7 @@ export async function PATCH(request: NextRequest, context: Context) {
       );
     }
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Source verification failed.",
-      },
+      { error: "Source verification failed." },
       { status: 400 },
     );
   }

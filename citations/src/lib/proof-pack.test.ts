@@ -1,5 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildProofPack } from "./proof-pack";
+
+const mocks = vi.hoisted(() => ({
+  execFile: vi.fn(),
+}));
+
+vi.mock("node:child_process", () => ({
+  execFile: mocks.execFile,
+}));
 
 describe("judge proof pack", () => {
   const previousPayGate = process.env.LEPTONWEB_PAYGATE_ADDRESS;
@@ -9,6 +17,36 @@ describe("judge proof pack", () => {
       delete process.env.LEPTONWEB_PAYGATE_ADDRESS;
     } else {
       process.env.LEPTONWEB_PAYGATE_ADDRESS = previousPayGate;
+    }
+  });
+
+  it("caches the fallback Git commit lookup once per process", async () => {
+    const previous = process.env.LEPTONWEB_DEPLOY_COMMIT;
+    delete process.env.LEPTONWEB_DEPLOY_COMMIT;
+    mocks.execFile.mockImplementation(
+      (
+        _file: string,
+        _args: string[],
+        _options: object,
+        callback: (
+          error: Error | null,
+          result: { stdout: string; stderr: string },
+        ) => void,
+      ) => {
+        callback(null, { stdout: "fallback-commit\n", stderr: "" });
+      },
+    );
+
+    try {
+      const first = await buildProofPack();
+      const second = await buildProofPack();
+
+      expect(first.deployedCommit).toBe("fallback-commit");
+      expect(second.deployedCommit).toBe("fallback-commit");
+      expect(mocks.execFile).toHaveBeenCalledTimes(1);
+    } finally {
+      if (previous === undefined) delete process.env.LEPTONWEB_DEPLOY_COMMIT;
+      else process.env.LEPTONWEB_DEPLOY_COMMIT = previous;
     }
   });
 

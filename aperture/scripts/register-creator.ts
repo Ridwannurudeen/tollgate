@@ -33,7 +33,7 @@ async function main() {
   if (!walletSetId) {
     walletSetId = await w3sCreateWalletSet("Aperture Creators");
     console.log(
-      `Created wallet set ${walletSetId} — save it as CIRCLE_WALLET_SET_ID to reuse.`,
+      "Created a wallet set. Save its ID from Circle Console as CIRCLE_WALLET_SET_ID to reuse it.",
     );
   }
 
@@ -42,7 +42,14 @@ async function main() {
   console.log(
     JSON.stringify(
       {
-        registered: entry,
+        registered: {
+          ownerId: entry.ownerId,
+          displayName: entry.displayName,
+          wallet: entry.wallet,
+          createdAt: entry.createdAt,
+          approvalStatus: entry.approvalStatus,
+          custody: entry.custody,
+        },
         note: "Custodial wallet minted by Circle W3S; the creator brought no wallet.",
       },
       null,

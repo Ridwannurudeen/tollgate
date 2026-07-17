@@ -12,6 +12,8 @@ const SESSION_LOGIN_WINDOW_MS = 60 * 1000;
 const SESSION_LOGIN_LIMIT = 10;
 const LOGIN_LINK_WINDOW_MS = 60 * 1000;
 const LOGIN_LINK_LIMIT = 5;
+const LICENSE_DOWNLOAD_WINDOW_MS = 60 * 1000;
+const LICENSE_DOWNLOAD_LIMIT = 20;
 const WITHDRAW_WINDOW_MS = 60 * 60 * 1000;
 const WITHDRAW_LIMIT = 5;
 const MESSAGE_WINDOW_MS = 60 * 1000;
@@ -20,6 +22,7 @@ const linkRegistrationBuckets = new Map<string, RateLimitBucket>();
 const demoUnlockIpBuckets = new Map<string, RateLimitBucket>();
 const sessionLoginBuckets = new Map<string, RateLimitBucket>();
 const loginLinkBuckets = new Map<string, RateLimitBucket>();
+const licenseDownloadBuckets = new Map<string, RateLimitBucket>();
 const withdrawBuckets = new Map<string, RateLimitBucket>();
 const messageBuckets = new Map<string, RateLimitBucket>();
 let demoUnlockGlobalBucket: RateLimitBucket | null = null;
@@ -45,20 +48,6 @@ function activeBucket(
   return bucket;
 }
 
-function recordBucket(
-  buckets: Map<string, RateLimitBucket>,
-  key: string,
-  now: number,
-  windowMs: number,
-): void {
-  const current = activeBucket(buckets.get(key), now, windowMs);
-  if (!current) {
-    buckets.set(key, { windowStart: now, count: 1 });
-    return;
-  }
-  current.count += 1;
-}
-
 export function assertLinkRegistrationRateLimit(
   key: string,
   now = Date.now(),
@@ -79,15 +68,15 @@ export function assertLinkRegistrationRateLimit(
 export function assertDemoUnlockWithinLimits(
   key: string,
   now = Date.now(),
-): void {
+): () => void {
   const bucketKey = key || "anonymous";
   pruneBuckets(demoUnlockIpBuckets, now, DEMO_UNLOCK_WINDOW_MS);
-  const ipBucket = activeBucket(
+  const currentIpBucket = activeBucket(
     demoUnlockIpBuckets.get(bucketKey),
     now,
     DEMO_UNLOCK_WINDOW_MS,
   );
-  if (ipBucket && ipBucket.count >= DEMO_UNLOCK_IP_LIMIT) {
+  if (currentIpBucket && currentIpBucket.count >= DEMO_UNLOCK_IP_LIMIT) {
     throw new Error(
       "Free unlock limit reached (2/day). Use your own wallet to unlock more photos.",
     );
@@ -107,21 +96,39 @@ export function assertDemoUnlockWithinLimits(
       "The free-unlock daily budget is used up. Use your own wallet or try again tomorrow.",
     );
   }
-}
 
-export function recordDemoUnlock(key: string, now = Date.now()): void {
-  const bucketKey = key || "anonymous";
-  pruneBuckets(demoUnlockIpBuckets, now, DEMO_UNLOCK_WINDOW_MS);
-  recordBucket(demoUnlockIpBuckets, bucketKey, now, DEMO_UNLOCK_WINDOW_MS);
-
-  if (
-    !demoUnlockGlobalBucket ||
-    now - demoUnlockGlobalBucket.windowStart >= DEMO_UNLOCK_WINDOW_MS
-  ) {
-    demoUnlockGlobalBucket = { windowStart: now, count: 1 };
-    return;
+  const ipBucket = currentIpBucket ?? { windowStart: now, count: 0 };
+  if (!currentIpBucket) {
+    demoUnlockIpBuckets.set(bucketKey, ipBucket);
   }
-  demoUnlockGlobalBucket.count += 1;
+
+  const globalBucket = demoUnlockGlobalBucket ?? {
+    windowStart: now,
+    count: 0,
+  };
+  if (!demoUnlockGlobalBucket) {
+    demoUnlockGlobalBucket = globalBucket;
+  }
+
+  ipBucket.count += 1;
+  globalBucket.count += 1;
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    ipBucket.count -= 1;
+    globalBucket.count -= 1;
+    if (
+      ipBucket.count === 0 &&
+      demoUnlockIpBuckets.get(bucketKey) === ipBucket
+    ) {
+      demoUnlockIpBuckets.delete(bucketKey);
+    }
+    if (globalBucket.count === 0 && demoUnlockGlobalBucket === globalBucket) {
+      demoUnlockGlobalBucket = null;
+    }
+  };
 }
 
 export function assertSessionLoginRateLimit(
@@ -151,6 +158,23 @@ export function assertLoginLinkRateLimit(key: string, now = Date.now()): void {
   }
   if (current.count >= LOGIN_LINK_LIMIT) {
     throw new Error("Too many login-link requests. Wait a minute and retry.");
+  }
+  current.count += 1;
+}
+
+export function assertLicenseDownloadRateLimit(
+  key: string,
+  now = Date.now(),
+): void {
+  const bucketKey = key || "anonymous";
+  pruneBuckets(licenseDownloadBuckets, now, LICENSE_DOWNLOAD_WINDOW_MS);
+  const current = licenseDownloadBuckets.get(bucketKey);
+  if (!current || now - current.windowStart >= LICENSE_DOWNLOAD_WINDOW_MS) {
+    licenseDownloadBuckets.set(bucketKey, { windowStart: now, count: 1 });
+    return;
+  }
+  if (current.count >= LICENSE_DOWNLOAD_LIMIT) {
+    throw new Error("Too many license-download requests. Wait a minute.");
   }
   current.count += 1;
 }

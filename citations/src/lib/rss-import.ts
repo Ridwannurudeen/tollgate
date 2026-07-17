@@ -1,8 +1,13 @@
-import { safeFetch, type SafeFetchOptions } from "./safe-fetch";
+import {
+  readCappedResponseText,
+  safeFetch,
+  type SafeFetchOptions,
+} from "./safe-fetch";
 import { parseCreatorFeed } from "./sources/rsshub";
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
 const MAX_IMPORT_POSTS = 20;
+export const RSS_IMPORT_MAX_RESPONSE_BYTES = 512 * 1024;
 
 export type RssImportPost = {
   title: string;
@@ -51,9 +56,15 @@ async function fetchText(
     },
     fetchOptions,
   );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error(`HTTP ${response.status}`);
+  }
   return {
-    text: await response.text(),
+    text: await readCappedResponseText(
+      response,
+      RSS_IMPORT_MAX_RESPONSE_BYTES,
+    ),
     contentType: response.headers.get("content-type") ?? "",
   };
 }

@@ -17,8 +17,10 @@ services:
       JELLYFIN_LEDGER_PATH: /app/data/ledger.json
       JELLYFIN_SESSIONS_PATH: /app/data/sessions.json
       JELLYFIN_PUBLIC_WEBHOOK_URL: http://127.0.0.1:4317/webhooks/jellyfin
+      JELLYFIN_REGISTRATION_SECRET: local-demo-registration-capability
       JELLYFIN_USDC_ATOMIC_PER_MINUTE: "2500"
       JELLYFIN_FEE_ROUTER_MODE: dry-run
+      JELLYFIN_FEE_ROUTER_PRIVATE_KEY: ""
     ports:
       - "4317:4317"
     volumes:

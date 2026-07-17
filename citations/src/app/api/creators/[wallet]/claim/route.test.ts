@@ -28,14 +28,21 @@ vi.mock("@/lib/fee-router-contract", () => ({
 
 vi.mock("@/lib/rate-limit", () => ({
   assertClaimRateLimit: mocks.assertClaimRateLimit,
+  requestIp: (headers: Headers) =>
+    headers.get("x-real-ip") ??
+    headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() ??
+    "local",
 }));
 
 const wallet = "0x7777777777777777777777777777777777777777";
 
-function request(): NextRequest {
+function request(token?: string): NextRequest {
   return new NextRequest(`http://tollgate.test/api/creators/${wallet}/claim`, {
     method: "POST",
-    headers: { "x-forwarded-for": "198.51.100.20" },
+    headers: {
+      "x-forwarded-for": "198.51.100.20",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
   });
 }
 
@@ -68,8 +75,10 @@ function source(overrides: Record<string, unknown> = {}) {
 function setCircleEnv(): () => void {
   const previousKey = process.env.CIRCLE_API_KEY;
   const previousSecret = process.env.CIRCLE_ENTITY_SECRET;
+  const previousClaimToken = process.env.TOLLGATE_CUSTODIAL_CLAIM_TOKEN;
   process.env.CIRCLE_API_KEY = "test-key";
   process.env.CIRCLE_ENTITY_SECRET = "test-secret";
+  process.env.TOLLGATE_CUSTODIAL_CLAIM_TOKEN = "claim-token";
   return () => {
     if (previousKey === undefined) {
       delete process.env.CIRCLE_API_KEY;
@@ -80,6 +89,11 @@ function setCircleEnv(): () => void {
       delete process.env.CIRCLE_ENTITY_SECRET;
     } else {
       process.env.CIRCLE_ENTITY_SECRET = previousSecret;
+    }
+    if (previousClaimToken === undefined) {
+      delete process.env.TOLLGATE_CUSTODIAL_CLAIM_TOKEN;
+    } else {
+      process.env.TOLLGATE_CUSTODIAL_CLAIM_TOKEN = previousClaimToken;
     }
   };
 }
@@ -92,14 +106,14 @@ describe("POST /api/creators/[wallet]/claim", () => {
     mocks.w3sExecuteContract.mockReset();
   });
 
-  it("allows creator-claimed custodial wallets to claim released funds", async () => {
+  it("rejects a bare custodial claim before reading settlement state", async () => {
     const restoreEnv = setCircleEnv();
     mocks.readSources.mockResolvedValue([
       source({
-        creatorClaimed: true,
+        verifiedCreator: true,
         probation: false,
         ownershipProof: {
-          method: "creator-claimed",
+          method: "meta-tag",
           verifiedAt: "2026-07-07T00:00:00.000Z",
         },
       }),
@@ -111,12 +125,37 @@ describe("POST /api/creators/[wallet]/claim", () => {
       const response = await POST(request(), context());
       const body = await response.json();
 
+      expect(response.status).toBe(401);
+      expect(body.error).toBe("unauthorized");
+      expect(mocks.readSources).not.toHaveBeenCalled();
+      expect(mocks.readFeeRouterClaimable).not.toHaveBeenCalled();
+      expect(mocks.w3sExecuteContract).not.toHaveBeenCalled();
+    } finally {
+      restoreEnv();
+    }
+  });
+
+  it("allows an authorized domain-verified custodial wallet to claim", async () => {
+    const restoreEnv = setCircleEnv();
+    mocks.readSources.mockResolvedValue([
+      source({
+        verifiedCreator: true,
+        probation: false,
+        ownershipProof: {
+          method: "meta-tag",
+          verifiedAt: "2026-07-07T00:00:00.000Z",
+        },
+      }),
+    ]);
+    mocks.readFeeRouterClaimable.mockResolvedValue(2500n);
+    mocks.w3sExecuteContract.mockResolvedValue("0xclaim");
+
+    try {
+      const response = await POST(request("claim-token"), context());
+      const body = await response.json();
+
       expect(response.status).toBe(200);
-      expect(body).toEqual({
-        claimed: true,
-        claimableAtomicUsdc: "2500",
-        transaction: "0xclaim",
-      });
+      expect(body.claimed).toBe(true);
       expect(mocks.w3sExecuteContract).toHaveBeenCalledWith(
         expect.objectContaining({
           walletId: "wallet-id",
@@ -129,28 +168,23 @@ describe("POST /api/creators/[wallet]/claim", () => {
     }
   });
 
-  it("keeps wallet-signature-only custodial wallets blocked", async () => {
+  it("keeps creator self-claims blocked even with the operator capability", async () => {
     const restoreEnv = setCircleEnv();
     mocks.readSources.mockResolvedValue([
       source({
-        probation: true,
+        creatorClaimed: true,
+        probation: false,
         ownershipProof: {
-          method: "wallet-signature",
-          signer: wallet,
-          signatureHash: `0x${"ab".repeat(32)}`,
+          method: "creator-claimed",
           verifiedAt: "2026-07-07T00:00:00.000Z",
         },
       }),
     ]);
 
     try {
-      const response = await POST(request(), context());
-      const body = await response.json();
+      const response = await POST(request("claim-token"), context());
 
       expect(response.status).toBe(403);
-      expect(body.error).toBe(
-        "verify or claim source ownership before claiming",
-      );
       expect(mocks.readFeeRouterClaimable).not.toHaveBeenCalled();
       expect(mocks.w3sExecuteContract).not.toHaveBeenCalled();
     } finally {

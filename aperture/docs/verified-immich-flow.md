@@ -28,21 +28,33 @@ Download button:
 - Request body: `{"assetIds":["<assetId>"],"edited":true}`.
 - Browser downloaded `immich-shared-20260624_064438.zip`.
 
-## Watcher Trigger
+## Authorization and Observation
 
-Aperture uses only the nginx access-log-visible trigger:
+Aperture's payment gate resolves the complete current shared link, settles the
+required amount directly to its approved payout wallet, journals the payment,
+attempts the receipts, and returns a short-lived one-use authorization. The
+supported client submits that authorization to Aperture's server-controlled
+archive proxy:
 
 ```text
-POST /api/download/archive?key=<shareKey>
+POST /aperture/api/license-archive?key=<shareKey>&tollgateAuthorization=<token>
 ```
 
-The POST body is not present in normal nginx access logs, so the watcher resolves the `shareKey` through:
+The authorization binds the shared-link identity, complete asset set, and POST
+method. The proxy re-resolves that scope, atomically reserves the token, and
+sends the canonical archive body to the trusted Immich origin itself. The two
+nginx templates also keep direct Immich shared-link archive requests gated and
+strip client-supplied share credentials before proxying.
+
+The watcher resolves the `shareKey` through:
 
 ```text
 GET /api/shared-links/me?key=<shareKey>
 ```
 
-That response includes the assets and each asset `ownerId`.
+That response includes the assets and each asset `ownerId`. The watcher only
+correlates a successful access-log event with the existing gate receipts; it
+does not settle funds or write receipts.
 
 ## Deployment Boundary
 

@@ -24,9 +24,10 @@ export default async function JellyfinRegisterPage() {
           </div>
           <div className="route-hero-copy">
             <p className="hero-text">
-              Register a media item, copy one API key, and point Jellyfin's
-              Webhook plugin at Tollgate's hosted sidecar. PlaybackStart and
-              PlaybackStop events become watched-minute receipts.
+              Ask the Tollgate operator to register a media item, then point
+              Jellyfin&apos;s Webhook plugin at the hosted sidecar with the
+              one-time key they issue. PlaybackStart and PlaybackStop events
+              become watched-minute receipts.
             </p>
             <div className="metrics-band profile-metrics">
               <div className="metric">
@@ -65,9 +66,13 @@ export default async function JellyfinRegisterPage() {
                 <li>Enable Send All Properties.</li>
                 <li>
                   Add header <code>X-Tollgate-Key</code> with the one-time key
-                  returned by this page.
+                  issued by the Tollgate operator.
                 </li>
               </ol>
+              <p className="status-line source-status">
+                Registration uses a server-held registration capability; it is
+                never sent to this browser.
+              </p>
             </div>
             <div className="receipt-context profile-section snippet-grid">
               <div className="panel-heading">

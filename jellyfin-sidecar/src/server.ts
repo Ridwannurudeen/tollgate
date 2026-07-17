@@ -2,9 +2,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { pathToFileURL } from "node:url";
 import { loadConfig, type SidecarConfig } from "./config.js";
 import { createFeeRouterAdapter } from "./fee-router.js";
-import { normalizeJellyfinEvent, processJellyfinWebhook } from "./jellyfin.js";
+import {
+  normalizeJellyfinEvent,
+  processJellyfinWebhook,
+  verifyJellyfinPlaybackStart,
+} from "./jellyfin.js";
 import {
   authenticateJellyfinOperator,
+  authorizeJellyfinRegistration,
   JellyfinOperatorRegistrationError,
   registerJellyfinOperator,
 } from "./operators.js";
@@ -91,7 +96,23 @@ function apiKeyFromRequest(request: IncomingMessage): string | null {
 }
 
 export function createSidecarServer(config: SidecarConfig = loadConfig()) {
+  if (
+    config.feeRouterMode === "live" &&
+    (!config.jellyfinServerUrl || !config.jellyfinApiKey)
+  ) {
+    throw new Error(
+      "Live Jellyfin settlement requires server verification credentials.",
+    );
+  }
   const feeRouter = createFeeRouterAdapter(config);
+  const verifyPlaybackStart =
+    config.feeRouterMode === "live"
+      ? (event: NonNullable<ReturnType<typeof normalizeJellyfinEvent>>) =>
+          verifyJellyfinPlaybackStart(event, {
+            serverUrl: config.jellyfinServerUrl as string,
+            apiKey: config.jellyfinApiKey as string,
+          })
+      : undefined;
 
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
@@ -108,6 +129,17 @@ export function createSidecarServer(config: SidecarConfig = loadConfig()) {
       }
 
       if (request.method === "POST" && url.pathname === "/operators/register") {
+        if (
+          !authorizeJellyfinRegistration(
+            headerValue(request.headers["x-tollgate-registration-secret"]),
+            config.registrationSecret,
+          )
+        ) {
+          sendJson(response, 401, {
+            error: "invalid registration capability",
+          });
+          return;
+        }
         assertRegistrationRateLimit(requestIp(request));
         const result = await registerJellyfinOperator(
           JSON.parse(await readBody(request)) as unknown,
@@ -148,6 +180,10 @@ export function createSidecarServer(config: SidecarConfig = loadConfig()) {
           sessionsPath: config.sessionsPath,
           defaultAtomicUsdcPerMinute: config.defaultAtomicUsdcPerMinute,
           feeRouter,
+          liveSettlement: config.feeRouterMode === "live",
+          verifyPlaybackStart,
+          maxAtomicUsdcPerEvent: config.maxAtomicUsdcPerEvent,
+          maxDailyAtomicUsdc: config.maxDailyAtomicUsdc,
         });
         const status =
           result.kind === "ignored" || result.kind === "unresolved" ? 202 : 200;

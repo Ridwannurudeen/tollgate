@@ -606,8 +606,7 @@ function shouldEscrowCitation(citation: Citation): boolean {
   return (
     escrowUnverifiedEnabled() &&
     citation.sourceKind === "external" &&
-    citation.verifiedCreator !== true &&
-    citation.creatorClaimed !== true
+    citation.verifiedCreator !== true
   );
 }
 
@@ -848,7 +847,11 @@ export async function routeEscrowReleasePayment(
         nonce,
       }),
     );
-    await publicClient.waitForTransactionReceipt({ hash: approveTx });
+    await waitForSuccessfulTransaction(
+      publicClient,
+      approveTx,
+      "FeeRouter escrow approval transaction",
+    );
   }
 
   const recipients = source.contributors?.map(
@@ -878,7 +881,11 @@ export async function routeEscrowReleasePayment(
       nonce,
     }),
   );
-  await publicClient.waitForTransactionReceipt({ hash: payTx });
+  await waitForSuccessfulTransaction(
+    publicClient,
+    payTx,
+    "FeeRouter escrow pay transaction",
+  );
 
   return {
     settlementMode: "forum-routed",
@@ -927,6 +934,10 @@ export async function refundReaderPayment(
       nonce,
     }),
   );
-  await publicClient.waitForTransactionReceipt({ hash: refundTx });
+  await waitForSuccessfulTransaction(
+    publicClient,
+    refundTx,
+    "FeeRouter refund transaction",
+  );
   return refundTx;
 }

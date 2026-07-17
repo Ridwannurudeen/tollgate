@@ -2,10 +2,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APERTURE_LICENSE_FEE_ATOMIC_USDC } from "./config";
-import {
-  NEAR_DUPLICATE_THRESHOLD,
-  hammingDistance,
-} from "./perceptual-hash";
+import { NEAR_DUPLICATE_THRESHOLD, hammingDistance } from "./perceptual-hash";
+import { redactPublicText } from "./public-data";
 
 const LINKS_PATH = path.join(process.cwd(), "data", "links.json");
 const EMPTY_LINKS: LinkRegistry = { links: [] };
@@ -162,12 +160,16 @@ function withLinkWriteLock<T>(write: () => Promise<T>): Promise<T> {
 
 export function publicLink(link: LinkRecord): PublicLinkRecord {
   return {
-    id: link.id,
-    title: link.title,
-    ...(link.description ? { description: link.description } : {}),
-    ownerId: link.ownerId,
+    id: redactPublicText(link.id),
+    title: redactPublicText(link.title),
+    ...(link.description
+      ? { description: redactPublicText(link.description) }
+      : {}),
+    ownerId: redactPublicText(link.ownerId),
     ...(link.mediaKind === "video" ? { mediaKind: "video" as const } : {}),
-    ...(link.contentType ? { contentType: link.contentType } : {}),
+    ...(link.contentType
+      ? { contentType: redactPublicText(link.contentType) }
+      : {}),
     ...(link.hasPreview ? { hasPreview: true } : {}),
     priceAtomicUsdc: link.priceAtomicUsdc,
     createdAt: link.createdAt,

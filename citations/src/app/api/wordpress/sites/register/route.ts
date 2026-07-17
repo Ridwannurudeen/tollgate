@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertWordPressRegistrationRateLimit } from "@/lib/rate-limit";
-import { WordPressRegistryError, registerWordPressSite } from "@/lib/wordpress";
+import {
+  WordPressRegistryError,
+  authorizeWordPressRegistration,
+  registerWordPressSite,
+} from "@/lib/wordpress";
 
 export const runtime = "nodejs";
 
@@ -23,6 +27,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "rate limited" },
       { status: 429 },
+    );
+  }
+
+  if (
+    !authorizeWordPressRegistration(
+      request.headers.get("x-tollgate-registration-secret"),
+    )
+  ) {
+    return NextResponse.json(
+      { error: "invalid registration capability" },
+      { status: 401 },
     );
   }
 

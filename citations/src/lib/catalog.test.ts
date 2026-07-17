@@ -6,9 +6,9 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   appendSource,
   buildSourceOwnershipMessage,
-  claimSourceAsCreator,
   fetchSourceContentExcerpt,
   htmlToText,
+  publicSource,
   refetchCustomSourceContent,
   verifySourceOwnership,
 } from "./catalog";
@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./safe-fetch", () => ({
+  readCappedResponseText: (response: Response) => response.text(),
   safeFetch: mocks.safeFetch,
 }));
 
@@ -238,14 +239,27 @@ describe("appendSource registration content evidence", () => {
   });
 
   it("returns no excerpt for unsupported content types", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("plain text"));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
     mocks.safeFetch.mockResolvedValueOnce(
-      response("plain text", 200, "text/plain"),
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
     );
 
     const result = await fetchSourceContentExcerpt(
       "https://example.com/plain.txt",
     );
 
+    expect(cancelled).toBe(true);
     expect(result.contentHash).toBeUndefined();
     expect(result.contentFetchedAt).toBeUndefined();
     expect(result.contentExcerpt).toBeUndefined();
@@ -391,52 +405,6 @@ describe("source ownership trust gates", () => {
     });
   });
 
-  it("records a creator claim without granting verified creator status", async () => {
-    await withTempRegistry(async (filePath) => {
-      const registered = await withRegistrationFetchDisabled(() =>
-        appendSource(
-          {
-            ...sourceInput,
-            title: "Claimed Creator Source",
-            url: "https://example.com/claimed-creator",
-          },
-          filePath,
-        ),
-      );
-
-      const result = await claimSourceAsCreator(
-        registered.source.id,
-        { attest: true },
-        filePath,
-      );
-
-      expect(result.source.creatorClaimed).toBe(true);
-      expect(result.source.verifiedCreator).toBe(false);
-      expect(result.source.probation).toBe(false);
-      expect(result.source.ownershipProof?.method).toBe("creator-claimed");
-      expect(result.source.ownershipProof?.verifiedAt).toBeTruthy();
-    });
-  });
-
-  it("rejects a creator claim without explicit attestation", async () => {
-    await withTempRegistry(async (filePath) => {
-      const registered = await withRegistrationFetchDisabled(() =>
-        appendSource(
-          {
-            ...sourceInput,
-            title: "Unattested Claim Source",
-            url: "https://example.com/unattested-claim",
-          },
-          filePath,
-        ),
-      );
-
-      await expect(
-        claimSourceAsCreator(registered.source.id, {}, filePath),
-      ).rejects.toThrow("explicit attestation");
-    });
-  });
-
   it("lets meta-tag domain proof clear probation", async () => {
     const previousSecret = process.env.TOLLGATE_VERIFY_SECRET;
     process.env.TOLLGATE_VERIFY_SECRET = "secret";
@@ -550,5 +518,35 @@ describe("source ownership trust gates", () => {
 
       expect(shouldEscrowSource(result.source)).toBe(true);
     });
+  });
+});
+
+describe("public source projection", () => {
+  it("redacts historical email text and private URLs without changing stored evidence", () => {
+    const source: CreatorSource = {
+      id: "historical-private-source",
+      title: "Contact archive@example.com",
+      creator: "archive@example.com",
+      handle: "@archive@example.com",
+      wallet: "0x7777777777777777777777777777777777777777",
+      url: "http://127.0.0.1:4318/private",
+      summary: "Questions go to archive@example.com.",
+      tags: ["archive"],
+      priceAtomicUsdc: 1_500,
+      sourceKind: "external",
+      creatorKind: "external",
+      verifiedCreator: false,
+      contentHash: `0x${"a".repeat(64)}`,
+      contentExcerpt: "Captured from archive@example.com.",
+    };
+
+    const projected = publicSource(source);
+    const payload = JSON.stringify(projected);
+
+    expect(payload).not.toContain("archive@example.com");
+    expect(payload).not.toContain("127.0.0.1");
+    expect(projected.contentHash).toBe(source.contentHash);
+    expect(source.title).toBe("Contact archive@example.com");
+    expect(source.url).toBe("http://127.0.0.1:4318/private");
   });
 });

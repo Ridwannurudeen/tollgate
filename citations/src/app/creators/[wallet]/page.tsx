@@ -3,7 +3,7 @@ import { CopyWallet } from "@/components/CopyWallet";
 import { CreatorWithdrawPanel } from "@/components/CreatorWithdrawPanel";
 import { SiteNav } from "@/components/SiteNav";
 import { SourceCard } from "@/components/SourceCard";
-import { readSources } from "@/lib/catalog";
+import { publicSource, readSources } from "@/lib/catalog";
 import { readCachedFeeRouterClaimable } from "@/lib/fee-router";
 import {
   arcscanTxUrl,
@@ -17,6 +17,7 @@ import {
   readLedger,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
+import { publicLedger } from "@/lib/public-data";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +27,18 @@ type Props = {
 
 export default async function CreatorPage({ params }: Props) {
   const { wallet } = await params;
-  const [ledger, sources] = await Promise.all([readLedger(), readSources()]);
+  const [rawLedger, rawSources] = await Promise.all([
+    readLedger(),
+    readSources(),
+  ]);
+  const verification = verifyLedgerIntegrity(rawLedger);
+  const ledger = publicLedger(rawLedger);
+  const sources = rawSources.map((source) => publicSource(source));
   const normalizedWallet = wallet.toLowerCase();
   const mySources = sources.filter(
     (source) => source.wallet.toLowerCase() === normalizedWallet,
   );
   const firstRegisteredSource = mySources[0];
-  const verification = verifyLedgerIntegrity(ledger);
   const creator = getCreatorEvidence(ledger, wallet);
   if (!creator) {
     return (

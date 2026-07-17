@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Address } from "viem";
-import { findSource } from "@/lib/catalog";
+import { findSource, publicSource } from "@/lib/catalog";
 import { createSourceAccessRecord } from "@/lib/engine";
 import { shouldEscrowSource } from "@/lib/escrow";
 import { appendSettlement } from "@/lib/ledger";
 import { tollgateAgentWallet } from "@/lib/payments";
+import { projectPublicData } from "@/lib/public-data";
+import { leptonwebPublicOrigin } from "@/lib/public-origin";
 import {
   PAYMENT_RESPONSE_HEADER,
   PAYMENT_SIGNATURE_HEADER,
   buildPaymentRequirements,
   paymentRequiredBody,
   paymentRequiredHeaders,
-  publicOrigin,
   settleX402,
 } from "@/lib/x402-server";
 
@@ -28,16 +29,15 @@ export async function GET(request: NextRequest, context: Context) {
     return NextResponse.json({ error: "source not found" }, { status: 404 });
   }
 
+  const projectedSource = publicSource(source);
   const escrowed = shouldEscrowSource(source);
   const payTo = escrowed ? tollgateAgentWallet() : (source.wallet as Address);
   const requirements = buildPaymentRequirements(payTo, source.priceAtomicUsdc);
-  const resourceUrl =
-    publicOrigin(request.headers, request.nextUrl.origin) +
-    request.nextUrl.pathname;
+  const resourceUrl = leptonwebPublicOrigin() + request.nextUrl.pathname;
   const required = paymentRequiredBody(
     requirements,
     resourceUrl,
-    `Paid access to ${source.title} by ${source.creator}.`,
+    `Paid access to ${projectedSource.title} by ${projectedSource.creator}.`,
   );
   const signatureHeader = request.headers.get(PAYMENT_SIGNATURE_HEADER);
   if (!signatureHeader) {
@@ -72,14 +72,14 @@ export async function GET(request: NextRequest, context: Context) {
   });
 
   return NextResponse.json(
-    {
-      source,
+    projectPublicData({
+      source: projectedSource,
       settlementMode: escrowed ? "escrowed" : settlement.mode,
       payer: settlement.payer,
       transaction: settlement.transaction ?? null,
       receipt: ledgerResult.receipts[0],
       ledger: ledgerResult.ledger,
-    },
+    }),
     { headers: { [PAYMENT_RESPONSE_HEADER]: settlement.responseHeader } },
   );
 }

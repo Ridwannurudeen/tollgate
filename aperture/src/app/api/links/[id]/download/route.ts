@@ -1,9 +1,8 @@
-import { getAddress, isAddress } from "viem";
 import { NextRequest, NextResponse } from "next/server";
-import { routeLicensePayment } from "../../../../../lib/fee-router";
 import { appendLicenseReceipt } from "../../../../../lib/ledger";
 import { handleLinkDownload } from "../../../../../lib/link-download";
-import { publicOrigin } from "../../../../../lib/x402-server";
+import { assertLicenseDownloadRateLimit } from "../../../../../lib/link-rate-limit";
+import { aperturePublicOrigin } from "../../../../../lib/public-origin";
 
 export const runtime = "nodejs";
 
@@ -24,19 +23,26 @@ function requestIp(request: NextRequest): string {
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
+  try {
+    assertLicenseDownloadRateLimit(requestIp(request));
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "license download limited",
+      },
+      { status: 429 },
+    );
+  }
+
   const { id } = await context.params;
-  const collector = process.env.APERTURE_LICENSE_COLLECTOR_ADDRESS;
   const result = await handleLinkDownload(id, {
     headers: request.headers,
-    origin: publicOrigin(request.headers, "http://127.0.0.1:3092"),
+    origin: aperturePublicOrigin(),
     basePath: process.env.APERTURE_BASE_PATH ?? "/aperture",
     remoteAddress: requestIp(request),
     userAgent: request.headers.get("user-agent"),
     referer: request.headers.get("referer"),
-    ...(collector && isAddress(collector)
-      ? { collectorAddress: getAddress(collector) }
-      : {}),
-    routeLicensePayment,
     appendReceipt: async (input) => {
       const result = await appendLicenseReceipt(input);
       return { receipt: result.receipt, created: result.created };

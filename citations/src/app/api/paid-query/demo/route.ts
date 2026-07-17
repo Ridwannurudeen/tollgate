@@ -9,10 +9,8 @@ import {
 import { payerAddress, payerWalletId } from "@/lib/circle-w3s";
 import { JUDGE_DEMO_QUESTION, JUDGE_DEMO_SOURCE_IDS } from "@/lib/judge-demo";
 import { PAID_QUERY_PRICE_ATOMIC_USDC } from "@/lib/payments";
-import {
-  assertDemoPaidQueryWithinLimits,
-  recordDemoPaidQuery,
-} from "@/lib/rate-limit";
+import { leptonwebInternalOrigin } from "@/lib/public-origin";
+import { reserveDemoPaidQuery } from "@/lib/rate-limit";
 import { validateQuestion } from "@/lib/settlement";
 import { createW3SPaidFetch } from "@/lib/x402-custodial";
 
@@ -110,14 +108,6 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = requestIp(request);
-  try {
-    assertDemoPaidQueryWithinLimits(ip);
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Rate limited." },
-      { status: 429 },
-    );
-  }
 
   // Balance guard: fail cleanly before signing rather than reverting on-chain
   // when the shared wallet is drained.
@@ -173,9 +163,21 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let reservation: ReturnType<typeof reserveDemoPaidQuery>;
+  try {
+    reservation = reserveDemoPaidQuery(ip);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Rate limited." },
+      { status: 429 },
+    );
+  }
+
+  let sponsorshipStarted = false;
   try {
     const paidFetch = createW3SPaidFetch({ walletId, address });
-    const target = new URL("/api/paid-query", request.nextUrl.origin);
+    const target = new URL("/api/paid-query", leptonwebInternalOrigin());
+    sponsorshipStarted = true;
     const response = await paidFetch(target.toString(), {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -183,6 +185,7 @@ export async function POST(request: NextRequest) {
     });
     const result = objectBody(await response.json().catch(() => null));
     if (!response.ok) {
+      if (response.status === 402) reservation.release();
       return NextResponse.json(
         {
           ...result,
@@ -194,8 +197,6 @@ export async function POST(request: NextRequest) {
         { status: 502 },
       );
     }
-    // Only now — after a real settlement — consume the caller's quota.
-    recordDemoPaidQuery(ip);
     let creatorBalances;
     if (creatorBalancesBefore) {
       try {
@@ -232,6 +233,7 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    if (!sponsorshipStarted) reservation.release();
     return NextResponse.json(
       {
         stage: "sponsorship",

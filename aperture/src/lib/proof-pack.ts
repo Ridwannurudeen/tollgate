@@ -1,14 +1,12 @@
-import {
-  APERTURE_IMMICH_API_BASE_URL,
-  APERTURE_LICENSE_FEE_ATOMIC_USDC,
-} from "./config";
+import { APERTURE_LICENSE_FEE_ATOMIC_USDC } from "./config";
 import { readFeeRouterSplitRegistry } from "./fee-router";
 import {
   readLicenseLedger,
   summarizeLedger,
   verifyLicenseLedger,
 } from "./ledger";
-import { readWalletRegistry } from "./registry";
+import { projectPublicData, publicLicenseLedger } from "./public-data";
+import { publicWalletRegistryEntry, readWalletRegistry } from "./registry";
 
 export async function buildProofPack() {
   const [ledger, registry] = await Promise.all([
@@ -21,24 +19,11 @@ export async function buildProofPack() {
     (sum, creator) => sum + creator.earned,
     0,
   );
-  // Public payload: strip custodial Circle walletIds, account key/login
-  // hashes, email, and ownershipProof so /api/proof never leaks private fields.
   const publicRegistry = {
-    photographers: registry.photographers.map(
-      ({
-        walletId,
-        accountKeyHash,
-        email,
-        loginTokenHash,
-        loginTokenExpiresAt,
-        linkedWallets,
-        ownershipProof,
-        ...entry
-      }) => entry,
-    ),
+    photographers: registry.photographers.map(publicWalletRegistryEntry),
   };
 
-  return {
+  return projectPublicData({
     generatedAt: new Date().toISOString(),
     verification: verifyLicenseLedger(ledger),
     totals: {
@@ -49,11 +34,10 @@ export async function buildProofPack() {
     },
     settlement: {
       feeRouterEnabled: process.env.APERTURE_FEE_ROUTER_ENABLED === "1",
-      immichApiBaseUrl: APERTURE_IMMICH_API_BASE_URL,
     },
     creators,
     feeRouterSplits: splitRegistry,
     registry: publicRegistry,
-    ledger,
-  };
+    ledger: publicLicenseLedger(ledger),
+  });
 }

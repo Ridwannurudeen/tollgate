@@ -20,9 +20,9 @@ export default function InstallPage() {
         <p className="eyebrow">VPS operator runbook</p>
         <h1>Run Aperture beside an existing Immich server.</h1>
         <p>
-          The sidecar reads nginx access logs, resolves each shared-link archive
-          download through Immich, and writes a public receipt for every mapped
-          photographer.
+          The payment gate resolves each shared-link archive through Immich,
+          settles mapped photographers, and writes the receipts. The access-log
+          watcher only correlates completed downloads with those gate receipts.
         </p>
       </section>
 
@@ -38,8 +38,7 @@ APERTURE_IMMICH_API_BASE_URL=http://127.0.0.1:2283/api
 APERTURE_ACCESS_LOG=/var/log/nginx/access.log
 APERTURE_LICENSE_FEE_ATOMIC_USDC=2500
 APERTURE_FEE_ROUTER_ENABLED=0
-APERTURE_EXIF_ENABLED=1
-APERTURE_IMMICH_LIBRARY_ROOT=/opt/immich/library`}</pre>
+APERTURE_SESSION_SECRET=<openssl rand -hex 32>`}</pre>
         </div>
 
         <div className="surface">
@@ -56,8 +55,9 @@ APERTURE_IMMICH_LIBRARY_ROOT=/opt/immich/library`}</pre>
         <h2>Tollgate mount</h2>
         <p>
           Aperture is served at `https://tollgate.gudman.xyz/aperture`. Tollgate
-          also exposes `/immich/api/download/archive` so public archive
-          downloads hit nginx and the watcher records the billable resolve.
+          also exposes `/immich/api/download/archive`. Its exact nginx location
+          must keep the Aperture authorization subrequest; the watcher observes
+          only successful authorized downloads.
         </p>
       </section>
       </main>

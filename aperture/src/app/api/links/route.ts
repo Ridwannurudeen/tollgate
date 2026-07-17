@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { LinkRegistryError, listPublicLinks } from "../../../lib/link-registry";
 import { handleLinkRegistration } from "../../../lib/link-registration";
 import { assertLinkRegistrationRateLimit } from "../../../lib/link-rate-limit";
-import { publicOrigin } from "../../../lib/x402-server";
+import { projectPublicData } from "../../../lib/public-data";
+import { aperturePublicOrigin } from "../../../lib/public-origin";
 import {
   SESSION_COOKIE_NAME,
   getSessionOwner,
@@ -38,16 +39,18 @@ export async function POST(request: NextRequest) {
     const sessionOwner = await getSessionOwner();
     const body = (await request.json().catch(() => null)) ?? {};
     const result = await handleLinkRegistration(
-      sessionOwner && body && typeof body === "object" && !Array.isArray(body)
+      body && typeof body === "object" && !Array.isArray(body)
         ? { ...body, email: undefined }
         : body,
       {
-        origin: publicOrigin(request.headers, "http://127.0.0.1:3092"),
+        origin: aperturePublicOrigin(),
         basePath: process.env.APERTURE_BASE_PATH ?? "/aperture",
         ...(sessionOwner ? { sessionOwnerId: sessionOwner.ownerId } : {}),
       },
     );
-    const response = NextResponse.json(result, { status: 201 });
+    const response = NextResponse.json(projectPublicData(result), {
+      status: 201,
+    });
     if (!sessionOwner && result.accountKey) {
       const cookieValue = signSession(result.registered.ownerId);
       if (cookieValue) {
@@ -60,15 +63,15 @@ export async function POST(request: NextRequest) {
     }
     return response;
   } catch (error) {
-    const status = error instanceof LinkRegistryError ? error.status : 400;
+    if (error instanceof LinkRegistryError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
+    }
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "photo link registration failed",
-      },
-      { status },
+      { error: "photo link registration failed" },
+      { status: 400 },
     );
   }
 }

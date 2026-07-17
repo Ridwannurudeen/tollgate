@@ -1,8 +1,10 @@
+import { createHmac } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  SESSION_MAX_AGE_SECONDS,
   accountKeyHash,
   findOwnerByAccountKey,
   findOwnerByEmail,
@@ -123,7 +125,7 @@ describe("email login", () => {
     });
   });
 
-  it("generates and resolves login tokens (reusable within TTL, survives link pre-fetch) without rotating the account key", async () => {
+  it("allows only one concurrent login-token redemption without rotating the account key", async () => {
     await withTempRegistry(async (filePath) => {
       const oldHash = accountKeyHash("aptr_old");
       await writeWalletRegistry(
@@ -147,19 +149,18 @@ describe("email login", () => {
       expect(login?.token).toMatch(/^[0-9a-f]{64}$/);
       expect(login?.hash).toMatch(/^0x[0-9a-f]{64}$/);
 
-      const redeemed = await redeemLoginToken(login?.token ?? "", filePath);
-      // Reusable within TTL: a second lookup (e.g. the human's click after a
-      // scanner pre-fetched the link) still resolves, and the token is NOT
-      // cleared.
-      const second = await redeemLoginToken(login?.token ?? "", filePath);
+      const attempts = await Promise.all([
+        redeemLoginToken(login?.token ?? "", filePath),
+        redeemLoginToken(login?.token ?? "", filePath),
+      ]);
       const read = await readWalletRegistry(filePath);
 
-      expect(redeemed?.ownerId).toBe("owner-1");
-      expect(redeemed?.accountKeyHash).toBe(oldHash);
-      expect(second?.ownerId).toBe("owner-1");
+      expect(attempts.filter(Boolean)).toHaveLength(1);
+      expect(attempts.find(Boolean)?.ownerId).toBe("owner-1");
+      expect(attempts.find(Boolean)?.accountKeyHash).toBe(oldHash);
       expect(read.photographers[0].accountKeyHash).toBe(oldHash);
-      expect(read.photographers[0].loginTokenHash).toBe(login?.hash);
-      expect(read.photographers[0].loginTokenExpiresAt).toBe(login?.expiresAt);
+      expect(read.photographers[0].loginTokenHash).toBeUndefined();
+      expect(read.photographers[0].loginTokenExpiresAt).toBeUndefined();
     });
   });
 
@@ -233,12 +234,45 @@ describe("email login", () => {
 describe("account sessions", () => {
   it("round-trips a signed session and rejects tampering", () => {
     withSessionSecret("session-secret", () => {
-      const cookie = signSession("owner-1");
+      const cookie = signSession("owner-1", 1_000);
 
-      expect(cookie).toMatch(/^owner-1\.[0-9a-f]{64}$/);
-      expect(verifySession(cookie ?? undefined)).toBe("owner-1");
-      expect(verifySession(`${cookie}00`)).toBeNull();
-      expect(verifySession(cookie?.replace("owner-1", "owner-2"))).toBeNull();
+      expect(cookie).toMatch(/^v1\.[A-Za-z0-9_-]+\.[0-9a-f]{64}$/);
+      expect(verifySession(cookie ?? undefined, 1_000)).toBe("owner-1");
+      expect(verifySession(`${cookie}00`, 1_000)).toBeNull();
+      const [version, payload, signature] = cookie?.split(".") ?? [];
+      expect(
+        verifySession(`${version}.${payload}A.${signature}`, 1_000),
+      ).toBeNull();
+    });
+  });
+
+  it("rejects a session after the cookie lifetime", () => {
+    withSessionSecret("session-secret", () => {
+      const issuedAt = 1_000;
+      const cookie = signSession("owner-1", issuedAt);
+
+      expect(
+        verifySession(
+          cookie ?? undefined,
+          issuedAt + SESSION_MAX_AGE_SECONDS * 1_000 - 1,
+        ),
+      ).toBe("owner-1");
+      expect(
+        verifySession(
+          cookie ?? undefined,
+          issuedAt + SESSION_MAX_AGE_SECONDS * 1_000,
+        ),
+      ).toBeNull();
+    });
+  });
+
+  it("rejects legacy deterministic owner-signature sessions", () => {
+    withSessionSecret("session-secret", () => {
+      const legacySignature = createHmac("sha256", "session-secret")
+        .update("owner-1")
+        .digest("hex");
+
+      expect(verifySession(`owner-1.${legacySignature}`, 1_000)).toBeNull();
     });
   });
 

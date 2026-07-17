@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Tollgate Pay-Per-Read
- * Description: Gates selected WordPress posts through Tollgate's hosted Arc/Circle USDC settlement API.
+ * Description: Gates selected WordPress posts and checks Tollgate's hosted receipt status.
  * Version: 0.1.0
  * Author: Tollgate
  * License: GPL-2.0-or-later
@@ -106,7 +106,7 @@ function tollgate_sanitize_options($input): array
 
 function tollgate_render_settings_intro(): void
 {
-    echo '<p>Register this WordPress site with Tollgate, then paste the returned site API key here. The plugin gates content only; all FeeRouter settlement and receipt writing stays on Tollgate.</p>';
+    echo '<p>Ask the Tollgate operator to register this site, wallet, and price, then paste the returned site API key here. The plugin checks existing receipts but cannot initiate settlement without reader payment authorization.</p>';
 }
 
 function tollgate_render_api_base_field(): void
@@ -159,7 +159,7 @@ function tollgate_render_settings_page(): void
     ?>
     <div class="wrap">
         <h1>Tollgate Pay-Per-Read</h1>
-        <p>Register this site by POSTing <code>siteUrl</code>, <code>creatorWallet</code>, and an operator-chosen <code>apiKeySeed</code> to <code><?php echo esc_html($options['api_base']); ?>/api/wordpress/sites/register</code>. Paste the returned API key below.</p>
+        <p>Registration requires an operator-issued capability and binds the site URL, creator wallet, and price on Tollgate. Paste the returned site API key below.</p>
         <form method="post" action="options.php">
             <?php
             settings_fields('tollgate_settings');
@@ -199,7 +199,7 @@ function tollgate_render_gate_meta_box($post): void
         <label for="tollgate_price_atomic_usdc">Price, atomic USDC</label>
         <input type="number" min="1" step="1" id="tollgate_price_atomic_usdc" name="tollgate_price_atomic_usdc" value="<?php echo esc_attr((string) $price); ?>" class="widefat" />
     </p>
-    <p class="description">2500 = $0.0025. The hosted Tollgate API writes the receipt and routes the payout.</p>
+    <p class="description">2500 = $0.0025. This display price must match the immutable price approved during Tollgate registration.</p>
     <?php
 }
 
@@ -229,8 +229,8 @@ function tollgate_register_rest_routes(): void
 {
     register_rest_route('tollgate/v1', '/pay/(?P<post_id>\d+)', array(
         'methods' => 'POST',
-        'callback' => 'tollgate_rest_pay',
-        'permission_callback' => '__return_true',
+        'callback' => 'tollgate_rest_payment_permission',
+        'permission_callback' => 'tollgate_rest_payment_permission',
         'args' => array(
             'post_id' => array(
                 'validate_callback' => 'tollgate_validate_post_id',
@@ -244,29 +244,18 @@ function tollgate_validate_post_id($value): bool
     return absint($value) > 0;
 }
 
-function tollgate_rest_pay($request)
+function tollgate_rest_payment_permission($request)
 {
     $post_id = absint($request['post_id']);
     if (!$post_id || !tollgate_is_gated_post($post_id)) {
         return new WP_Error('tollgate_not_gated', 'This post is not gated by Tollgate.', array('status' => 404));
     }
 
-    $result = tollgate_api_post('/api/wordpress/posts/' . rawurlencode((string) $post_id) . '/pay', tollgate_post_payload($post_id, true));
-    if (is_wp_error($result)) {
-        $error_data = $result->get_error_data();
-        $status = is_array($error_data) && isset($error_data['status']) ? absint($error_data['status']) : 0;
-        return new WP_Error('tollgate_payment_failed', $result->get_error_message(), array('status' => $status > 0 ? $status : 502));
-    }
-
-    if (empty($result['paid'])) {
-        return new WP_Error('tollgate_unpaid', 'Tollgate did not confirm payment.', array('status' => 402));
-    }
-
-    return new WP_REST_Response(array(
-        'paid' => true,
-        'receiptHash' => isset($result['receiptHash']) ? sanitize_text_field((string) $result['receiptHash']) : null,
-        'settlementMode' => isset($result['settlementMode']) ? sanitize_text_field((string) $result['settlementMode']) : null,
-    ), 200);
+    return new WP_Error(
+        'tollgate_reader_payment_required',
+        'Reader payment authorization is required before Tollgate can settle this post.',
+        array('status' => 402)
+    );
 }
 
 function tollgate_agent_payment_required(): void
@@ -289,7 +278,7 @@ function tollgate_agent_payment_required(): void
     header('Content-Type: application/json; charset=' . get_option('blog_charset'));
     echo wp_json_encode(array(
         'error' => 'payment_required',
-        'message' => 'This WordPress post is gated by Tollgate.',
+        'message' => 'This WordPress post is gated by Tollgate. Reader payment authorization is required before settlement.',
         'paymentRequirements' => array(
             'network' => 'arc-testnet',
             'asset' => 'USDC',
@@ -324,49 +313,15 @@ function tollgate_gate_content(string $content): string
 function tollgate_render_paywall(int $post_id): string
 {
     $price = tollgate_post_price($post_id);
-    $button_id = 'tollgate-pay-' . $post_id;
-    $status_id = 'tollgate-status-' . $post_id;
-    $endpoint = rest_url('tollgate/v1/pay/' . $post_id);
 
     ob_start();
     ?>
     <section class="tollgate-paywall" data-tollgate-post="<?php echo esc_attr((string) $post_id); ?>">
         <h2>This post is gated by Tollgate</h2>
-        <p>Unlock this post and write a public payment receipt for the publisher.</p>
+        <p>Reader payment authorization is required before Tollgate can create a settlement receipt.</p>
         <p><strong><?php echo esc_html(tollgate_format_atomic_usdc($price)); ?></strong></p>
-        <button type="button" id="<?php echo esc_attr($button_id); ?>" class="button button-primary">Unlock with Tollgate</button>
-        <p id="<?php echo esc_attr($status_id); ?>" aria-live="polite"></p>
+        <p>Existing verified receipts still unlock this post automatically.</p>
     </section>
-    <script>
-    (function () {
-        var button = document.getElementById(<?php echo wp_json_encode($button_id); ?>);
-        var status = document.getElementById(<?php echo wp_json_encode($status_id); ?>);
-        if (!button || !status) {
-            return;
-        }
-        button.addEventListener('click', function () {
-            button.disabled = true;
-            status.textContent = 'Settling payment...';
-            fetch(<?php echo wp_json_encode($endpoint); ?>, { method: 'POST', credentials: 'same-origin' })
-                .then(function (response) {
-                    return response.json().catch(function () { return {}; }).then(function (body) {
-                        if (!response.ok) {
-                            throw new Error(body.message || body.error || 'Payment failed.');
-                        }
-                        return body;
-                    });
-                })
-                .then(function () {
-                    status.textContent = 'Paid. Reloading...';
-                    window.location.reload();
-                })
-                .catch(function (error) {
-                    button.disabled = false;
-                    status.textContent = error.message;
-                });
-        });
-    }());
-    </script>
     <?php
     return (string) ob_get_clean();
 }

@@ -3,7 +3,7 @@ import { assertWordPressPayRateLimit } from "@/lib/rate-limit";
 import {
   WordPressRegistryError,
   authenticateWordPressSite,
-  settleWordPressPost,
+  wordpressPostStatus,
 } from "@/lib/wordpress";
 
 export const runtime = "nodejs";
@@ -44,18 +44,28 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const { postId } = await context.params;
     const body = (await request.json()) as unknown;
-    const result = await settleWordPressPost(site, postId, body);
+    const result = await wordpressPostStatus(site, postId, body);
+    if (!result.paid || !result.receipt) {
+      return NextResponse.json(
+        {
+          paid: false,
+          eventId: result.eventId,
+          error: "reader payment authorization required",
+          proofEndpoint: "/api/wordpress/proof",
+        },
+        { status: 402 },
+      );
+    }
     return NextResponse.json(
       {
-        paid: result.paid,
-        created: result.created,
+        paid: true,
+        created: false,
         eventId: result.eventId,
-        queryId: result.query.id,
         receiptHash: result.receipt.receiptHash,
         settlementMode: result.receipt.settlementMode,
         amountAtomicUsdc: result.receipt.amountAtomicUsdc,
       },
-      { status: result.created ? 201 : 200 },
+      { status: 200 },
     );
   } catch (error) {
     if (error instanceof WordPressRegistryError) {

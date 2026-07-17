@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { payErrorMessage } from "../../lib/pay-errors";
+import { connectArcWallet, makePaidFetch } from "../../lib/x402-client";
 
 type DownloadArchiveButtonProps = {
   sharedLinkKey: string;
   assetIds: string[];
   basePath: string;
   localProofEnabled: boolean;
+  priceText: string;
 };
 
 type LicenseDownloadResponse = {
@@ -26,25 +29,41 @@ export function DownloadArchiveButton({
   assetIds,
   basePath,
   localProofEnabled,
+  priceText,
 }: DownloadArchiveButtonProps) {
   const [status, setStatus] = useState<
     "idle" | "paying" | "downloading" | "payment-required" | "done" | "bad"
   >("idle");
   const [settlementMode, setSettlementMode] = useState<string | null>(null);
   const [receiptHash, setReceiptHash] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   async function downloadArchive() {
     setStatus("paying");
     setSettlementMode(null);
     setReceiptHash(null);
-    const gateResponse = await fetch(`${basePath}/api/license-download`, {
+    setFailure(null);
+    const gateRequest = {
       method: "POST",
       headers: {
         "content-type": "application/json",
         ...(localProofEnabled ? { [LOCAL_PROOF_HEADER]: "1" } : {}),
       },
       body: JSON.stringify({ sharedLinkKey, assetIds }),
-    });
+    };
+    let gateResponse: Response;
+    if (localProofEnabled) {
+      gateResponse = await fetch(
+        `${basePath}/api/license-download`,
+        gateRequest,
+      );
+    } else {
+      const paidFetch = makePaidFetch(await connectArcWallet());
+      gateResponse = await paidFetch(
+        `${basePath}/api/license-download`,
+        gateRequest,
+      );
+    }
 
     if (gateResponse.status === 402) {
       setStatus("payment-required");
@@ -90,9 +109,16 @@ export function DownloadArchiveButton({
     <div className="downloadAction">
       <button
         className="button primary"
-        disabled={status === "downloading" || assetIds.length === 0}
+        disabled={
+          status === "paying" ||
+          status === "downloading" ||
+          assetIds.length === 0
+        }
         onClick={() => {
-          downloadArchive().catch(() => setStatus("bad"));
+          downloadArchive().catch((error) => {
+            setFailure(payErrorMessage(error, priceText));
+            setStatus("bad");
+          });
         }}
         type="button"
       >
@@ -110,7 +136,8 @@ export function DownloadArchiveButton({
           : status === "payment-required"
             ? "x402 payment required before download unlock."
           : status === "bad"
-            ? "Download failed. Check that the shared-link key is valid."
+            ? (failure ??
+              "Download failed. Check that the shared-link key is valid.")
             : "POST /aperture/api/license-download"}
       </span>
     </div>

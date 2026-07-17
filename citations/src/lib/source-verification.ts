@@ -4,12 +4,14 @@ import { updateSourceVerification } from "./catalog";
 import { sha256Hex } from "./hash";
 import {
   isUnsafeFetchHost,
+  readCappedResponseText,
   safeFetch,
   type SafeFetchOptions,
 } from "./safe-fetch";
 import type { CreatorSource, SourceOwnershipProof } from "./types";
 
 const VERIFY_TIMEOUT_MS = 5_000;
+export const SOURCE_VERIFICATION_MAX_BYTES = 512 * 1024;
 
 function verifySecret(): string {
   const secret = process.env.TOLLGATE_VERIFY_SECRET;
@@ -65,9 +67,13 @@ export async function verifyMetaTagSource(
       { ...localVerificationFetchOptions(source), ...fetchOptions },
     );
     if (!response.ok) {
+      await response.body?.cancel();
       throw new Error(`verification fetch failed: HTTP ${response.status}`);
     }
-    const html = await response.text();
+    const html = await readCappedResponseText(
+      response,
+      SOURCE_VERIFICATION_MAX_BYTES,
+    );
     if (!hasVerificationMetaTag(html, token)) {
       throw new Error("verification meta tag was not found.");
     }

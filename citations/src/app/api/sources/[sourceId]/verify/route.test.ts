@@ -24,6 +24,11 @@ vi.mock("@/lib/catalog", () => {
     SourceRegistryError,
     claimSourceAsCreator: mocks.claimSourceAsCreator,
     findSource: mocks.findSource,
+    publicSource: ({
+      notifyEmail: _notifyEmail,
+      walletId: _walletId,
+      ...rest
+    }: Record<string, unknown>) => rest,
     verifySourceOwnership: mocks.verifySourceOwnership,
   };
 });
@@ -82,7 +87,7 @@ describe("PATCH /api/sources/[sourceId]/verify", () => {
     });
   });
 
-  it("routes creator-claimed verification through the claim branch", async () => {
+  it("rejects creator self-attestation without releasing escrow", async () => {
     const claimedSource = {
       ...source,
       creatorClaimed: true,
@@ -108,17 +113,12 @@ describe("PATCH /api/sources/[sourceId]/verify", () => {
     );
     const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(mocks.claimSourceAsCreator).toHaveBeenCalledWith("source-1", {
-      method: "creator-claimed",
-      attest: true,
-    });
+    expect(response.status).toBe(403);
+    expect(body.error).toContain("domain ownership proof");
+    expect(mocks.claimSourceAsCreator).not.toHaveBeenCalled();
     expect(mocks.verifySourceOwnership).not.toHaveBeenCalled();
     expect(mocks.verifySourceByWebProof).not.toHaveBeenCalled();
-    expect(mocks.releaseEscrowForSource).toHaveBeenCalledWith(claimedSource);
-    expect(body.source.creatorClaimed).toBe(true);
-    expect(body.source.verifiedCreator).toBe(false);
-    expect(body.escrowRelease.released).toBe(true);
+    expect(mocks.releaseEscrowForSource).not.toHaveBeenCalled();
   });
 
   it("keeps wallet-signature verification on the existing probationary branch", async () => {
@@ -157,6 +157,8 @@ describe("PATCH /api/sources/[sourceId]/verify", () => {
   it("keeps domain proof on the web-proof branch", async () => {
     const verifiedSource = {
       ...source,
+      notifyEmail: "private@example.com",
+      walletId: "private-circle-wallet-id",
       verifiedCreator: true,
       probation: false,
       ownershipProof: {
@@ -170,6 +172,7 @@ describe("PATCH /api/sources/[sourceId]/verify", () => {
     });
 
     const response = await PATCH(request({ method: "meta-tag" }), context());
+    const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(mocks.verifySourceByWebProof).toHaveBeenCalledWith(
@@ -177,5 +180,9 @@ describe("PATCH /api/sources/[sourceId]/verify", () => {
       "meta-tag",
     );
     expect(mocks.claimSourceAsCreator).not.toHaveBeenCalled();
+    expect(body.source.walletId).toBeUndefined();
+    expect(body.source.notifyEmail).toBeUndefined();
+    expect(body.sources[0].walletId).toBeUndefined();
+    expect(body.sources[0].notifyEmail).toBeUndefined();
   });
 });

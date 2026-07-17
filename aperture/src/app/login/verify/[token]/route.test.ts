@@ -38,10 +38,12 @@ function request(token = "a".repeat(64)): NextRequest {
 describe("GET /login/verify/[token]", () => {
   const savedSecret = process.env.APERTURE_SESSION_SECRET;
   const savedBasePath = process.env.APERTURE_BASE_PATH;
+  const savedPublicOrigin = process.env.APERTURE_PUBLIC_ORIGIN;
 
   beforeEach(() => {
     process.env.APERTURE_SESSION_SECRET = "session-secret";
     process.env.APERTURE_BASE_PATH = "/aperture";
+    process.env.APERTURE_PUBLIC_ORIGIN = "https://tollgate.gudman.xyz";
     mocks.findOwnerByEmail.mockReset();
     mocks.redeemLoginToken.mockReset();
     mocks.registerCreator.mockReset();
@@ -60,6 +62,11 @@ describe("GET /login/verify/[token]", () => {
       delete process.env.APERTURE_BASE_PATH;
     } else {
       process.env.APERTURE_BASE_PATH = savedBasePath;
+    }
+    if (savedPublicOrigin === undefined) {
+      delete process.env.APERTURE_PUBLIC_ORIGIN;
+    } else {
+      process.env.APERTURE_PUBLIC_ORIGIN = savedPublicOrigin;
     }
   });
 
@@ -131,7 +138,7 @@ describe("GET /login/verify/[token]", () => {
     expect(cookie).toContain("aperture_session=link-new.signature");
   });
 
-  it("logs into an existing account for a replayed signup token without creating a duplicate", async () => {
+  it("rejects a signup token once its email belongs to an existing account", async () => {
     mocks.redeemLoginToken.mockResolvedValue(null);
     mocks.verifySignupToken.mockReturnValue("jane@example.com");
     mocks.findOwnerByEmail.mockResolvedValue({
@@ -145,9 +152,37 @@ describe("GET /login/verify/[token]", () => {
       params: Promise.resolve({ token: "signup.payload" }),
     });
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(400);
     expect(mocks.registerCreator).not.toHaveBeenCalled();
-    expect(mocks.signSession).toHaveBeenCalledWith("owner-existing");
+    expect(mocks.signSession).not.toHaveBeenCalled();
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("redirects only to the configured public origin", async () => {
+    process.env.APERTURE_PUBLIC_ORIGIN = "https://canonical.example";
+    mocks.redeemLoginToken.mockResolvedValue({
+      ownerId: "owner-1",
+      displayName: "Jane Lens",
+    });
+    mocks.signSession.mockReturnValue("owner-1.signature");
+    const hostileRequest = new NextRequest(
+      "https://tollgate.gudman.xyz/aperture/login/verify/token",
+      {
+        headers: {
+          host: "evil.example",
+          "x-forwarded-host": "also-evil.example",
+          "x-forwarded-proto": "http",
+        },
+      },
+    );
+
+    const response = await GET(hostileRequest, {
+      params: Promise.resolve({ token: "a".repeat(64) }),
+    });
+
+    expect(response.headers.get("location")).toBe(
+      "https://canonical.example/aperture/dashboard",
+    );
   });
 
   it("returns a creation error page if signup account creation fails", async () => {

@@ -1,16 +1,34 @@
-import { decodePaymentRequiredHeader } from "@x402/core/http";
-import { describe, expect, it } from "vitest";
+import {
+  decodePaymentRequiredHeader,
+  encodePaymentSignatureHeader,
+} from "@x402/core/http";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   GATEWAY_BATCHING_NAME,
   GATEWAY_BATCHING_VERSION,
   PAYMENT_REQUIRED_HEADER,
+  buildExactPaymentRequirements,
   buildGatewayPaymentRequirements,
   buildPaymentRequirements,
   paymentRequiredBody,
   paymentRequiredHeaders,
-  publicOrigin,
+  settleX402,
 } from "./x402-server";
 import { ARC_CAIP2, ARC_GATEWAY_WALLET, ARC_USDC } from "./chain";
+
+const previousFacilitatorKey = process.env.FACILITATOR_PRIVATE_KEY;
+
+beforeEach(() => {
+  delete process.env.FACILITATOR_PRIVATE_KEY;
+});
+
+afterEach(() => {
+  if (previousFacilitatorKey === undefined) {
+    delete process.env.FACILITATOR_PRIVATE_KEY;
+  } else {
+    process.env.FACILITATOR_PRIVATE_KEY = previousFacilitatorKey;
+  }
+});
 
 describe("x402 source gateway helpers", () => {
   it("builds Arc USDC exact payment requirements", () => {
@@ -67,19 +85,33 @@ describe("x402 source gateway helpers", () => {
     );
   });
 
-  it("derives the public origin from host and x-forwarded-proto", () => {
-    const headers = new Headers({
-      host: "tollgate.gudman.xyz",
-      "x-forwarded-proto": "https",
+  it("fails closed when exact settlement is not configured", async () => {
+    const requirements = buildExactPaymentRequirements(
+      "0x1111111111111111111111111111111111111111",
+      1800,
+    );
+    const header = encodePaymentSignatureHeader({
+      x402Version: 2,
+      accepted: requirements,
+      payload: {
+        signature: `0x${"00".repeat(65)}`,
+        authorization: {
+          from: "0x2222222222222222222222222222222222222222",
+          to: requirements.payTo,
+          value: requirements.amount,
+          validAfter: "0",
+          validBefore: "9999999999",
+          nonce: `0x${"11".repeat(32)}`,
+        },
+      },
     });
-    expect(publicOrigin(headers, "http://127.0.0.1:3091")).toBe(
-      "https://tollgate.gudman.xyz",
-    );
-  });
 
-  it("falls back to the bind origin when no host header is present", () => {
-    expect(publicOrigin(new Headers(), "http://127.0.0.1:3091")).toBe(
-      "http://127.0.0.1:3091",
-    );
+    const result = await settleX402(header, requirements);
+
+    expect(result).toEqual({
+      ok: false,
+      status: 503,
+      reason: "x402 settlement is not configured",
+    });
   });
 });

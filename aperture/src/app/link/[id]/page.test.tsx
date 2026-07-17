@@ -15,13 +15,25 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-vi.mock("../../../lib/link-registry", () => ({
-  findLink: mocks.findLink,
-}));
+vi.mock("../../../lib/link-registry", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../../lib/link-registry")
+  >("../../../lib/link-registry");
+  return {
+    ...actual,
+    findLink: mocks.findLink,
+  };
+});
 
-vi.mock("../../../lib/registry", () => ({
-  readWalletForOwner: mocks.readWalletForOwner,
-}));
+vi.mock("../../../lib/registry", async () => {
+  const actual = await vi.importActual<typeof import("../../../lib/registry")>(
+    "../../../lib/registry",
+  );
+  return {
+    ...actual,
+    readWalletForOwner: mocks.readWalletForOwner,
+  };
+});
 
 vi.mock("../../../lib/account", () => ({
   getSessionOwner: mocks.getSessionOwner,
@@ -40,7 +52,8 @@ vi.mock("../../../components/LinkDownloadButton", () => ({
 }));
 
 vi.mock("../../../components/LinkMessagePanel", () => ({
-  LinkMessagePanel: ({ linkId }: { linkId: string }) => `message panel:${linkId}`,
+  LinkMessagePanel: ({ linkId }: { linkId: string }) =>
+    `message panel:${linkId}`,
 }));
 
 describe("gated link page", () => {
@@ -54,8 +67,9 @@ describe("gated link page", () => {
   it("renders the public photo description without exposing the source URL", async () => {
     mocks.findLink.mockResolvedValue({
       id: "link-1",
-      title: "Rainy Lagos",
-      description: "A night market street scene before rainfall.",
+      title: "Rainy Lagos archive@example.com",
+      description:
+        "A night market street scene from archive@example.com before rainfall.",
       ownerId: "owner-1",
       sourceUrl: "https://secret.example.com/original.jpg",
       priceAtomicUsdc: 2500,
@@ -64,7 +78,7 @@ describe("gated link page", () => {
     });
     mocks.readWalletForOwner.mockResolvedValue({
       ownerId: "owner-1",
-      displayName: "Jane Lens",
+      displayName: "Jane Lens archive@example.com",
       wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
       createdAt: "2026-07-06T00:00:00.000Z",
       approvalStatus: "operator-approved",
@@ -76,8 +90,9 @@ describe("gated link page", () => {
     const payload = renderToStaticMarkup(page as ReactElement);
 
     expect(payload).toContain("Rainy Lagos");
-    expect(payload).toContain("A night market street scene before rainfall.");
+    expect(payload).toContain("A night market street scene");
     expect(payload).toContain("Jane Lens");
+    expect(payload).not.toContain("archive@example.com");
     expect(payload).toContain("/aperture/link/link-1/preview");
     expect(payload).not.toContain("secret.example.com");
     expect(payload).not.toContain("sourceUrl");

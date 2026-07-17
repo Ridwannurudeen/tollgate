@@ -15,8 +15,17 @@ describe("link image content", () => {
   });
 
   it("rejects non-image content types before charging", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("html"));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
     const fetchImpl = (async () =>
-      new Response("html", {
+      new Response(body, {
         status: 200,
         headers: { "content-type": "text/html" },
       })) as unknown as typeof fetch;
@@ -27,6 +36,7 @@ describe("link image content", () => {
         resolveHost: publicResolve,
       }),
     ).rejects.toThrow(/jpeg, png, webp, gif, avif, or tiff/);
+    expect(cancelled).toBe(true);
   });
 
   it("captures image content evidence from the first bytes", async () => {

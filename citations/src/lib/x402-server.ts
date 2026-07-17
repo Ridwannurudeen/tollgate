@@ -1,5 +1,4 @@
 import {
-  createPublicClient,
   createWalletClient,
   http,
   publicActions,
@@ -24,7 +23,6 @@ import { ExactEvmScheme as ExactEvmFacilitator } from "@x402/evm/exact/facilitat
 import { toFacilitatorEvmSigner, type FacilitatorEvmSigner } from "@x402/evm";
 import {
   ARC_CAIP2,
-  ARC_CHAIN_ID,
   ARC_GATEWAY_API_URL,
   ARC_GATEWAY_WALLET,
   ARC_RPC_URL,
@@ -101,15 +99,6 @@ export function buildGatewayPaymentRequirements(
   };
 }
 
-export function publicOrigin(headers: Headers, fallbackOrigin: string): string {
-  const host = headers.get("host");
-  if (!host) return fallbackOrigin;
-  const proto =
-    headers.get("x-forwarded-proto") ??
-    new URL(fallbackOrigin).protocol.replace(":", "");
-  return `${proto}://${host}`;
-}
-
 export function paymentRequiredBody(
   requirements: PaymentRequirements | PaymentRequirements[],
   resourceUrl: string,
@@ -182,66 +171,6 @@ function makeGatewayFacilitator() {
   return new BatchFacilitatorClient({
     url: process.env.LEPTONWEB_GATEWAY_API_URL ?? ARC_GATEWAY_API_URL,
   });
-}
-
-async function verifyOnly(
-  payload: PaymentPayload,
-  requirements: PaymentRequirements,
-): Promise<{ ok: boolean; payer?: string; reason?: string }> {
-  const auth = (payload.payload as { authorization?: Record<string, unknown> })
-    .authorization;
-  if (!auth) return { ok: false, reason: "missing EIP-3009 authorization" };
-  if (
-    typeof auth.from !== "string" ||
-    typeof auth.to !== "string" ||
-    typeof auth.nonce !== "string" ||
-    typeof auth.value !== "string" ||
-    typeof auth.validAfter !== "string" ||
-    typeof auth.validBefore !== "string" ||
-    !/^\d+$/.test(auth.value) ||
-    !/^\d+$/.test(auth.validAfter) ||
-    !/^\d+$/.test(auth.validBefore)
-  ) {
-    return { ok: false, reason: "malformed authorization" };
-  }
-  const publicClient = createPublicClient({
-    chain: arcTestnet,
-    transport: http(ARC_RPC_URL),
-  });
-  const valid = await publicClient.verifyTypedData({
-    address: auth.from as `0x${string}`,
-    domain: {
-      name: requirements.extra.name as string,
-      version: requirements.extra.version as string,
-      chainId: ARC_CHAIN_ID,
-      verifyingContract: requirements.asset as `0x${string}`,
-    },
-    types: {
-      TransferWithAuthorization: [
-        { name: "from", type: "address" },
-        { name: "to", type: "address" },
-        { name: "value", type: "uint256" },
-        { name: "validAfter", type: "uint256" },
-        { name: "validBefore", type: "uint256" },
-        { name: "nonce", type: "bytes32" },
-      ],
-    },
-    primaryType: "TransferWithAuthorization",
-    message: {
-      from: auth.from as `0x${string}`,
-      to: auth.to as `0x${string}`,
-      value: BigInt(auth.value as string),
-      validAfter: BigInt(auth.validAfter as string),
-      validBefore: BigInt(auth.validBefore as string),
-      nonce: auth.nonce as `0x${string}`,
-    },
-    signature: (payload.payload as { signature: `0x${string}` }).signature,
-  });
-  return {
-    ok: valid,
-    payer: auth.from as string,
-    reason: valid ? undefined : "invalid signature",
-  };
 }
 
 export async function settleX402(
@@ -335,24 +264,9 @@ export async function settleX402(
     };
   }
 
-  const verified = await verifyOnly(payload, requirements);
-  if (!verified.ok) {
-    return {
-      ok: false,
-      status: 402,
-      reason: verified.reason ?? "payment verification failed",
-    };
-  }
-  const response: SettleResponse = {
-    success: true,
-    transaction: "",
-    network: ARC_CAIP2,
-    payer: verified.payer,
-  };
   return {
-    ok: true,
-    mode: "x402-verified",
-    payer: verified.payer,
-    responseHeader: encodePaymentResponseHeader(response),
+    ok: false,
+    status: 503,
+    reason: "x402 settlement is not configured",
   };
 }

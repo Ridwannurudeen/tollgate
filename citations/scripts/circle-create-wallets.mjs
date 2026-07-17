@@ -48,16 +48,19 @@ function upsertEnv(updates) {
   for (const [k, v] of Object.entries(updates)) {
     if (!seen.has(k)) out.push(`${k}=${v}`);
   }
-  writeFileSync(ENV_PATH, out.filter((l, i) => !(l === "" && i === out.length - 1)).join("\n") + "\n");
+  writeFileSync(
+    ENV_PATH,
+    out.filter((l, i) => !(l === "" && i === out.length - 1)).join("\n") + "\n",
+  );
 }
 
 async function ensureWalletSet() {
   if (process.env.CIRCLE_WALLET_SET_ID) {
-    console.log(`wallet set: reusing ${process.env.CIRCLE_WALLET_SET_ID}`);
+    console.log("wallet set: reusing configured wallet set");
     return process.env.CIRCLE_WALLET_SET_ID;
   }
   const id = await w3sCreateWalletSet("Tollgate Agents");
-  console.log(`wallet set: created ${id}`);
+  console.log("wallet set: created");
   upsertEnv({ CIRCLE_WALLET_SET_ID: id });
   return id;
 }
@@ -67,9 +70,13 @@ async function ensureWallet(walletSetId, { idEnv, addrEnv, refId, label }) {
     console.log(`${label}: reusing ${process.env[addrEnv]}`);
     return { id: process.env[idEnv], address: process.env[addrEnv] };
   }
-  const wallet = await w3sCreateWallet({ walletSetId, blockchain: BLOCKCHAIN, refId });
+  const wallet = await w3sCreateWallet({
+    walletSetId,
+    blockchain: BLOCKCHAIN,
+    refId,
+  });
   const info = await w3sWallet(wallet.id);
-  console.log(`${label}: created ${info.address} (${info.id})`);
+  console.log(`${label}: created ${info.address}`);
   upsertEnv({ [idEnv]: info.id, [addrEnv]: info.address });
   // Reflect into the live process so a subsequent run in the same invocation sees it.
   process.env[idEnv] = info.id;
@@ -93,7 +100,9 @@ async function main() {
   });
 
   console.log("\nDone. Next:");
-  console.log(`  1. Fund the payer with Arc-Testnet USDC: https://faucet.circle.com`);
+  console.log(
+    `  1. Fund the payer with Arc-Testnet USDC: https://faucet.circle.com`,
+  );
   console.log(`     payer address: ${payer.address}`);
   console.log(`  2. Verify: npm run prove:w3s-source circle-gateway-nano`);
 }

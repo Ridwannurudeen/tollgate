@@ -1,17 +1,22 @@
-# ⚠ Codex: your Aperture clone is STALE — reset to this repo before any work
+# Aperture security boundary
 
-Your working clone at commit `49839b7 "Mount Aperture under Tollgate"` is **behind production and contains a fixed bug**. Do NOT build, commit, or redeploy from it. Reset to this repo (it matches the live deployment on the VPS at `/opt/aperture`).
+Do not restore the original access-log settlement design from an older clone.
+The audited tree may be ahead of `/opt/aperture`; no deployment is implied by
+repository changes.
 
-## What changed since 49839b7 (and is NOT in your clone)
-1. **Double-pay bug fixed in `src/lib/watcher.ts`.** Previously `settle()` ran *before* the de-dup check, so a de-duped resolve event still paid on-chain and the forum-routed evidence was discarded (ledger stayed `local-proof`). The fix adds an injectable `findExistingReceipt` and **peeks for an existing receipt before settling** (idempotent — same access-log line never double-pays). This is the single most important change. If you redeploy your old `watcher.ts`, you reintroduce on-chain double-payments.
-2. **On-chain settlement is live.** A dedicated Aperture Arc payer is funded and `APERTURE_FEE_ROUTER_ENABLED=1` (secrets live only in `/etc/aperture.env` on the box, never in git). Receipts now settle `forum-routed` per download.
-3. **Photographer remapped** from the demo wallet to a real user-controlled wallet via `register:owner` (ownerId `751f8862…` → `0xc9F2…`).
-4. **Verified live:** 16/16 tests, typecheck, build, `verify:ledger` all pass; a real `forum-routed` receipt exists (tx confirmed on Arc, status 0x1); idempotency confirmed (re-running the same line creates no new payment).
+## Settlement invariant
 
-## What to do
-- **Reset/re-clone your working copy to THIS repo** (commit `3ff1a98+`). Treat it as the source of truth; it equals `/opt/aperture` on the VPS.
-- Never ship `data/` or `/etc/aperture.env` secrets to git.
-- Before any redeploy, confirm `grep -c "Idempotency\|findExisting" src/lib/watcher.ts` returns ≥1.
+1. `src/lib/license-download.ts` is the sole Immich payment and receipt writer.
+2. `src/lib/license-check.ts` accepts only a short-lived, one-use authorization
+   bound to the shared-link key and archive POST.
+3. `src/lib/watcher.ts` is observation-only. It reads successful access-log
+   events and existing receipts; it never calls FeeRouter or appends a receipt.
+4. Both nginx archive entry points retain their exact `auth_request` locations.
 
-## Source-of-truth rule going forward
-Production lives at `/opt/aperture` (deployed) and mirrors this repo. Any change must land in this repo first, then deploy — so production and the clone never diverge again.
+Before any approved deployment, run the full security regression suite and
+confirm the watcher has no FeeRouter or ledger-append import.
+
+## Source of truth
+
+Production lives at `/opt/aperture`. Verify its commit and configuration before
+any approved deployment; never assume it already mirrors this tree.

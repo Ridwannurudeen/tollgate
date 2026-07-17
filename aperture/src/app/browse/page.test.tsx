@@ -12,9 +12,16 @@ vi.mock("../../lib/link-registry", () => ({
   listPublicLinks: mocks.listPublicLinks,
 }));
 
-vi.mock("../../lib/registry", () => ({
-  readWalletRegistry: mocks.readWalletRegistry,
-}));
+vi.mock("../../lib/registry", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../lib/registry")>(
+      "../../lib/registry",
+    );
+  return {
+    ...actual,
+    readWalletRegistry: mocks.readWalletRegistry,
+  };
+});
 
 vi.mock("../../components/SiteNav", () => ({
   SiteNav: () => "nav",
@@ -56,7 +63,7 @@ describe("browse page", () => {
       photographers: [
         {
           ownerId: "owner-1",
-          displayName: "Jane Lens",
+          displayName: "Jane Lens jane@example.com",
           wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
           createdAt: "2026-07-06T00:00:00.000Z",
           approvalStatus: "operator-approved",

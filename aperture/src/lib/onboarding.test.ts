@@ -2,9 +2,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildOwnerOwnershipMessage, registerCreator } from "./onboarding";
 import { readWalletRegistry, writeWalletRegistry } from "./registry";
+
+const mocks = vi.hoisted(() => ({
+  w3sMintWallet: vi.fn(),
+}));
+
+vi.mock("./circle-w3s", () => ({
+  w3sMintWallet: mocks.w3sMintWallet,
+}));
 
 async function withTempRegistry(
   run: (filePath: string) => Promise<void>,
@@ -18,6 +26,10 @@ async function withTempRegistry(
 }
 
 describe("registerCreator", () => {
+  beforeEach(() => {
+    mocks.w3sMintWallet.mockReset();
+  });
+
   it("self-custody: registers the supplied wallet and persists it", async () => {
     await withTempRegistry(async (filePath) => {
       const entry = await registerCreator({
@@ -149,38 +161,78 @@ describe("registerCreator", () => {
     }
   });
 
-  it("preserves linked wallets when an existing owner re-registers", async () => {
+  it("rejects an existing owner before minting a replacement wallet", async () => {
     await withTempRegistry(async (filePath) => {
+      const existing = {
+        ownerId: "owner-1",
+        displayName: "Jane Lens",
+        wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03" as const,
+        createdAt: "2026-07-06T00:00:00.000Z",
+        approvalStatus: "operator-approved" as const,
+        linkedWallets: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      };
       await writeWalletRegistry(
         {
-          photographers: [
-            {
-              ownerId: "owner-1",
-              displayName: "Jane Lens",
-              wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
-              createdAt: "2026-07-06T00:00:00.000Z",
-              approvalStatus: "operator-approved",
-              linkedWallets: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
-            },
-          ],
+          photographers: [existing],
         },
         filePath,
       );
-
-      const entry = await registerCreator({
-        ownerId: "owner-1",
-        displayName: "Jane Lens Updated",
-        wallet: "0x12f25b721cc21c38495e33a4c8524dd0b647ba03",
-        filePath,
+      mocks.w3sMintWallet.mockResolvedValue({
+        id: "wallet-attacker",
+        address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        blockchain: "ARC-TESTNET",
+        state: "LIVE",
       });
 
-      expect(entry.linkedWallets).toEqual([
-        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      ]);
+      await expect(
+        registerCreator({
+          ownerId: "owner-1",
+          displayName: "Attacker",
+          walletSetId: "wallet-set",
+          filePath,
+        }),
+      ).rejects.toThrow("ownerId already registered");
+
+      expect(mocks.w3sMintWallet).not.toHaveBeenCalled();
       const registry = await readWalletRegistry(filePath);
-      expect(registry.photographers[0].linkedWallets).toEqual([
-        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      expect(registry.photographers).toEqual([existing]);
+    });
+  });
+
+  it("allows only one concurrent registration for an owner ID", async () => {
+    await withTempRegistry(async (filePath) => {
+      const attempts = await Promise.allSettled([
+        registerCreator({
+          ownerId: "owner-1",
+          displayName: "Jane Lens",
+          wallet: "0x12f25b721cc21c38495e33a4c8524dd0b647ba03",
+          filePath,
+        }),
+        registerCreator({
+          ownerId: "owner-1",
+          displayName: "Attacker",
+          wallet: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          filePath,
+        }),
       ]);
+
+      const fulfilled = attempts.filter(
+        (attempt) => attempt.status === "fulfilled",
+      );
+      const rejected = attempts.filter(
+        (attempt) => attempt.status === "rejected",
+      );
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0]).toMatchObject({
+        reason: new Error("ownerId already registered."),
+      });
+
+      const registry = await readWalletRegistry(filePath);
+      expect(registry.photographers).toHaveLength(1);
+      expect(registry.photographers[0]).toMatchObject(
+        fulfilled[0].status === "fulfilled" ? fulfilled[0].value : {},
+      );
     });
   });
 });

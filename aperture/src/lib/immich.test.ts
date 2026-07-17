@@ -47,6 +47,8 @@ describe("parseSharedLink", () => {
     const parsed = parseSharedLink({
       id: "share-1",
       key: "abc",
+      type: "INDIVIDUAL",
+      allowDownload: true,
       assets: [
         {
           id: "asset-1",
@@ -57,11 +59,63 @@ describe("parseSharedLink", () => {
       ],
     });
 
+    expect(parsed).toMatchObject({
+      type: "INDIVIDUAL",
+      allowDownload: true,
+    });
     expect(parsed.assets[0]).toEqual({
       id: "asset-1",
       ownerId: "owner-1",
       originalFileName: "photo.png",
       originalPath: "/opt/immich/library/photo.png",
     });
+  });
+
+  it("requires Immich's allowDownload flag", () => {
+    expect(() =>
+      parseSharedLink({
+        id: "share-1",
+        key: "abc",
+        type: "INDIVIDUAL",
+        assets: [],
+      }),
+    ).toThrow("Immich shared link allowDownload missing.");
+  });
+
+  it("rejects shared links whose downloads are disabled", () => {
+    expect(() =>
+      parseSharedLink({
+        id: "share-1",
+        key: "abc",
+        type: "INDIVIDUAL",
+        allowDownload: false,
+        assets: [],
+      }),
+    ).toThrow("Immich shared link does not allow downloads.");
+  });
+
+  it("rejects non-individual shared links", () => {
+    expect(() =>
+      parseSharedLink({
+        id: "share-1",
+        key: "abc",
+        type: "ALBUM",
+        allowDownload: true,
+        assets: [],
+      }),
+    ).toThrow("Immich shared link is not an individual-asset link.");
+  });
+
+  it("rejects album-shaped shared-link responses", () => {
+    expect(() =>
+      parseSharedLink({
+        id: "share-1",
+        key: "abc",
+        type: "INDIVIDUAL",
+        allowDownload: true,
+        album: { id: "album-1" },
+        assets: [],
+      }),
+    ).toThrow("Immich shared link contains an album.");
   });
 });

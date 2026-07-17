@@ -1,11 +1,8 @@
 import { open, stat } from "node:fs/promises";
 import {
   APERTURE_ACCESS_LOG,
-  APERTURE_EXIF_ENABLED,
   APERTURE_IMMICH_API_BASE_URL,
-  APERTURE_LICENSE_FEE_ATOMIC_USDC,
 } from "../src/lib/config";
-import { readAssetExifCredit } from "../src/lib/exif";
 import { processAccessLogLine } from "../src/lib/watcher";
 
 let offset = 0;
@@ -29,16 +26,11 @@ async function readNewLines(filePath: string): Promise<string[]> {
 
 async function tick() {
   for (const line of await readNewLines(APERTURE_ACCESS_LOG)) {
-    // The offset was already advanced by readNewLines, so a throw here would
-    // permanently drop this line and every remaining one. Skip the bad line
-    // and keep processing; append de-dup keeps retries from double-paying.
+    // The offset was already advanced by readNewLines, so skip a bad line and
+    // continue observing the remaining authorized downloads.
     try {
       const result = await processAccessLogLine(line, {
         immichApiBaseUrl: APERTURE_IMMICH_API_BASE_URL,
-        amountAtomicUsdc: APERTURE_LICENSE_FEE_ATOMIC_USDC,
-        ...(APERTURE_EXIF_ENABLED
-          ? { readExifCredit: readAssetExifCredit }
-          : {}),
       });
       if (result.kind === "processed") {
         console.log(
@@ -59,7 +51,7 @@ async function tick() {
 async function main() {
   offset = (await stat(APERTURE_ACCESS_LOG)).size;
   console.log(
-    `Watching ${APERTURE_ACCESS_LOG} for Immich archive downloads at ${APERTURE_IMMICH_API_BASE_URL} (exif=${APERTURE_EXIF_ENABLED ? "on" : "off"})`,
+    `Watching ${APERTURE_ACCESS_LOG} for authorized Immich archive downloads at ${APERTURE_IMMICH_API_BASE_URL}`,
   );
   setInterval(() => {
     tick().catch((error: unknown) => {

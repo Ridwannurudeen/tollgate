@@ -22,6 +22,8 @@ export type ImmichAsset = {
 export type ImmichSharedLink = {
   id: string;
   key: string;
+  type: "INDIVIDUAL";
+  allowDownload: boolean;
   assets: ImmichAsset[];
 };
 

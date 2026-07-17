@@ -2,13 +2,14 @@ import Link from "next/link";
 import { EarningsBoard } from "@/components/EarningsBoard";
 import { ReceiptTicker } from "@/components/ReceiptTicker";
 import { SiteNav } from "@/components/SiteNav";
-import { readSources } from "@/lib/catalog";
+import { publicSource, readSources } from "@/lib/catalog";
 import { formatDollars } from "@/lib/format";
 import {
   readLedger,
   summarizeCreators,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
+import { publicLedger } from "@/lib/public-data";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,14 @@ function totalPaid(ledger: Awaited<ReturnType<typeof readLedger>>): number {
 }
 
 export default async function CreatorsPage() {
-  const [ledger, sources] = await Promise.all([readLedger(), readSources()]);
+  const [rawLedger, rawSources] = await Promise.all([
+    readLedger(),
+    readSources(),
+  ]);
+  const verification = verifyLedgerIntegrity(rawLedger);
+  const ledger = publicLedger(rawLedger);
+  const sources = rawSources.map((source) => publicSource(source));
   const creators = summarizeCreators(ledger);
-  const verification = verifyLedgerIntegrity(ledger);
 
   return (
     <>

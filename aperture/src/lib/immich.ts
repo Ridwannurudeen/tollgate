@@ -100,15 +100,35 @@ export function parseSharedLink(value: unknown): ImmichSharedLink {
   if (!isRecord(value)) throw new Error("Immich shared link is not an object.");
   const id = value.id;
   const key = value.key;
+  const type = value.type;
+  const allowDownload = value.allowDownload;
   const assets = value.assets;
   if (typeof id !== "string") throw new Error("Immich shared link id missing.");
   if (typeof key !== "string") {
     throw new Error("Immich shared link key missing.");
   }
+  if (type !== "INDIVIDUAL") {
+    throw new Error("Immich shared link is not an individual-asset link.");
+  }
+  if (value.album !== undefined && value.album !== null) {
+    throw new Error("Immich shared link contains an album.");
+  }
+  if (typeof allowDownload !== "boolean") {
+    throw new Error("Immich shared link allowDownload missing.");
+  }
+  if (!allowDownload) {
+    throw new Error("Immich shared link does not allow downloads.");
+  }
   if (!Array.isArray(assets)) {
     throw new Error("Immich shared link assets missing.");
   }
-  return { id, key, assets: assets.map(parseAsset) };
+  return {
+    id,
+    key,
+    type,
+    allowDownload,
+    assets: assets.map(parseAsset),
+  };
 }
 
 function sharedLinkUrl(apiBaseUrl: string, key: string): URL {

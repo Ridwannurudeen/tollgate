@@ -5,6 +5,7 @@ import {
   createWalletClient,
   defineChain,
   http,
+  parseEventLogs,
   type Address,
   type Hex,
   type PublicClient,
@@ -23,6 +24,16 @@ const STANDING_FEE_ROUTER_ALLOWANCE = 10_000_000_000n;
 let splitRegistryLock: Promise<void> = Promise.resolve();
 
 const feeRouterAbi = [
+  {
+    type: "event",
+    name: "SplitCreated",
+    inputs: [
+      { name: "splitId", type: "uint256", indexed: true },
+      { name: "creator", type: "address", indexed: true },
+      { name: "recipients", type: "address[]", indexed: false },
+      { name: "bps", type: "uint16[]", indexed: false },
+    ],
+  },
   {
     type: "function",
     name: "createSplit",
@@ -219,6 +230,23 @@ function withSplitRegistryLock<T>(write: () => Promise<T>): Promise<T> {
   return run;
 }
 
+async function waitForSuccessfulTransaction(
+  publicClient: PublicClient,
+  transaction: Hex,
+  operation: string,
+) {
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: transaction,
+  });
+  if (receipt.transactionHash.toLowerCase() !== transaction.toLowerCase()) {
+    throw new Error(`${operation} was replaced.`);
+  }
+  if (receipt.status !== "success") {
+    throw new Error(`${operation} failed with status ${receipt.status}.`);
+  }
+  return receipt;
+}
+
 async function readFeeRouterSplit(
   splitId: bigint,
   feeRouterAddress: Address,
@@ -308,7 +336,7 @@ async function ensureCreatorSplit(
     }
 
     const chain = buildChain(config);
-    const { result: splitId, request } = await publicClient.simulateContract({
+    const { request } = await publicClient.simulateContract({
       address: config.feeRouterAddress,
       abi: feeRouterAbi,
       functionName: "createSplit",
@@ -320,11 +348,43 @@ async function ensureCreatorSplit(
       ...request,
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: createSplitTx });
+    const receipt = await waitForSuccessfulTransaction(
+      publicClient,
+      createSplitTx,
+      "FeeRouter createSplit transaction",
+    );
+    const events = parseEventLogs({
+      abi: feeRouterAbi,
+      eventName: "SplitCreated",
+      logs: receipt.logs.filter(
+        (log) =>
+          log.address.toLowerCase() ===
+          config.feeRouterAddress.toLowerCase(),
+      ),
+    });
+    const [createdEvent] = events;
+    if (events.length !== 1 || !createdEvent) {
+      throw new Error(
+        "FeeRouter createSplit receipt has no unique SplitCreated event.",
+      );
+    }
+    const created = createdEvent.args;
+    if (
+      created.creator.toLowerCase() !== account.address.toLowerCase() ||
+      !sameAddressList(created.recipients, recipients) ||
+      !sameBpsList(
+        created.bps.map((value) => Number(value)),
+        bps,
+      )
+    ) {
+      throw new Error(
+        "FeeRouter SplitCreated event does not match the requested creator split.",
+      );
+    }
 
     const record: FeeRouterSplitRecord = {
       wallet: recipient,
-      splitId: splitId.toString(),
+      splitId: created.splitId.toString(),
       recipients,
       bps,
       createSplitTx,
@@ -406,7 +466,11 @@ class LiveFeeRouterAdapter implements FeeRouterAdapter {
         account,
         chain,
       });
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
+      await waitForSuccessfulTransaction(
+        publicClient,
+        approveTx,
+        "FeeRouter approval transaction",
+      );
     }
 
     const split = await ensureCreatorSplit(
@@ -425,7 +489,11 @@ class LiveFeeRouterAdapter implements FeeRouterAdapter {
       account,
       chain,
     });
-    await publicClient.waitForTransactionReceipt({ hash: payTx });
+    await waitForSuccessfulTransaction(
+      publicClient,
+      payTx,
+      "FeeRouter pay transaction",
+    );
 
     return {
       settlementMode: "forum-routed",

@@ -120,72 +120,65 @@ export async function registerCreator(
     throw new Error("email must be a valid address.");
   }
 
-  let entry: WalletRegistryEntry;
-  if (input.wallet) {
-    if (!isAddress(input.wallet)) {
-      throw new Error("wallet must be a valid EVM address.");
-    }
-    const wallet = getAddress(input.wallet);
-    const ownershipProof = await ownershipProofFromInput(
-      input,
-      ownerId,
-      wallet,
-    );
-    entry = {
-      ownerId,
-      displayName,
-      wallet,
-      createdAt: new Date().toISOString(),
-      approvalStatus: ownershipProof ? "wallet-signed" : "pending",
-      custody: "self",
-      ...(ownershipProof ? { ownershipProof } : {}),
-    };
-  } else {
-    const walletSetId = input.walletSetId ?? process.env.CIRCLE_WALLET_SET_ID;
-    if (!walletSetId) {
-      throw new Error(
-        "Custodial onboarding needs CIRCLE_WALLET_SET_ID (run create:circle-wallets first) — or provide a wallet.",
-      );
-    }
-    const minted = await w3sMintWallet({
-      walletSetId,
-      blockchain: BLOCKCHAIN,
-      refId: `creator-${ownerId}`,
-    });
-    entry = {
-      ownerId,
-      displayName,
-      wallet: minted.address,
-      createdAt: new Date().toISOString(),
-      approvalStatus: "operator-approved",
-      custody: "circle-w3s",
-      walletId: minted.id,
-    };
-  }
-
   return withRegistryWriteLock(async () => {
     const registry = await readWalletRegistry(input.filePath);
-    const existing = findWalletForOwner(registry, ownerId);
+    if (findWalletForOwner(registry, ownerId)) {
+      throw new Error("ownerId already registered.");
+    }
     if (
       email &&
-      registry.photographers.some(
-        (candidate) =>
-          candidate.ownerId !== ownerId && candidate.email === email,
-      )
+      registry.photographers.some((candidate) => candidate.email === email)
     ) {
       throw new Error("email already registered.");
     }
+
+    let entry: WalletRegistryEntry;
+    if (input.wallet) {
+      if (!isAddress(input.wallet)) {
+        throw new Error("wallet must be a valid EVM address.");
+      }
+      const wallet = getAddress(input.wallet);
+      const ownershipProof = await ownershipProofFromInput(
+        input,
+        ownerId,
+        wallet,
+      );
+      entry = {
+        ownerId,
+        displayName,
+        wallet,
+        createdAt: new Date().toISOString(),
+        approvalStatus: ownershipProof ? "wallet-signed" : "pending",
+        custody: "self",
+        ...(ownershipProof ? { ownershipProof } : {}),
+      };
+    } else {
+      const walletSetId = input.walletSetId ?? process.env.CIRCLE_WALLET_SET_ID;
+      if (!walletSetId) {
+        throw new Error(
+          "Custodial onboarding needs CIRCLE_WALLET_SET_ID (run create:circle-wallets first) — or provide a wallet.",
+        );
+      }
+      const minted = await w3sMintWallet({
+        walletSetId,
+        blockchain: BLOCKCHAIN,
+        refId: `creator-${ownerId}`,
+      });
+      entry = {
+        ownerId,
+        displayName,
+        wallet: minted.address,
+        createdAt: new Date().toISOString(),
+        approvalStatus: "operator-approved",
+        custody: "circle-w3s",
+        walletId: minted.id,
+      };
+    }
+
     const finalEntry: WalletRegistryEntry = {
       ...entry,
-      ...(input.accountKeyHash
-        ? { accountKeyHash: input.accountKeyHash }
-        : existing?.accountKeyHash
-          ? { accountKeyHash: existing.accountKeyHash }
-          : {}),
-      ...(email ? { email } : existing?.email ? { email: existing.email } : {}),
-      ...(existing?.linkedWallets
-        ? { linkedWallets: existing.linkedWallets }
-        : {}),
+      ...(input.accountKeyHash ? { accountKeyHash: input.accountKeyHash } : {}),
+      ...(email ? { email } : {}),
     };
     await writeWalletRegistry(
       upsertWalletRegistryEntry(registry, finalEntry),

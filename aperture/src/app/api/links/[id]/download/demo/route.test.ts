@@ -1,17 +1,19 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
   payerWalletId: vi.fn(),
   payerAddress: vi.fn(),
   assertDemoUnlockWithinLimits: vi.fn(),
-  recordDemoUnlock: vi.fn(),
+  releaseDemoUnlockReservation: vi.fn(),
   createFeeRouterPublicClient: vi.fn(),
   readContract: vi.fn(),
   createW3SPaidFetch: vi.fn(),
   paidFetch: vi.fn(),
 }));
+
+const previousInternalOrigin = process.env.APERTURE_INTERNAL_ORIGIN;
 
 vi.mock("../../../../../../lib/circle-w3s", () => ({
   payerWalletId: mocks.payerWalletId,
@@ -20,7 +22,6 @@ vi.mock("../../../../../../lib/circle-w3s", () => ({
 
 vi.mock("../../../../../../lib/link-rate-limit", () => ({
   assertDemoUnlockWithinLimits: mocks.assertDemoUnlockWithinLimits,
-  recordDemoUnlock: mocks.recordDemoUnlock,
 }));
 
 vi.mock("../../../../../../lib/fee-router", () => ({
@@ -45,10 +46,11 @@ function context(id = "link-1") {
 
 describe("POST /api/links/[id]/download/demo", () => {
   beforeEach(() => {
+    process.env.APERTURE_INTERNAL_ORIGIN = "http://127.0.0.1:3092";
     mocks.payerWalletId.mockReset();
     mocks.payerAddress.mockReset();
     mocks.assertDemoUnlockWithinLimits.mockReset();
-    mocks.recordDemoUnlock.mockReset();
+    mocks.releaseDemoUnlockReservation.mockReset();
     mocks.createFeeRouterPublicClient.mockReset();
     mocks.readContract.mockReset();
     mocks.createW3SPaidFetch.mockReset();
@@ -57,6 +59,9 @@ describe("POST /api/links/[id]/download/demo", () => {
     mocks.payerWalletId.mockReturnValue("wallet-1");
     mocks.payerAddress.mockReturnValue(
       "0x1111111111111111111111111111111111111111",
+    );
+    mocks.assertDemoUnlockWithinLimits.mockReturnValue(
+      mocks.releaseDemoUnlockReservation,
     );
     mocks.createFeeRouterPublicClient.mockReturnValue({
       readContract: mocks.readContract,
@@ -75,6 +80,14 @@ describe("POST /api/links/[id]/download/demo", () => {
     );
   });
 
+  afterEach(() => {
+    if (previousInternalOrigin === undefined) {
+      delete process.env.APERTURE_INTERNAL_ORIGIN;
+    } else {
+      process.env.APERTURE_INTERNAL_ORIGIN = previousInternalOrigin;
+    }
+  });
+
   it("returns a plain 503 when the custodial payer is not configured", async () => {
     mocks.payerWalletId.mockImplementation(() => {
       throw new Error("missing");
@@ -86,10 +99,10 @@ describe("POST /api/links/[id]/download/demo", () => {
     expect(response.status).toBe(503);
     expect(body.error).toContain("isn't configured");
     expect(mocks.assertDemoUnlockWithinLimits).not.toHaveBeenCalled();
-    expect(mocks.recordDemoUnlock).not.toHaveBeenCalled();
+    expect(mocks.releaseDemoUnlockReservation).not.toHaveBeenCalled();
   });
 
-  it("does not record quota when the server-to-server payment fails", async () => {
+  it("releases the reservation when server-to-server payment is rejected", async () => {
     mocks.paidFetch.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: "raw settlement failure" }), {
         status: 402,
@@ -108,10 +121,43 @@ describe("POST /api/links/[id]/download/demo", () => {
     expect(mocks.assertDemoUnlockWithinLimits).toHaveBeenCalledWith(
       "203.0.113.5",
     );
-    expect(mocks.recordDemoUnlock).not.toHaveBeenCalled();
+    expect(mocks.releaseDemoUnlockReservation).toHaveBeenCalledOnce();
   });
 
-  it("streams the photo and records quota only after a successful unlock", async () => {
+  it("keeps the reservation after a settled download fails", async () => {
+    mocks.paidFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "stream failed" }), {
+        status: 502,
+        headers: {
+          "content-type": "application/json",
+          "payment-response": "settled",
+        },
+      }),
+    );
+
+    const response = await POST(
+      request({ "x-real-ip": "203.0.113.6" }),
+      context(),
+    );
+
+    expect(response.status).toBe(502);
+    expect(mocks.releaseDemoUnlockReservation).not.toHaveBeenCalled();
+  });
+
+  it("releases the reservation when the balance check fails", async () => {
+    mocks.readContract.mockRejectedValueOnce(new Error("unavailable"));
+
+    const response = await POST(
+      request({ "x-real-ip": "198.51.100.8" }),
+      context(),
+    );
+
+    expect(response.status).toBe(503);
+    expect(mocks.releaseDemoUnlockReservation).toHaveBeenCalledOnce();
+    expect(mocks.paidFetch).not.toHaveBeenCalled();
+  });
+
+  it("streams the photo and keeps the successful reservation", async () => {
     const response = await POST(request({ "x-real-ip": "198.51.100.9" }), {
       params: Promise.resolve({ id: "link 1" }),
     });
@@ -124,10 +170,10 @@ describe("POST /api/links/[id]/download/demo", () => {
       'attachment; filename="photo.jpg"',
     );
     expect(mocks.paidFetch).toHaveBeenCalledWith(
-      "http://aperture.test/aperture/api/links/link%201/download",
+      "http://127.0.0.1:3092/aperture/api/links/link%201/download",
       { method: "POST" },
     );
-    expect(mocks.recordDemoUnlock).toHaveBeenCalledWith("198.51.100.9");
+    expect(mocks.releaseDemoUnlockReservation).not.toHaveBeenCalled();
   });
 
   it("passes through video response headers after a successful unlock", async () => {
@@ -156,6 +202,6 @@ describe("POST /api/links/[id]/download/demo", () => {
     expect(response.headers.get("x-aperture-receipt-hash")).toBe(
       `0x${"2".repeat(64)}`,
     );
-    expect(mocks.recordDemoUnlock).toHaveBeenCalledWith("198.51.100.10");
+    expect(mocks.releaseDemoUnlockReservation).not.toHaveBeenCalled();
   });
 });

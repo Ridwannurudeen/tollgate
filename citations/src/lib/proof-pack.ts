@@ -1,17 +1,17 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readSources } from "./catalog";
+import { publicSource, readSources } from "./catalog";
 import { actorClassCounts, summarizeActorPayments } from "./actor-class";
 import { readFeeRouterSplitRegistry } from "./fee-router";
 import { readLedger, summarizeCreators, verifyLedgerIntegrity } from "./ledger";
 import { tollgateAgentWallet } from "./payments";
 import { payGateAddress } from "./pay-gate";
+import { projectPublicData } from "./public-data";
 
 const execFileAsync = promisify(execFile);
+let fallbackDeployedCommit: Promise<string> | undefined;
 
-async function readDeployedCommit(): Promise<string> {
-  const configured = process.env.LEPTONWEB_DEPLOY_COMMIT?.trim();
-  if (configured) return configured;
+async function readFallbackDeployedCommit(): Promise<string> {
   try {
     const result = await execFileAsync("git", ["rev-parse", "HEAD"], {
       cwd: process.cwd(),
@@ -20,6 +20,13 @@ async function readDeployedCommit(): Promise<string> {
   } catch {
     return "unknown";
   }
+}
+
+function readDeployedCommit(): Promise<string> {
+  const configured = process.env.LEPTONWEB_DEPLOY_COMMIT?.trim();
+  if (configured) return Promise.resolve(configured);
+  fallbackDeployedCommit ??= readFallbackDeployedCommit();
+  return fallbackDeployedCommit;
 }
 
 export async function buildProofPack() {
@@ -54,7 +61,7 @@ export async function buildProofPack() {
     (source) => source.creatorClaimed === true,
   );
 
-  return {
+  return projectPublicData({
     project: "tollgate-citations",
     generatedAt: new Date().toISOString(),
     deployedCommit,
@@ -148,21 +155,24 @@ export async function buildProofPack() {
       latestHash: ledger.receipts.at(-1)?.receiptHash ?? null,
     },
     creators,
-    sources: sources.map((source) => ({
-      id: source.id,
-      title: source.title,
-      creator: source.creator,
-      wallet: source.wallet,
-      url: source.url,
-      sourceKind: source.sourceKind,
-      creatorKind: source.creatorKind,
-      verifiedCreator: source.verifiedCreator,
-      ownershipProof: source.ownershipProof,
-    })),
+    sources: sources.map((source) => {
+      const projected = publicSource(source);
+      return {
+        id: projected.id,
+        title: projected.title,
+        creator: projected.creator,
+        wallet: projected.wallet,
+        url: projected.url,
+        sourceKind: projected.sourceKind,
+        creatorKind: projected.creatorKind,
+        verifiedCreator: projected.verifiedCreator,
+        ownershipProof: projected.ownershipProof,
+      };
+    }),
     feeRouterSplits: splitRegistry,
     receipts: ledger.receipts,
     queries: ledger.queries,
-  };
+  });
 }
 
 export type JudgeProofPack = Awaited<ReturnType<typeof buildProofPack>>;

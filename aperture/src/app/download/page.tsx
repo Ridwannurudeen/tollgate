@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { APERTURE_IMMICH_API_BASE_URL } from "../../lib/config";
+import {
+  APERTURE_IMMICH_API_BASE_URL,
+  APERTURE_LICENSE_FEE_ATOMIC_USDC,
+} from "../../lib/config";
 import { resolveSharedLink } from "../../lib/immich";
 import { DownloadArchiveButton } from "./DownloadArchiveButton";
 
@@ -74,6 +77,10 @@ export default async function DownloadPage({
               assetIds={assetIds}
               basePath={basePath}
               localProofEnabled={localProofEnabled}
+              priceText={`${(
+                (assetIds.length * APERTURE_LICENSE_FEE_ATOMIC_USDC) /
+                1_000_000
+              ).toFixed(4)} USDC`}
               sharedLinkKey={key}
             />
           </>

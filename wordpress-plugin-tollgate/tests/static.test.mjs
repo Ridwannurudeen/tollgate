@@ -20,7 +20,17 @@ describe("Tollgate WordPress plugin", () => {
     assert.match(plugin, /X-Tollgate-Site-Key/);
     assert.match(plugin, /\/api\/wordpress\/posts\//);
     assert.match(plugin, /\/api\/wordpress\/proof/);
+    assert.doesNotMatch(plugin, /\/api\/wordpress\/posts\/[^']*\/pay/);
     assert.doesNotMatch(plugin, /curl_exec|file_get_contents|shell_exec|proc_open|popen/);
+  });
+
+  it("does not expose a public callback that can trigger hosted settlement", () => {
+    assert.doesNotMatch(plugin, /'permission_callback'\s*=>\s*'__return_true'/);
+    assert.match(
+      plugin,
+      /'permission_callback'\s*=>\s*'tollgate_rest_payment_permission'/,
+    );
+    assert.match(plugin, /reader payment authorization is required/i);
   });
 
   it("returns a real HTTP 402 for known AI agent user agents", () => {

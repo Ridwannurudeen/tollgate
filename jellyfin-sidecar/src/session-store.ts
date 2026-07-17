@@ -4,6 +4,7 @@ import type {
   ActivePlaybackSession,
   NormalizedPlaybackEvent,
   SessionStore,
+  VerifiedPlaybackStart,
 } from "./types.js";
 
 const EMPTY_STORE: SessionStore = { sessions: [] };
@@ -55,10 +56,17 @@ async function writeSessionStore(
 export async function upsertPlaybackSession(
   event: NormalizedPlaybackEvent,
   filePath: string,
+  verification?: VerifiedPlaybackStart & { verifiedAt: string },
 ): Promise<ActivePlaybackSession> {
   return withSessionWriteLock(async () => {
+    const store = await readSessionStore(filePath);
+    const key = sessionKeyForEvent(event);
+    const existing = store.sessions.find((entry) => entry.key === key);
+    if (existing && (!verification || existing.verifiedAt)) {
+      return existing;
+    }
     const session: ActivePlaybackSession = {
-      key: sessionKeyForEvent(event),
+      key,
       itemId: event.itemId,
       itemName: event.itemName,
       itemType: event.itemType,
@@ -66,11 +74,15 @@ export async function upsertPlaybackSession(
       sessionId: event.sessionId,
       deviceId: event.deviceId,
       clientName: event.clientName,
-      startedAt: event.timestamp,
-      startPlaybackPositionTicks: event.playbackPositionTicks ?? 0,
+      startedAt: verification?.verifiedAt ?? event.timestamp,
+      startPlaybackPositionTicks:
+        verification?.playbackPositionTicks ??
+        event.playbackPositionTicks ??
+        0,
+      verifiedAt: verification?.verifiedAt ?? null,
+      verifiedRunTimeTicks: verification?.runTimeTicks ?? null,
       rawStartHash: event.rawHash,
     };
-    const store = await readSessionStore(filePath);
     await writeSessionStore(
       {
         sessions: [

@@ -8,6 +8,8 @@ import {
   PAID_QUERY_PRICE_ATOMIC_USDC,
   tollgateAgentWallet,
 } from "@/lib/payments";
+import { projectPublicData, publicSettlementResult } from "@/lib/public-data";
+import { leptonwebPublicOrigin } from "@/lib/public-origin";
 import { settlePaidQuestion, validateQuestion } from "@/lib/settlement";
 import {
   PAYMENT_RESPONSE_HEADER,
@@ -16,7 +18,6 @@ import {
   buildGatewayPaymentRequirements,
   paymentRequiredBody,
   paymentRequiredHeaders,
-  publicOrigin,
   settleX402,
 } from "@/lib/x402-server";
 
@@ -54,9 +55,7 @@ export async function POST(request: NextRequest) {
       buildExactPaymentRequirements(payTo, PAID_QUERY_PRICE_ATOMIC_USDC),
       buildGatewayPaymentRequirements(payTo, PAID_QUERY_PRICE_ATOMIC_USDC),
     ];
-    const resourceUrl =
-      publicOrigin(request.headers, request.nextUrl.origin) +
-      request.nextUrl.pathname;
+    const resourceUrl = leptonwebPublicOrigin() + request.nextUrl.pathname;
     const required = paymentRequiredBody(
       accepts,
       resourceUrl,
@@ -96,30 +95,30 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    return NextResponse.json(result, {
+    return NextResponse.json(publicSettlementResult(result), {
       status: 201,
       headers: { [PAYMENT_RESPONSE_HEADER]: settlement.responseHeader },
     });
   } catch (error) {
     if (error instanceof PaidQueryAgentError) {
       return NextResponse.json(
-        {
+        projectPublicData({
           error: error.message,
           stage: error.stage,
           readerPayment: error.readerPayment,
           query: error.query,
           priorFailure: error.priorFailure,
-        },
+        }),
         { status: 502 },
       );
     }
     return NextResponse.json(
-      {
+      projectPublicData({
         error:
           error instanceof Error
             ? error.message
             : "Paid query settlement failed.",
-      },
+      }),
       { status: 400 },
     );
   }

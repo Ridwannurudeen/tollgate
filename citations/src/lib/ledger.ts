@@ -640,7 +640,8 @@ export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {
     const citation = query?.citations.find(
       (candidate) => candidate.sourceId === receipt.sourceId,
     );
-    const current = byWallet.get(receipt.wallet) ?? {
+    const walletKey = receipt.wallet.toLowerCase();
+    const current = byWallet.get(walletKey) ?? {
       creator: receipt.creator,
       handle: citation?.handle ?? "@unknown",
       wallet: receipt.wallet,
@@ -666,17 +667,18 @@ export function summarizeCreators(ledger: Ledger): CreatorEarnings[] {
       current.creatorClaimed === true || citation?.creatorClaimed === true;
     current.citationCount += 1;
     current.earnedAtomicUsdc += receipt.amountAtomicUsdc;
-    byWallet.set(receipt.wallet, current);
+    byWallet.set(walletKey, current);
 
-    const sourceIds = sourceIdsByWallet.get(receipt.wallet) ?? new Set();
+    const sourceIds = sourceIdsByWallet.get(walletKey) ?? new Set();
     sourceIds.add(receipt.sourceId);
-    sourceIdsByWallet.set(receipt.wallet, sourceIds);
+    sourceIdsByWallet.set(walletKey, sourceIds);
   }
 
   return Array.from(byWallet.values())
     .map((creator) => ({
       ...creator,
-      sourceCount: sourceIdsByWallet.get(creator.wallet)?.size ?? 0,
+      sourceCount:
+        sourceIdsByWallet.get(creator.wallet.toLowerCase())?.size ?? 0,
     }))
     .sort((a, b) => b.earnedAtomicUsdc - a.earnedAtomicUsdc);
 }

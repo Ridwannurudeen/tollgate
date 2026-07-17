@@ -18,8 +18,7 @@ const WORDPRESS_REGISTRATION_LIMIT = 20;
 const WORDPRESS_PAY_WINDOW_MS = 60 * 1000;
 const WORDPRESS_PAY_LIMIT = 30;
 // Custodial demo pays real (testnet) USDC from a shared wallet per click, so it
-// is capped both per-IP and globally. Limits are check-then-record: a failed
-// settlement must not burn a judge's quota.
+// is capped both per-IP and globally.
 const DEMO_PAID_QUERY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DEMO_PAID_QUERY_PER_IP_LIMIT = 2;
 const DEMO_PAID_QUERY_GLOBAL_LIMIT = 30;
@@ -32,6 +31,18 @@ const wordpressRegistrationBuckets = new Map<string, RateLimitBucket>();
 const wordpressPayBuckets = new Map<string, RateLimitBucket>();
 const demoPaidQueryBuckets = new Map<string, RateLimitBucket>();
 let demoPaidQueryGlobal: RateLimitBucket = { windowStart: 0, count: 0 };
+
+export function requestIp(headers: Headers): string {
+  const realIp = headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  const forwarded = headers.get("x-forwarded-for");
+  if (forwarded) {
+    const parts = forwarded.split(",").map((part) => part.trim());
+    const closestProxyValue = parts[parts.length - 1];
+    if (closestProxyValue) return closestProxyValue;
+  }
+  return "local";
+}
 
 export function assertQueryRateLimit(key: string, now = Date.now()): void {
   const bucketKey = key || "anonymous";
@@ -189,13 +200,10 @@ function activeCount(
   return bucket.count;
 }
 
-// Throws if a new custodial demo query would exceed the per-IP or global cap.
-// Does NOT record the attempt — call recordDemoPaidQuery only after a settlement
-// succeeds, so a failed payment never consumes a judge's quota.
-export function assertDemoPaidQueryWithinLimits(
+export function reserveDemoPaidQuery(
   key: string,
   now = Date.now(),
-): void {
+): { release: () => void } {
   const bucketKey = key || "anonymous";
   for (const [existingKey, bucket] of demoPaidQueryBuckets) {
     if (now - bucket.windowStart >= DEMO_PAID_QUERY_WINDOW_MS) {
@@ -221,19 +229,35 @@ export function assertDemoPaidQueryWithinLimits(
       "The shared demo wallet's daily budget is used up. Try the free run, or connect your own wallet.",
     );
   }
-}
 
-export function recordDemoPaidQuery(key: string, now = Date.now()): void {
-  const bucketKey = key || "anonymous";
-  const ip = demoPaidQueryBuckets.get(bucketKey);
-  if (!ip || now - ip.windowStart >= DEMO_PAID_QUERY_WINDOW_MS) {
-    demoPaidQueryBuckets.set(bucketKey, { windowStart: now, count: 1 });
-  } else {
-    ip.count += 1;
+  let ipBucket = demoPaidQueryBuckets.get(bucketKey);
+  if (!ipBucket || now - ipBucket.windowStart >= DEMO_PAID_QUERY_WINDOW_MS) {
+    ipBucket = { windowStart: now, count: 0 };
+    demoPaidQueryBuckets.set(bucketKey, ipBucket);
   }
   if (now - demoPaidQueryGlobal.windowStart >= DEMO_PAID_QUERY_WINDOW_MS) {
-    demoPaidQueryGlobal = { windowStart: now, count: 1 };
-  } else {
-    demoPaidQueryGlobal.count += 1;
+    demoPaidQueryGlobal = { windowStart: now, count: 0 };
   }
+  const globalBucket = demoPaidQueryGlobal;
+  ipBucket.count += 1;
+  globalBucket.count += 1;
+
+  let released = false;
+  return {
+    release: () => {
+      if (released) return;
+      released = true;
+      ipBucket.count -= 1;
+      globalBucket.count -= 1;
+      if (
+        ipBucket.count === 0 &&
+        demoPaidQueryBuckets.get(bucketKey) === ipBucket
+      ) {
+        demoPaidQueryBuckets.delete(bucketKey);
+      }
+      if (globalBucket.count === 0 && demoPaidQueryGlobal === globalBucket) {
+        demoPaidQueryGlobal = { windowStart: 0, count: 0 };
+      }
+    },
+  };
 }

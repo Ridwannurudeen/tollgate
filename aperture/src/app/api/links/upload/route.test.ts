@@ -107,10 +107,37 @@ describe("POST /api/links/upload", () => {
         mediaKind: "photo",
         title: "Photo",
         displayName: "Jane Lens",
-        email: "jane@example.com",
+        email: undefined,
       }),
       expect.not.objectContaining({ sessionOwnerId: expect.any(String) }),
     );
+  });
+
+  it("redacts the public creator response after signing the raw owner session", async () => {
+    mocks.handleLinkUploadRegistration.mockResolvedValue({
+      accountKey: "aptr_key",
+      link: {
+        id: "upload-private",
+        title: "Contact archive@example.com",
+        ownerId: "owner-archive@example.com",
+        priceAtomicUsdc: 2500,
+      },
+      registered: {
+        ownerId: "owner-archive@example.com",
+        displayName: "Archive archive@example.com",
+        wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03",
+        createdAt: "2026-07-06T00:00:00.000Z",
+        approvalStatus: "operator-approved",
+      },
+      shareUrl: "https://tollgate.gudman.xyz/aperture/link/upload-private",
+    });
+
+    const response = await POST(uploadRequest("198.51.100.219"));
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(JSON.stringify(body)).not.toContain("archive@example.com");
+    expect(mocks.signSession).toHaveBeenCalledWith("owner-archive@example.com");
   });
 
   it("reuses an existing session owner and strips email", async () => {
@@ -250,22 +277,33 @@ describe("POST /api/links/upload", () => {
 
   it("rejects video files larger than the video upload cap", async () => {
     const body = new FormData();
-    body.set(
-      "file",
-      fileWithSize(VIDEO_UPLOAD_MAX_BYTES + 1, "video/mp4"),
-    );
+    body.set("file", fileWithSize(VIDEO_UPLOAD_MAX_BYTES + 1, "video/mp4"));
     body.set("mediaKind", "video");
     body.set("title", "Large Video");
     body.set("displayName", "Jane Lens");
 
-    const response = await POST(
-      requestWithFormData("198.51.100.218", body),
-    );
+    const response = await POST(requestWithFormData("198.51.100.218", body));
 
     expect(response.status).toBe(413);
     expect(await response.json()).toEqual({
       error: "video is larger than the 100 MB upload cap.",
     });
     expect(mocks.handleLinkUploadRegistration).not.toHaveBeenCalled();
+  });
+
+  it("does not expose Circle request details in upload registration errors", async () => {
+    mocks.handleLinkUploadRegistration.mockRejectedValue(
+      new Error(
+        "Circle request /wallets/private-circle-wallet-id failed: upstream-secret-body",
+      ),
+    );
+
+    const response = await POST(uploadRequest("198.51.100.220"));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({ error: "photo upload registration failed" });
+    expect(JSON.stringify(body)).not.toContain("private-circle-wallet-id");
+    expect(JSON.stringify(body)).not.toContain("upstream-secret-body");
   });
 });

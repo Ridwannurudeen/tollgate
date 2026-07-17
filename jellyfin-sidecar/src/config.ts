@@ -10,7 +10,12 @@ export type SidecarConfig = {
   ledgerPath: string;
   sessionsPath: string;
   publicWebhookUrl: string;
+  registrationSecret?: string;
+  jellyfinServerUrl?: string;
+  jellyfinApiKey?: string;
   defaultAtomicUsdcPerMinute: number;
+  maxAtomicUsdcPerEvent: number;
+  maxDailyAtomicUsdc: number;
   feeRouterMode: FeeRouterMode;
   feeRouterPrivateKey?: Hex;
   feeRouterRpcUrl: string;
@@ -33,7 +38,7 @@ function readPositiveInteger(
 ): number {
   if (!value) return fallback;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`Expected a positive integer, got ${value}.`);
   }
   return parsed;
@@ -59,6 +64,33 @@ function readHex(value: string | undefined): Hex | undefined {
   return value as Hex;
 }
 
+function readJellyfinServerUrl(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined;
+  const url = new URL(value.trim());
+  if (
+    (url.protocol !== "http:" && url.protocol !== "https:") ||
+    url.username ||
+    url.password
+  ) {
+    throw new Error(
+      "JELLYFIN_SERVER_URL must be an HTTP(S) URL without credentials.",
+    );
+  }
+  url.search = "";
+  url.hash = "";
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
+  return url.toString();
+}
+
+function readJellyfinApiKey(value: string | undefined): string | undefined {
+  const apiKey = value?.trim();
+  if (!apiKey) return undefined;
+  if (!/^[A-Za-z0-9._~-]{8,256}$/.test(apiKey)) {
+    throw new Error("JELLYFIN_API_KEY is invalid.");
+  }
+  return apiKey;
+}
+
 function normalizeFeeRouterMode(value: string | undefined): FeeRouterMode {
   if (!value || value === "dry-run") return "dry-run";
   if (value === "live" || value === "forum-routed") return "live";
@@ -72,14 +104,27 @@ export function loadConfig(
   cwd: string = process.cwd(),
 ): SidecarConfig {
   const feeRouterMode = normalizeFeeRouterMode(env.JELLYFIN_FEE_ROUTER_MODE);
-  const feeRouterPrivateKey = readHex(
-    env.JELLYFIN_FEE_ROUTER_PRIVATE_KEY ??
-      env.LEPTONWEB_FEE_ROUTER_PRIVATE_KEY ??
-      env.APERTURE_FEE_ROUTER_PRIVATE_KEY,
-  );
+  const feeRouterPrivateKey = readHex(env.JELLYFIN_FEE_ROUTER_PRIVATE_KEY);
   if (feeRouterMode === "live" && !feeRouterPrivateKey) {
     throw new Error(
-      "JELLYFIN_FEE_ROUTER_PRIVATE_KEY or LEPTONWEB_FEE_ROUTER_PRIVATE_KEY is required when JELLYFIN_FEE_ROUTER_MODE=live.",
+      "JELLYFIN_FEE_ROUTER_PRIVATE_KEY is required when JELLYFIN_FEE_ROUTER_MODE=live.",
+    );
+  }
+  const jellyfinServerUrl = readJellyfinServerUrl(env.JELLYFIN_SERVER_URL);
+  const jellyfinApiKey = readJellyfinApiKey(env.JELLYFIN_API_KEY);
+  if (feeRouterMode === "live" && !jellyfinServerUrl) {
+    throw new Error(
+      "JELLYFIN_SERVER_URL is required when JELLYFIN_FEE_ROUTER_MODE=live.",
+    );
+  }
+  if (feeRouterMode === "live" && !jellyfinApiKey) {
+    throw new Error(
+      "JELLYFIN_API_KEY is required when JELLYFIN_FEE_ROUTER_MODE=live.",
+    );
+  }
+  if (feeRouterMode === "live") {
+    throw new Error(
+      "Jellyfin live FeeRouter settlement is disabled until durable pre-payment journaling and reconciliation are implemented.",
     );
   }
 
@@ -105,9 +150,21 @@ export function loadConfig(
       env.JELLYFIN_USDC_ATOMIC_PER_MINUTE,
       2500,
     ),
+    maxAtomicUsdcPerEvent: readPositiveInteger(
+      env.JELLYFIN_MAX_ATOMIC_USDC_PER_EVENT,
+      1_000_000,
+    ),
+    maxDailyAtomicUsdc: readPositiveInteger(
+      env.JELLYFIN_MAX_DAILY_ATOMIC_USDC,
+      10_000_000,
+    ),
     publicWebhookUrl:
       env.JELLYFIN_PUBLIC_WEBHOOK_URL ??
       "https://tollgate.gudman.xyz/jellyfin/api/webhooks/jellyfin",
+    registrationSecret:
+      env.JELLYFIN_REGISTRATION_SECRET?.trim() || undefined,
+    jellyfinServerUrl,
+    jellyfinApiKey,
     feeRouterMode,
     feeRouterPrivateKey,
     feeRouterRpcUrl:

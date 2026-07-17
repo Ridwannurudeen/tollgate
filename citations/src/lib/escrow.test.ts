@@ -37,7 +37,7 @@ describe("escrow source policy", () => {
     }
   });
 
-  it("does not escrow creator-claimed external sources after probation clears", () => {
+  it("keeps historical creator-claimed external sources in escrow", () => {
     const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
     delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
 
@@ -52,7 +52,7 @@ describe("escrow source policy", () => {
             verifiedAt: "2026-07-07T00:00:00.000Z",
           },
         }),
-      ).toBe(false);
+      ).toBe(true);
     } finally {
       restoreEnv(previous);
     }

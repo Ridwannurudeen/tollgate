@@ -20,6 +20,7 @@ import {
   readLedger,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
+import { publicLedger } from "@/lib/public-data";
 import { agentTraceLabel, displayAgentRationale } from "@/lib/query-display";
 import { sourceStatus } from "@/lib/source-status";
 import { readCachedSlashBondStatus } from "@/lib/slash-bond";
@@ -47,12 +48,13 @@ function EvidenceRow({
 
 export default async function AnswerPage({ params }: Props) {
   const { queryId } = await params;
-  const [ledger, covenant, slashBond] = await Promise.all([
+  const [rawLedger, covenant, slashBond] = await Promise.all([
     readLedger(),
     readCovenantEnvelope().catch(() => null),
     readCachedSlashBondStatus().catch(() => null),
   ]);
-  const verification = verifyLedgerIntegrity(ledger);
+  const verification = verifyLedgerIntegrity(rawLedger);
+  const ledger = publicLedger(rawLedger);
   const evidence = getAnswerEvidence(ledger, queryId);
   if (!evidence) notFound();
 

@@ -4,6 +4,7 @@ import {
   summarizeCreators,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
+import { projectPublicData, publicLedger } from "@/lib/public-data";
 
 export const runtime = "nodejs";
 
@@ -36,8 +37,7 @@ export async function GET(request: NextRequest) {
   const filteredQueries = filtered
     ? ledger.queries.filter((query) => {
         const matchesAgentMode =
-          requestedAgentMode === null ||
-          query.agentMode === requestedAgentMode;
+          requestedAgentMode === null || query.agentMode === requestedAgentMode;
         const matchesSettled =
           requestedSettled === null ||
           (requestedSettled === "true" && query.readerPayment !== undefined) ||
@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
     : ledger;
   const sourceVerification = verifyLedgerIntegrity(ledger);
   return NextResponse.json({
-    ledger: responseLedger,
-    creators: summarizeCreators(responseLedger),
+    ledger: publicLedger(responseLedger),
+    creators: projectPublicData(summarizeCreators(responseLedger)),
     verification: sourceVerification,
     ...(filtered
       ? {

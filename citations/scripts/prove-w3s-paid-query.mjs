@@ -26,7 +26,6 @@ console.log(
   JSON.stringify(
     {
       payer: address,
-      payerWalletId: walletId,
       signedBy: "circle-w3s",
       question: body.query?.question,
       settlementMode: body.query?.readerPayment?.settlementMode,

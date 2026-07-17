@@ -1,20 +1,47 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { registerCreator } from "../../../lib/onboarding";
+import { publicWalletRegistryEntry } from "../../../lib/registry";
 import type { WalletRegistryEntry } from "../../../lib/types";
 
 export const runtime = "nodejs";
 
 function publicRegistered(entry: WalletRegistryEntry) {
+  const projected = publicWalletRegistryEntry(entry);
   return {
-    ownerId: entry.ownerId,
-    displayName: entry.displayName,
-    wallet: entry.wallet,
-    approvalStatus: entry.approvalStatus,
-    custody: entry.custody,
+    ownerId: projected.ownerId,
+    displayName: projected.displayName,
+    wallet: projected.wallet,
+    approvalStatus: projected.approvalStatus,
+    custody: projected.custody,
   };
 }
 
+function registrationAuthorized(request: Request, expected: string): boolean {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) return false;
+  const suppliedHash = createHash("sha256")
+    .update(authorization.slice("Bearer ".length))
+    .digest();
+  const expectedHash = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(suppliedHash, expectedHash);
+}
+
 export async function POST(request: Request) {
+  const registrationSecret =
+    process.env.APERTURE_CREATOR_REGISTRATION_SECRET?.trim();
+  if (!registrationSecret) {
+    return NextResponse.json(
+      { error: "creator registration is not configured" },
+      { status: 503 },
+    );
+  }
+  if (!registrationAuthorized(request, registrationSecret)) {
+    return NextResponse.json(
+      { error: "invalid registration capability" },
+      { status: 401 },
+    );
+  }
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "invalid body" }, { status: 400 });
@@ -43,9 +70,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ registered: publicRegistered(entry) });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "registration failed" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "registration failed" }, { status: 400 });
   }
 }

@@ -14,6 +14,11 @@ export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 export const LOGIN_TOKEN_TTL_MS = 20 * 60 * 1000;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SESSION_TOKEN_VERSION = "v1";
+type SessionTokenPayload = {
+  ownerId: string;
+  exp: number;
+};
 type SignupTokenPayload = {
   email: string;
   exp: number;
@@ -90,11 +95,6 @@ export async function generateLoginToken(
   });
 }
 
-// Non-consuming lookup: the token stays valid until it expires (its 20-min TTL)
-// rather than being cleared on first use. Email providers (Gmail, security
-// scanners) pre-fetch links to check them, which would otherwise burn a
-// single-use token before the human clicks. A fresh login-link request
-// overwrites loginTokenHash, invalidating any prior token.
 export async function redeemLoginToken(
   token: string,
   filePath?: string,
@@ -103,23 +103,36 @@ export async function redeemLoginToken(
   const trimmed = token.trim();
   if (!/^[0-9a-f]{64}$/i.test(trimmed)) return null;
   const hash = accountKeyHash(trimmed);
-  const registry = await readWalletRegistry(filePath);
-  return (
-    registry.photographers.find(
-      (entry) =>
-        entry.loginTokenHash === hash &&
-        !!entry.loginTokenExpiresAt &&
-        Date.parse(entry.loginTokenExpiresAt) > now,
-    ) ?? null
-  );
+  return withRegistryWriteLock(async () => {
+    const registry = await readWalletRegistry(filePath);
+    let redeemed: WalletRegistryEntry | null = null;
+    const photographers = registry.photographers.map((entry) => {
+      if (
+        redeemed ||
+        entry.loginTokenHash !== hash ||
+        !entry.loginTokenExpiresAt ||
+        Date.parse(entry.loginTokenExpiresAt) <= now
+      ) {
+        return entry;
+      }
+      const consumed = { ...entry };
+      delete consumed.loginTokenHash;
+      delete consumed.loginTokenExpiresAt;
+      redeemed = consumed;
+      return consumed;
+    });
+    if (!redeemed) return null;
+    await writeWalletRegistry({ photographers }, filePath);
+    return redeemed;
+  });
 }
 
 function sessionSecret(): string | null {
   return process.env.APERTURE_SESSION_SECRET?.trim() || null;
 }
 
-function sessionSignature(ownerId: string, secret: string): string {
-  return createHmac("sha256", secret).update(ownerId).digest("hex");
+function sessionSignature(value: string, secret: string): string {
+  return createHmac("sha256", secret).update(value).digest("hex");
 }
 
 function signupTokenSignature(payload: string, secret: string): string {
@@ -142,6 +155,16 @@ function isSignupTokenPayload(value: unknown): value is SignupTokenPayload {
     typeof (value as SignupTokenPayload).email === "string" &&
     typeof (value as SignupTokenPayload).exp === "number" &&
     Number.isFinite((value as SignupTokenPayload).exp)
+  );
+}
+
+function isSessionTokenPayload(value: unknown): value is SessionTokenPayload {
+  return (
+    Boolean(value && typeof value === "object") &&
+    typeof (value as SessionTokenPayload).ownerId === "string" &&
+    Boolean((value as SessionTokenPayload).ownerId) &&
+    typeof (value as SessionTokenPayload).exp === "number" &&
+    Number.isSafeInteger((value as SessionTokenPayload).exp)
   );
 }
 
@@ -186,22 +209,48 @@ export function verifySignupToken(
   }
 }
 
-export function signSession(ownerId: string): string | null {
+export function signSession(ownerId: string, now = Date.now()): string | null {
   const secret = sessionSecret();
-  if (!secret) return null;
-  return `${ownerId}.${sessionSignature(ownerId, secret)}`;
+  if (!secret || !ownerId || !Number.isFinite(now)) return null;
+  const payload = Buffer.from(
+    JSON.stringify({
+      ownerId,
+      exp: now + SESSION_MAX_AGE_SECONDS * 1_000,
+    }),
+    "utf8",
+  ).toString("base64url");
+  const signedPayload = `${SESSION_TOKEN_VERSION}.${payload}`;
+  return `${signedPayload}.${sessionSignature(signedPayload, secret)}`;
 }
 
-export function verifySession(cookieValue: string | undefined): string | null {
+export function verifySession(
+  cookieValue: string | undefined,
+  now = Date.now(),
+): string | null {
   const secret = sessionSecret();
-  if (!secret || !cookieValue) return null;
-  const separator = cookieValue.indexOf(".");
-  if (separator <= 0) return null;
-  const ownerId = cookieValue.slice(0, separator);
-  const supplied = cookieValue.slice(separator + 1);
-  if (!ownerId || !/^[0-9a-f]{64}$/i.test(supplied)) return null;
-  const expected = sessionSignature(ownerId, secret);
-  return timingSafeHexEquals(supplied, expected) ? ownerId : null;
+  if (!secret || !cookieValue || !Number.isFinite(now)) return null;
+  const [version, payload, suppliedSignature, extra] = cookieValue
+    .trim()
+    .split(".");
+  if (
+    version !== SESSION_TOKEN_VERSION ||
+    !payload ||
+    !suppliedSignature ||
+    extra !== undefined
+  ) {
+    return null;
+  }
+  const expectedSignature = sessionSignature(`${version}.${payload}`, secret);
+  if (!timingSafeHexEquals(suppliedSignature, expectedSignature)) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as unknown;
+    if (!isSessionTokenPayload(parsed) || parsed.exp <= now) return null;
+    return parsed.ownerId;
+  } catch {
+    return null;
+  }
 }
 
 export function sessionCookieOptions(maxAge = SESSION_MAX_AGE_SECONDS) {

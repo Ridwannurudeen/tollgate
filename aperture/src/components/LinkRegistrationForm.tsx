@@ -34,7 +34,6 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
   const [description, setDescription] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [wallet, setWallet] = useState("");
-  const [email, setEmail] = useState("");
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<LinkRegistrationResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +61,6 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
         body.set("displayName", displayName.trim());
         if (description.trim()) body.set("description", description.trim());
         if (wallet.trim()) body.set("wallet", wallet.trim());
-        if (email.trim()) body.set("email", email.trim());
         response = await fetch(`${basePath}/api/links/upload`, {
           method: "POST",
           body,
@@ -77,7 +75,6 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
             description: description.trim() || undefined,
             displayName: displayName.trim(),
             wallet: wallet.trim() || undefined,
-            email: email.trim() || undefined,
           }),
         });
       }
@@ -204,19 +201,6 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
         />
       </label>
       <label>
-        Email{" "}
-        <span className="hint">
-          (recommended - so you can log in with just a link)
-        </span>
-        <input
-          autoComplete="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="jane@example.com"
-          type="email"
-        />
-      </label>
-      <label>
         Payout wallet{" "}
         <span className="hint">
           (optional - leave blank and we create one for you)
@@ -272,8 +256,8 @@ export function LinkRegistrationForm({ basePath }: { basePath: string }) {
             <div className="accountKeyBox">
               <p className="eyebrow">Save your account key</p>
               <p>
-                Backup key - save it if you want a non-email login. You can also
-                use your email to receive a private login link.
+                Save this key for future sign-in. Email login is available when
+                an account is created from a verified email link.
               </p>
               <input readOnly value={result.accountKey} />
               <div className="actions compactActions">

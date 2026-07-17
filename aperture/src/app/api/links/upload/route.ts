@@ -3,7 +3,8 @@ import { LinkRegistryError } from "../../../../lib/link-registry";
 import { handleLinkUploadRegistration } from "../../../../lib/link-registration";
 import { LINK_DOWNLOAD_MAX_BYTES } from "../../../../lib/link-content";
 import { assertLinkRegistrationRateLimit } from "../../../../lib/link-rate-limit";
-import { publicOrigin } from "../../../../lib/x402-server";
+import { projectPublicData } from "../../../../lib/public-data";
+import { aperturePublicOrigin } from "../../../../lib/public-origin";
 import { VIDEO_UPLOAD_MAX_BYTES } from "../../../../lib/video-content";
 import {
   SESSION_COOKIE_NAME,
@@ -95,15 +96,17 @@ export async function POST(request: NextRequest) {
         description: form.get("description"),
         displayName: form.get("displayName"),
         wallet: form.get("wallet"),
-        email: sessionOwner ? undefined : form.get("email"),
+        email: undefined,
       },
       {
-        origin: publicOrigin(request.headers, "http://127.0.0.1:3092"),
+        origin: aperturePublicOrigin(),
         basePath: process.env.APERTURE_BASE_PATH ?? "/aperture",
         ...(sessionOwner ? { sessionOwnerId: sessionOwner.ownerId } : {}),
       },
     );
-    const response = NextResponse.json(result, { status: 201 });
+    const response = NextResponse.json(projectPublicData(result), {
+      status: 201,
+    });
     if (!sessionOwner && result.accountKey) {
       const cookieValue = signSession(result.registered.ownerId);
       if (cookieValue) {
@@ -116,15 +119,15 @@ export async function POST(request: NextRequest) {
     }
     return response;
   } catch (error) {
-    const status = error instanceof LinkRegistryError ? error.status : 400;
+    if (error instanceof LinkRegistryError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
+    }
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "photo upload registration failed",
-      },
-      { status },
+      { error: "photo upload registration failed" },
+      { status: 400 },
     );
   }
 }

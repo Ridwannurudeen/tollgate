@@ -10,6 +10,7 @@ import {
   type PublicClient,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { DEFAULT_CREATOR_SOURCES } from "./catalog";
 import { createQueryRecord } from "./engine";
 import {
   assertValidFeeRouterSplit,
@@ -17,6 +18,7 @@ import {
   readFeeRouterSplitRegistry,
   refundReaderPayment,
   routeCitationPayments,
+  routeEscrowReleasePayment,
   type FeeRouterWalletClient,
 } from "./fee-router";
 import { resetFeeRouterNonceStateForTests } from "./fee-router-nonce";
@@ -272,7 +274,7 @@ describe("assertValidFeeRouterSplit", () => {
     }
   });
 
-  it("does not escrow creator-claimed external citations", async () => {
+  it("escrows historical creator-claimed external citations", async () => {
     const previous = process.env.TOLLGATE_ESCROW_UNVERIFIED;
     delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
     const query = oneCitationQuery();
@@ -290,7 +292,11 @@ describe("assertValidFeeRouterSplit", () => {
     try {
       const evidence = await routeCitationPayments(query, { enabled: false });
 
-      expect(evidence[query.citations[0].sourceId]).toBeUndefined();
+      expect(evidence[query.citations[0].sourceId]).toEqual({
+        settlementMode: "escrowed",
+        paymentResource: "tollgate-escrow:unverified-source",
+        payoutPolicy: "escrow-unverified",
+      });
     } finally {
       if (previous === undefined) {
         delete process.env.TOLLGATE_ESCROW_UNVERIFIED;
@@ -808,6 +814,78 @@ describe("assertValidFeeRouterSplit", () => {
   });
 });
 
+describe("routeEscrowReleasePayment", () => {
+  it("rejects a reverted approval before creating a split", async () => {
+    const source = DEFAULT_CREATOR_SOURCES[0];
+    if (!source) throw new Error("missing test source");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      source.wallet,
+      0n,
+      201n,
+      writes,
+    );
+    Object.assign(publicClient, {
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
+        status: "reverted",
+        transactionHash: hash,
+        logs: [],
+      }),
+    });
+
+    await expect(
+      routeEscrowReleasePayment(source, 1_000, ["receipt-a"], {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+      }),
+    ).rejects.toThrow("FeeRouter escrow approval transaction failed");
+    expect(writes).toEqual(["approve"]);
+  });
+
+  it("rejects a reverted escrow payout instead of returning evidence", async () => {
+    const source = DEFAULT_CREATOR_SOURCES[0];
+    if (!source) throw new Error("missing test source");
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-escrow-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      source.wallet,
+      1_000_000n,
+      202n,
+      writes,
+    );
+    const originalWait = publicClient.waitForTransactionReceipt.bind(publicClient);
+    Object.assign(publicClient, {
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => {
+        if (hash === `0x${"c".repeat(64)}`) {
+          return {
+            status: "reverted",
+            transactionHash: hash,
+            logs: [],
+          };
+        }
+        return originalWait({ hash });
+      },
+    });
+
+    try {
+      await expect(
+        routeEscrowReleasePayment(source, 1_000, ["receipt-a"], {
+          enabled: true,
+          privateKey: TEST_KEY,
+          publicClient,
+          walletClient,
+          splitRegistryPath: registryPath,
+        }),
+      ).rejects.toThrow("FeeRouter escrow pay transaction failed");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("refundReaderPayment", () => {
   const READER = "0xdc01ca917f0328f567d718ea25179815fae2db91" as Address;
 
@@ -847,7 +925,10 @@ describe("refundReaderPayment", () => {
         throw new Error(`unexpected read ${functionName}`);
       },
       getTransactionCount: async () => 70,
-      waitForTransactionReceipt: async () => ({ status: "success" }),
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
+        status: "success",
+        transactionHash: hash,
+      }),
     } as unknown as PublicClient;
     const walletClient = {
       writeContract: async (request: ContractCall) => {
@@ -866,5 +947,31 @@ describe("refundReaderPayment", () => {
     expect(writes[0].functionName).toBe("transfer");
     expect(writes[0].args?.[0]).toBe(READER);
     expect(writes[0].args?.[1]).toBe(10_000n);
+  });
+
+  it("rejects a reverted refund instead of returning its hash", async () => {
+    const publicClient = {
+      readContract: async ({ functionName }: { functionName: string }) => {
+        if (functionName === "balanceOf") return 1_000_000n;
+        throw new Error(`unexpected read ${functionName}`);
+      },
+      getTransactionCount: async () => 71,
+      waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => ({
+        status: "reverted",
+        transactionHash: hash,
+      }),
+    } as unknown as PublicClient;
+    const walletClient = {
+      writeContract: async () => `0x${"f".repeat(64)}` as Hex,
+    } as FeeRouterWalletClient;
+
+    await expect(
+      refundReaderPayment(READER, 10_000, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+      }),
+    ).rejects.toThrow("FeeRouter refund transaction failed");
   });
 });

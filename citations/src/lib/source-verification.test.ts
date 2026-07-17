@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  SOURCE_VERIFICATION_MAX_BYTES,
   verificationToken,
   verifyDnsTxtSource,
   verifyMetaTagSource,
@@ -39,6 +40,47 @@ describe("wallet-free source verification", () => {
 
       expect(proof.method).toBe("meta-tag");
       expect(proof.signatureHash).toMatch(/^0x[0-9a-f]{64}$/);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      } else {
+        process.env.TOLLGATE_VERIFY_SECRET = previous;
+      }
+    }
+  });
+
+  it("aborts an oversized chunked page before decoding verification HTML", async () => {
+    const previous = process.env.TOLLGATE_VERIFY_SECRET;
+    process.env.TOLLGATE_VERIFY_SECRET = "secret";
+    const token = verificationToken(source.id);
+    let cancelled = false;
+    const prefix = `<meta name="tollgate-verification" content="${token}">`;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            prefix.padEnd(SOURCE_VERIFICATION_MAX_BYTES, " "),
+          ),
+        );
+        controller.enqueue(new Uint8Array([1]));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    try {
+      await expect(
+        verifyMetaTagSource(source, {
+          fetchImpl: async () =>
+            new Response(stream, {
+              status: 200,
+              headers: { "content-type": "text/html" },
+            }),
+          resolveHost: async () => ["93.184.216.34"],
+        }),
+      ).rejects.toThrow(/response body exceeds/i);
+      expect(cancelled).toBe(true);
     } finally {
       if (previous === undefined) {
         delete process.env.TOLLGATE_VERIFY_SECRET;

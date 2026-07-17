@@ -1,16 +1,16 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JUDGE_DEMO_QUESTION, JUDGE_DEMO_SOURCE_IDS } from "@/lib/judge-demo";
 import { POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
-  assertDemoPaidQueryWithinLimits: vi.fn(),
   createFeeRouterPublicClient: vi.fn(),
   createW3SPaidFetch: vi.fn(),
   payerAddress: vi.fn(),
   payerWalletId: vi.fn(),
   readFeeRouterClaimable: vi.fn(),
-  recordDemoPaidQuery: vi.fn(),
+  releaseDemoPaidQuery: vi.fn(),
+  reserveDemoPaidQuery: vi.fn(),
   validateQuestion: vi.fn(),
 }));
 
@@ -26,8 +26,7 @@ vi.mock("@/lib/fee-router", () => ({
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
-  assertDemoPaidQueryWithinLimits: mocks.assertDemoPaidQueryWithinLimits,
-  recordDemoPaidQuery: mocks.recordDemoPaidQuery,
+  reserveDemoPaidQuery: mocks.reserveDemoPaidQuery,
 }));
 
 vi.mock("@/lib/settlement", () => ({
@@ -39,6 +38,7 @@ vi.mock("@/lib/x402-custodial", () => ({
 }));
 
 const PAYER = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const previousInternalOrigin = process.env.LEPTONWEB_INTERNAL_ORIGIN;
 
 function request() {
   return new NextRequest("http://tollgate.test/api/paid-query/demo", {
@@ -61,14 +61,26 @@ function settlementResult() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  process.env.LEPTONWEB_INTERNAL_ORIGIN = "http://127.0.0.1:3091";
   mocks.payerWalletId.mockReturnValue("wallet-id");
   mocks.payerAddress.mockReturnValue(PAYER);
   mocks.validateQuestion.mockImplementation((question: string) =>
     question.trim(),
   );
+  mocks.reserveDemoPaidQuery.mockReturnValue({
+    release: mocks.releaseDemoPaidQuery,
+  });
   mocks.createFeeRouterPublicClient.mockReturnValue({
     readContract: vi.fn().mockResolvedValue(100_000n),
   });
+});
+
+afterEach(() => {
+  if (previousInternalOrigin === undefined) {
+    delete process.env.LEPTONWEB_INTERNAL_ORIGIN;
+  } else {
+    process.env.LEPTONWEB_INTERNAL_ORIGIN = previousInternalOrigin;
+  }
 });
 
 describe("POST /api/paid-query/demo", () => {
@@ -115,7 +127,12 @@ describe("POST /api/paid-query/demo", () => {
       deltaAtomicUsdc: "200",
     });
     expect(mocks.readFeeRouterClaimable).toHaveBeenCalledTimes(10);
-    expect(mocks.recordDemoPaidQuery).toHaveBeenCalledWith("198.51.100.44");
+    expect(mocks.reserveDemoPaidQuery).toHaveBeenCalledWith("198.51.100.44");
+    expect(paidFetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:3091/api/paid-query",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(mocks.releaseDemoPaidQuery).not.toHaveBeenCalled();
   });
 
   it("stops before payment when the initial creator balances cannot be read", async () => {
@@ -128,7 +145,7 @@ describe("POST /api/paid-query/demo", () => {
     expect(body.stage).toBe("creator-balance");
     expect(body.error).toBe("Arc RPC failed");
     expect(mocks.createW3SPaidFetch).not.toHaveBeenCalled();
-    expect(mocks.recordDemoPaidQuery).not.toHaveBeenCalled();
+    expect(mocks.reserveDemoPaidQuery).not.toHaveBeenCalled();
   });
 
   it("keeps settled evidence when the updated balance read fails", async () => {
@@ -166,6 +183,20 @@ describe("POST /api/paid-query/demo", () => {
     expect(body.creatorBalancesBefore).toHaveLength(
       JUDGE_DEMO_SOURCE_IDS.length,
     );
-    expect(mocks.recordDemoPaidQuery).toHaveBeenCalledOnce();
+    expect(mocks.reserveDemoPaidQuery).toHaveBeenCalledOnce();
+    expect(mocks.releaseDemoPaidQuery).not.toHaveBeenCalled();
+  });
+
+  it("releases a reservation when sponsorship cannot start", async () => {
+    mocks.readFeeRouterClaimable.mockResolvedValue(1000n);
+    mocks.createW3SPaidFetch.mockImplementation(() => {
+      throw new Error("signer unavailable");
+    });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(502);
+    expect(mocks.reserveDemoPaidQuery).toHaveBeenCalledOnce();
+    expect(mocks.releaseDemoPaidQuery).toHaveBeenCalledOnce();
   });
 });

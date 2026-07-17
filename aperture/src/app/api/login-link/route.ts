@@ -7,17 +7,9 @@ import {
 } from "../../../lib/account";
 import { assertLoginLinkRateLimit } from "../../../lib/link-rate-limit";
 import { sendLoginLinkEmail, sendSignupLinkEmail } from "../../../lib/mailer";
+import { aperturePublicOrigin } from "../../../lib/public-origin";
 
 export const runtime = "nodejs";
-
-const CANONICAL_LOGIN_ORIGIN = "https://tollgate.gudman.xyz";
-const LOGIN_HOSTS = new Set([
-  "tollgate.gudman.xyz",
-  "aperture.gudman.xyz",
-  "localhost",
-  "127.0.0.1",
-  "::1",
-]);
 
 function requestIp(request: NextRequest): string {
   const realIp = request.headers.get("x-real-ip")?.trim();
@@ -33,25 +25,6 @@ function requestIp(request: NextRequest): string {
 
 function ok() {
   return NextResponse.json({ ok: true });
-}
-
-function loginOrigin(request: NextRequest): string {
-  const host = request.headers.get("host")?.trim();
-  if (!host) return CANONICAL_LOGIN_ORIGIN;
-  try {
-    const parsed = new URL(`http://${host}`);
-    if (!LOGIN_HOSTS.has(parsed.hostname)) return CANONICAL_LOGIN_ORIGIN;
-    const local =
-      parsed.hostname === "localhost" ||
-      parsed.hostname === "127.0.0.1" ||
-      parsed.hostname === "::1";
-    const proto = local
-      ? request.headers.get("x-forwarded-proto")?.trim() || "http"
-      : "https";
-    return `${proto}://${host}`;
-  } catch {
-    return CANONICAL_LOGIN_ORIGIN;
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -78,7 +51,7 @@ export async function POST(request: NextRequest) {
     if (login) {
       await sendLoginLinkEmail(
         owner.email,
-        `${loginOrigin(request)}${basePath}/login/verify/${login.token}`,
+        `${aperturePublicOrigin()}${basePath}/login/verify/${login.token}`,
       );
     }
     return ok();
@@ -88,7 +61,7 @@ export async function POST(request: NextRequest) {
   if (signupToken) {
     await sendSignupLinkEmail(
       email,
-      `${loginOrigin(request)}${basePath}/login/verify/${signupToken}`,
+      `${aperturePublicOrigin()}${basePath}/login/verify/${signupToken}`,
     );
   }
   return ok();

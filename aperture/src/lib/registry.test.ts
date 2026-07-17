@@ -4,12 +4,34 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   findWalletForOwner,
+  publicWalletRegistryEntry,
   readWalletRegistry,
   upsertWalletRegistryEntry,
   writeWalletRegistry,
 } from "./registry";
 
 describe("wallet registry", () => {
+  it("redacts historical email text only in the public creator projection", () => {
+    const entry = {
+      ownerId: "owner-archive@example.com",
+      displayName: "Archive archive@example.com",
+      wallet: "0x12F25B721Cc21c38495e33A4c8524dd0B647ba03" as const,
+      createdAt: "2026-06-24T00:00:00.000Z",
+      approvalStatus: "operator-approved" as const,
+      email: "private@example.com",
+      accountKeyHash: `0x${"a".repeat(64)}` as `0x${string}`,
+    };
+
+    const projected = publicWalletRegistryEntry(entry);
+    const payload = JSON.stringify(projected);
+
+    expect(payload).not.toContain("archive@example.com");
+    expect(payload).not.toContain("private@example.com");
+    expect(projected).not.toHaveProperty("email");
+    expect(projected).not.toHaveProperty("accountKeyHash");
+    expect(entry.displayName).toBe("Archive archive@example.com");
+  });
+
   it("round-trips entries with checksum addresses", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-registry-"));
     const filePath = path.join(dir, "registry.json");

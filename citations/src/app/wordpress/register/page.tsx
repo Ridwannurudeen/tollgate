@@ -20,8 +20,9 @@ export default async function WordPressRegisterPage() {
           </div>
           <div className="route-hero-copy">
             <p className="hero-text">
-              Register your site, copy one API key, upload the Tollgate plugin,
-              and choose which posts readers or AI agents must pay to unlock.
+              Ask the Tollgate operator to bind one site, payout wallet, and
+              price before installing the Tollgate plugin. The server-held
+              registration capability never enters the browser.
             </p>
             <div className="metrics-band profile-metrics">
               <div className="metric">
@@ -66,9 +67,9 @@ export default async function WordPressRegisterPage() {
                 <h3>Content gate only, no wallet code in PHP</h3>
               </div>
               <p className="hero-text">
-                The WordPress plugin gates selected posts and calls Tollgate's
-                hosted settlement API. FeeRouter routing, receipt hashes, and
-                Arc USDC settlement stay in the Node app.
+                The WordPress plugin gates selected posts and checks existing
+                Tollgate receipts. Public reader settlement stays disabled until
+                a reader payment authorization can be verified.
               </p>
               <Link className="receipt-link" href="/api/wordpress/proof">
                 View WordPress proof feed

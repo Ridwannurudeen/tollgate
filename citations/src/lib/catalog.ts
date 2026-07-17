@@ -3,7 +3,8 @@ import path from "node:path";
 import { verifyMessage } from "viem";
 import { w3sMintWallet, type MintedWallet } from "./circle-w3s";
 import { sha256Hex } from "./hash";
-import { safeFetch } from "./safe-fetch";
+import { projectPublicData } from "./public-data";
+import { readCappedResponseText, safeFetch } from "./safe-fetch";
 import { readRsshubSources } from "./sources/rsshub";
 import type {
   CreatorSource,
@@ -371,10 +372,6 @@ export function normalizeSourceInput(input: unknown): CreatorSource {
   if (!wallet) {
     throw new SourceRegistryError("wallet must be a 20-byte EVM address.");
   }
-  const custody = registration.custody;
-  if (custody !== undefined && custody !== "self" && custody !== "circle-w3s") {
-    throw new SourceRegistryError("custody must be self or circle-w3s.");
-  }
   const origin = registration.origin;
   if (
     origin !== undefined &&
@@ -400,10 +397,7 @@ export function normalizeSourceInput(input: unknown): CreatorSource {
     sourceKind: "external",
     creatorKind: "external",
     verifiedCreator: false,
-    custody: custody ?? "self",
-    ...(registration.walletId
-      ? { walletId: cleanText(registration.walletId, "walletId", 96) }
-      : {}),
+    custody: "self",
     probation: true,
     registeredAt: new Date().toISOString(),
     ...(normalizeNotifyEmail(registration.notifyEmail)
@@ -425,11 +419,11 @@ type MintWallet = (args: {
 async function inputWithCustodialWallet(
   input: unknown,
   mintWallet: MintWallet,
-): Promise<unknown> {
-  if (!isRecord(input)) return input;
+): Promise<{ input: unknown; minted?: MintedWallet }> {
+  if (!isRecord(input)) return { input };
   const wallet =
     typeof input.wallet === "string" ? input.wallet.trim() : input.wallet;
-  if (wallet) return input;
+  if (wallet) return { input };
   const walletSetId = process.env.CIRCLE_WALLET_SET_ID;
   if (
     !process.env.CIRCLE_API_KEY ||
@@ -444,12 +438,7 @@ async function inputWithCustodialWallet(
     blockchain: W3S_BLOCKCHAIN,
     refId: `source-${slugify(title)}`,
   });
-  return {
-    ...input,
-    wallet: minted.address,
-    custody: "circle-w3s",
-    walletId: minted.id,
-  };
+  return { input: { ...input, wallet: minted.address }, minted };
 }
 
 export function buildSourceOwnershipMessage({
@@ -625,51 +614,6 @@ export function htmlToText(html: string): string {
     .trim();
 }
 
-async function readCappedResponseText(
-  response: Response,
-  maxBytes: number,
-): Promise<string> {
-  const reader = response.body?.getReader();
-  if (!reader) return (await response.text()).slice(0, maxBytes);
-
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  let truncated = false;
-  try {
-    while (totalBytes < maxBytes) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const remainingBytes = maxBytes - totalBytes;
-      if (value.byteLength > remainingBytes) {
-        chunks.push(value.slice(0, remainingBytes));
-        totalBytes += remainingBytes;
-        truncated = true;
-        break;
-      }
-      chunks.push(value);
-      totalBytes += value.byteLength;
-      if (totalBytes >= maxBytes) {
-        truncated = true;
-        break;
-      }
-    }
-  } finally {
-    if (truncated) {
-      await reader.cancel().catch(() => undefined);
-    } else {
-      reader.releaseLock();
-    }
-  }
-
-  const bytes = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
-}
-
 export async function fetchSourceContentExcerpt(
   sourceUrl: URL | string,
   init: RequestInit = {},
@@ -678,10 +622,20 @@ export async function fetchSourceContentExcerpt(
 > {
   const url = sourceUrl instanceof URL ? sourceUrl : new URL(sourceUrl);
   const response = await safeFetch(url, init);
-  if (!response.ok) return {};
+  if (!response.ok) {
+    await response.body?.cancel();
+    return {};
+  }
   const contentType = response.headers.get("content-type") ?? "";
-  if (!SOURCE_CONTENT_TYPE_PATTERN.test(contentType)) return {};
-  const text = await readCappedResponseText(response, SOURCE_CONTENT_MAX_BYTES);
+  if (!SOURCE_CONTENT_TYPE_PATTERN.test(contentType)) {
+    await response.body?.cancel();
+    return {};
+  }
+  const text = await readCappedResponseText(
+    response,
+    SOURCE_CONTENT_MAX_BYTES,
+    "truncate",
+  );
   const contentExcerpt = htmlToText(text).slice(
     0,
     SOURCE_CONTENT_EXCERPT_MAX_CHARS,
@@ -793,7 +747,7 @@ export function publicSource(source: CreatorSource): CreatorSource {
   // Strip creator PII / custodial internals before a source leaves the
   // server: notifyEmail and the Circle W3S walletId are operator-only.
   const { notifyEmail: _notifyEmail, walletId: _walletId, ...rest } = source;
-  return rest;
+  return projectPublicData(rest);
 }
 
 export async function readSources(): Promise<CreatorSource[]> {
@@ -827,15 +781,21 @@ export async function appendSource(
   filePath: string = SOURCE_REGISTRY_PATH,
   mintWallet: MintWallet = w3sMintWallet,
 ): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
-  const registrationInput = await inputWithCustodialWallet(input, mintWallet);
-  const normalized = normalizeSourceInput(registrationInput);
+  const prepared = await inputWithCustodialWallet(input, mintWallet);
+  const normalized = normalizeSourceInput(prepared.input);
   const ownershipProof = await ownershipProofFromInput(
-    registrationInput,
+    prepared.input,
     normalized,
   );
   const contentEvidence = await registrationContentEvidence(normalized);
   const source: CreatorSource = {
     ...normalized,
+    ...(prepared.minted
+      ? {
+          custody: "circle-w3s" as const,
+          walletId: prepared.minted.id,
+        }
+      : {}),
     verifiedCreator: false,
     probation: true,
     ...(ownershipProof ? { ownershipProof } : {}),
@@ -883,47 +843,6 @@ export async function updateSourceVerification(
       ...customSources[index],
       ...(domainVerified ? { verifiedCreator: true, probation: false } : {}),
       ownershipProof,
-    };
-    const nextCustomSources = customSources.slice();
-    nextCustomSources[index] = source;
-    await writeCustomSources(nextCustomSources, filePath);
-    const liveSources = await readRsshubSources();
-    return {
-      source,
-      sources: [
-        ...liveSources,
-        ...DEFAULT_CREATOR_SOURCES,
-        ...nextCustomSources,
-      ],
-    };
-  });
-}
-
-export async function claimSourceAsCreator(
-  sourceId: string,
-  input: unknown,
-  filePath: string = SOURCE_REGISTRY_PATH,
-): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
-  if (!isRecord(input) || input.attest !== true) {
-    throw new SourceRegistryError(
-      "creator claim requires an explicit attestation.",
-    );
-  }
-
-  return withRegistryLock(async () => {
-    const customSources = await readCustomSources(filePath);
-    const index = customSources.findIndex((source) => source.id === sourceId);
-    if (index < 0) {
-      throw new SourceRegistryError("source not found.", 404);
-    }
-    const source: CreatorSource = {
-      ...customSources[index],
-      creatorClaimed: true,
-      probation: false,
-      ownershipProof: {
-        method: "creator-claimed",
-        verifiedAt: new Date().toISOString(),
-      },
     };
     const nextCustomSources = customSources.slice();
     nextCustomSources[index] = source;

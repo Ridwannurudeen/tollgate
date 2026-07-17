@@ -51,6 +51,7 @@ const DEFAULT_PROBATION_MAX_PAID_CITATIONS = 3;
 
 type SettleOptions = {
   creatorWallet?: string;
+  settlePayments?: boolean;
   sourceIds?: string[];
 };
 
@@ -287,6 +288,9 @@ export async function settleQuestion(
     agentSources,
     agent.serverMode,
   );
+  if (options.settlePayments === false) {
+    return appendSettlement(query);
+  }
   const preparedUseIntent = await prepareUseIntent(query);
   if (preparedUseIntent?.payGateAddress) {
     const payGateSettlement = await payCitationsWithIntent(
@@ -653,10 +657,7 @@ async function attachReaderRefund(
       ...payment,
       refundFailure: {
         reason,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Reader refund settlement failed.",
+        message: "Reader refund settlement failed.",
       },
     };
   }
@@ -737,7 +738,7 @@ export function sourcesForAgent(
   return sources
     .map((source) => {
       if (source.sourceKind !== "external") return source;
-      if (source.probation === false || source.creatorClaimed === true) {
+      if (source.verifiedCreator === true && source.probation === false) {
         return { ...source, probation: false };
       }
       const paidQueryCount = sourcePaidQueryCount(ledger, source.id);

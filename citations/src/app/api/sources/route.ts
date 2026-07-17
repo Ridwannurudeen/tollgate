@@ -5,7 +5,10 @@ import {
   publicSource,
   readSources,
 } from "@/lib/catalog";
-import { assertSourceRegistrationRateLimit } from "@/lib/rate-limit";
+import {
+  assertSourceRegistrationRateLimit,
+  requestIp,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -16,11 +19,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const rateLimitKey =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
-      "local";
-    assertSourceRegistrationRateLimit(rateLimitKey);
+    assertSourceRegistrationRateLimit(requestIp(request.headers));
     const body = (await request.json()) as unknown;
     const result = await appendSource(body);
     return NextResponse.json(
@@ -38,12 +37,7 @@ export async function POST(request: NextRequest) {
       );
     }
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Source registration failed.",
-      },
+      { error: "Source registration failed." },
       { status: 400 },
     );
   }

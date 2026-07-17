@@ -3,7 +3,10 @@ import Link from "next/link";
 import { SiteFooter } from "../../components/SiteFooter";
 import { SiteNav } from "../../components/SiteNav";
 import { listPublicLinks } from "../../lib/link-registry";
-import { readWalletRegistry } from "../../lib/registry";
+import {
+  publicWalletRegistryEntry,
+  readWalletRegistry,
+} from "../../lib/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +24,10 @@ export default async function BrowsePage() {
     readWalletRegistry(),
   ]);
   const owners = new Map(
-    registry.photographers.map((entry) => [entry.ownerId, entry.displayName]),
+    registry.photographers.map((entry) => {
+      const projected = publicWalletRegistryEntry(entry);
+      return [projected.ownerId, projected.displayName];
+    }),
   );
 
   return (

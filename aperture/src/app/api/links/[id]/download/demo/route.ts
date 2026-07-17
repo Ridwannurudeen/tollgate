@@ -6,10 +6,8 @@ import {
   usdcRouterAbi,
 } from "../../../../../../lib/fee-router";
 import { payerAddress, payerWalletId } from "../../../../../../lib/circle-w3s";
-import {
-  assertDemoUnlockWithinLimits,
-  recordDemoUnlock,
-} from "../../../../../../lib/link-rate-limit";
+import { assertDemoUnlockWithinLimits } from "../../../../../../lib/link-rate-limit";
+import { apertureInternalOrigin } from "../../../../../../lib/public-origin";
 import { createW3SPaidFetch } from "../../../../../../lib/x402-custodial";
 import { PAYMENT_RESPONSE_HEADER } from "../../../../../../lib/x402-server";
 
@@ -74,9 +72,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
+  const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
+  const target = new URL(
+    `${basePath}/api/links/${encodeURIComponent(id)}/download`,
+    apertureInternalOrigin(),
+  );
+  const paidFetch = createW3SPaidFetch({ walletId, address });
   const ip = requestIp(request);
+  let releaseReservation: () => void;
   try {
-    assertDemoUnlockWithinLimits(ip);
+    releaseReservation = assertDemoUnlockWithinLimits(ip);
   } catch (error) {
     return jsonError(
       error instanceof Error
@@ -95,26 +100,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
       args: [address],
     });
     if (balance < BigInt(APERTURE_LICENSE_FEE_ATOMIC_USDC)) {
+      releaseReservation();
       return jsonError(
         "The free-unlock wallet is out of funds. Try unlock with your own wallet.",
         503,
       );
     }
   } catch {
+    releaseReservation();
     return jsonError(
       "Could not check the free-unlock wallet balance. Use your own wallet or try again shortly.",
       503,
     );
   }
 
-  const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
-  const target = new URL(
-    `${basePath}/api/links/${encodeURIComponent(id)}/download`,
-    request.nextUrl.origin,
-  );
-  const paidFetch = createW3SPaidFetch({ walletId, address });
   const response = await paidFetch(target.toString(), { method: "POST" });
   if (!response.ok) {
+    if (response.status === 402) {
+      releaseReservation();
+    }
     const status =
       response.status >= 400 && response.status < 500 && response.status !== 402
         ? response.status
@@ -123,7 +127,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   const body = await response.arrayBuffer();
-  recordDemoUnlock(ip);
   return new Response(body, {
     status: 200,
     headers: streamHeaders(response),

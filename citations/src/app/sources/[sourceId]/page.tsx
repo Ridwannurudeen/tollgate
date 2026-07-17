@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CopyWallet } from "@/components/CopyWallet";
 import { SiteNav } from "@/components/SiteNav";
 import { SourceVerifyPanel } from "@/components/SourceVerifyPanel";
-import { findSource } from "@/lib/catalog";
+import { findSource, publicSource } from "@/lib/catalog";
 import { formatUsdc, settlementLabel, shortHash } from "@/lib/format";
 import { groundingYield } from "@/lib/grounding-yield";
 import {
@@ -11,6 +11,7 @@ import {
   readLedger,
   verifyLedgerIntegrity,
 } from "@/lib/ledger";
+import { publicLedger } from "@/lib/public-data";
 import { sourceStatus, sourceStatusBadgeClassName } from "@/lib/source-status";
 import { verificationToken } from "@/lib/source-verification";
 
@@ -26,14 +27,16 @@ function formatGroundingYield(value: number): string {
 
 export default async function SourcePage({ params }: Props) {
   const { sourceId } = await params;
-  const [ledger, source] = await Promise.all([
+  const [rawLedger, rawSource] = await Promise.all([
     readLedger(),
     findSource(sourceId),
   ]);
-  if (!source) notFound();
+  if (!rawSource) notFound();
 
+  const verification = verifyLedgerIntegrity(rawLedger);
+  const ledger = publicLedger(rawLedger);
+  const source = publicSource(rawSource);
   const evidence = getSourceEvidence(ledger, sourceId);
-  const verification = verifyLedgerIntegrity(ledger);
   const receipts = evidence?.receipts ?? [];
   const earnedAtomicUsdc = evidence?.earnedAtomicUsdc ?? 0;
   const latestReceipt = receipts[0];
@@ -175,7 +178,6 @@ export default async function SourcePage({ params }: Props) {
           sourceId={source.id}
           token={token}
           verified={source.verifiedCreator}
-          claimed={source.creatorClaimed === true}
         />
 
         <section className="receipt-ledger">

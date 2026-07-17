@@ -29,12 +29,6 @@ vi.mock("../../components/SiteFooter", () => ({
   SiteFooter: () => "footer",
 }));
 
-vi.mock("../../components/AddEmailForm", () => ({
-  AddEmailForm: ({ basePath }: { basePath: string }) => (
-    <div>add-email:{basePath}</div>
-  ),
-}));
-
 vi.mock("../../components/LinkedWalletsForm", () => ({
   LinkedWalletsForm: ({ linkedWallets }: { linkedWallets: string[] }) => (
     <div>linked:{linkedWallets.join(",")}</div>
@@ -260,7 +254,7 @@ describe("dashboard page", () => {
     expect(payload).toContain(
       "Couldn&#x27;t load citations earnings right now",
     );
-    expect(payload).toContain("add-email:/aperture");
+    expect(payload).toContain("Account key only");
     expect(payload).toContain("Open video proof");
   });
 });

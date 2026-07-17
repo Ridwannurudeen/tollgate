@@ -354,11 +354,8 @@ describe("handleLinkRegistration", () => {
     }
   });
 
-  it("stores a lowercased login email for a new logged-out account", async () => {
-    const registerCreator = vi.fn(async () => ({
-      ...photographer,
-      email: "jane@example.com",
-    }));
+  it("ignores caller-provided email for a new logged-out account", async () => {
+    const registerCreator = vi.fn(async () => photographer);
     const registerLink = vi.fn(async (input: RegisterLinkInput) =>
       registeredLink(input, "link-email"),
     );
@@ -389,11 +386,17 @@ describe("handleLinkRegistration", () => {
     );
 
     expect(registerCreator).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "jane@example.com" }),
+      expect.not.objectContaining({ email: expect.anything() }),
     );
   });
 
-  it("rejects malformed login emails on new logged-out accounts", async () => {
+  it("does not let malformed caller email affect creator registration", async () => {
+    const registerCreator = vi.fn(async () => photographer);
+    const registerLink = vi.fn(async (input: RegisterLinkInput) =>
+      registeredLink(input, "link-bad-email"),
+    );
+    const preview = previewDeps("link-bad-email");
+
     await expect(
       handleLinkRegistration(
         {
@@ -405,17 +408,23 @@ describe("handleLinkRegistration", () => {
         {
           origin: "https://tollgate.gudman.xyz",
           basePath: "/aperture",
+          ownerId: () => "link-owner",
           findLinkBySourceUrl: async () => null,
-          findNearDuplicateLink: async () => null,
-          fetchImageBytes: async () => ({
-            bytes: new Uint8Array([1, 2, 3]),
-            contentType: "image/jpeg",
-            sourceContentHash: hash("9"),
-          }),
-          computeDHash: async () => dHash("9999999999999999"),
+          findNearDuplicateLink: preview.findNearDuplicateLink,
+          registerCreator,
+          registerLink,
+          generateAccountKey: () => "aptr_known-key",
+          fetchImageBytes: preview.fetchImageBytes,
+          computeDHash: preview.computeDHash,
+          buildWatermarkedPreview: preview.buildWatermarkedPreview,
+          writeLinkPreview: preview.writeLinkPreview,
+          markLinkPreviewGenerated: preview.markLinkPreviewGenerated,
         },
       ),
-    ).rejects.toThrow("email must be a valid address.");
+    ).resolves.toMatchObject({ registered: { ownerId: "link-owner" } });
+    expect(registerCreator).toHaveBeenCalledWith(
+      expect.not.objectContaining({ email: expect.anything() }),
+    );
   });
 
   it("rejects malformed descriptions", async () => {

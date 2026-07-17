@@ -13,6 +13,18 @@ export type ProofPackOptions = {
   feeRouterMode: FeeRouterMode;
 };
 
+type PublicPlaybackReceipt = Omit<PlaybackReceipt, "userId" | "sessionId">;
+
+function publicPlaybackReceipt(
+  receipt: PlaybackReceipt,
+): PublicPlaybackReceipt {
+  return Object.fromEntries(
+    Object.entries(receipt).filter(
+      ([key]) => key !== "userId" && key !== "sessionId",
+    ),
+  ) as PublicPlaybackReceipt;
+}
+
 function isFixtureReplayReceipt(receipt: PlaybackReceipt): boolean {
   return (
     receipt.itemId === "video-demo-001" &&
@@ -124,7 +136,9 @@ export async function buildProofPack(options: ProofPackOptions) {
     },
     receiptOrigins,
     registry,
-    ledger,
+    ledger: {
+      receipts: ledger.receipts.map(publicPlaybackReceipt),
+    },
   };
 }
 

@@ -13,8 +13,7 @@
     "licenseFeeAtomicUsdc": 2500
   },
   "settlement": {
-    "feeRouterEnabled": false,
-    "immichApiBaseUrl": "http://127.0.0.1:2283/api"
+    "feeRouterEnabled": false
   },
   "creators": [
     {

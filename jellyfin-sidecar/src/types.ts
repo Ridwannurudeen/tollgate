@@ -48,7 +48,14 @@ export type ActivePlaybackSession = {
   clientName: string | null;
   startedAt: string;
   startPlaybackPositionTicks: number;
+  verifiedAt: string | null;
+  verifiedRunTimeTicks: number | null;
   rawStartHash: Hex;
+};
+
+export type VerifiedPlaybackStart = {
+  playbackPositionTicks: number;
+  runTimeTicks: number;
 };
 
 export type SessionStore = {

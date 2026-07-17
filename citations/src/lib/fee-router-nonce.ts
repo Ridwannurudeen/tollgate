@@ -40,10 +40,11 @@ function acquireSubmissionSlot(): Promise<() => void> {
   });
 }
 
-async function reserveNonce(
+export function withReservedNonce<T>(
   publicClient: PublicClient,
   account: FeeRouterNonceAccount,
-): Promise<number> {
+  task: (nonce: number) => Promise<T>,
+): Promise<T> {
   const key = account.address.toLowerCase();
   const state = nonceStates.get(key) ?? { queue: Promise.resolve() };
   nonceStates.set(key, state);
@@ -56,39 +57,32 @@ async function reserveNonce(
     }
     const nonce = state.nextNonce;
     state.nextNonce += 1;
-    return nonce;
+    const release = await acquireSubmissionSlot();
+    try {
+      return await task(nonce);
+    } catch (error) {
+      try {
+        state.nextNonce = await publicClient.getTransactionCount({
+          address: account.address,
+          blockTag: "pending",
+        });
+      } catch (reconciliationError) {
+        delete state.nextNonce;
+        throw new AggregateError(
+          [error, reconciliationError],
+          "FeeRouter submission and nonce reconciliation both failed.",
+        );
+      }
+      throw error;
+    } finally {
+      release();
+    }
   });
   state.queue = run.then(
     () => undefined,
     () => undefined,
   );
   return run;
-}
-
-function isNonceTooLowError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /nonce too low|lower than the current nonce/i.test(message);
-}
-
-export async function withReservedNonce<T>(
-  publicClient: PublicClient,
-  account: FeeRouterNonceAccount,
-  task: (nonce: number) => Promise<T>,
-): Promise<T> {
-  const nonce = await reserveNonce(publicClient, account);
-  const release = await acquireSubmissionSlot();
-  try {
-    return await task(nonce);
-  } catch (error) {
-    if (!isNonceTooLowError(error)) throw error;
-    // Another process sharing this wallet advanced the chain nonce past our
-    // cache. Reseed from the chain and retry once.
-    nonceStates.delete(account.address.toLowerCase());
-    const freshNonce = await reserveNonce(publicClient, account);
-    return await task(freshNonce);
-  } finally {
-    release();
-  }
 }
 
 export function resetFeeRouterNonceStateForTests(): void {

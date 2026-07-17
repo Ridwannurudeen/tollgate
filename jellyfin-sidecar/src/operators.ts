@@ -192,6 +192,19 @@ function timingSafeHashEquals(left: string, right: string): boolean {
   );
 }
 
+export function authorizeJellyfinRegistration(
+  registrationSecret: string | null,
+  expectedSecret: string | undefined,
+): boolean {
+  const supplied = registrationSecret?.trim();
+  const expected = expectedSecret?.trim();
+  if (!supplied || !expected) return false;
+  return timingSafeHashEquals(
+    operatorKeyHash(supplied),
+    operatorKeyHash(expected),
+  );
+}
+
 function generateOperatorKey(): string {
   return `tgjf_${randomBytes(32).toString("hex")}`;
 }
@@ -270,6 +283,21 @@ export async function registerJellyfinOperator(
       readJellyfinOperators(options.operatorsPath),
       readCreatorRegistry(options.registryPath),
     ]);
+    if (
+      operators.operators.some((operator) =>
+        operator.itemIds.includes(mapping.itemId),
+      ) ||
+      registry.videos.some(
+        (entry) =>
+          entry.itemId === mapping.itemId ||
+          entry.itemIds?.includes(mapping.itemId),
+      )
+    ) {
+      throw new JellyfinOperatorRegistrationError(
+        "Jellyfin item is already registered.",
+        409,
+      );
+    }
     await Promise.all([
       writeJellyfinOperators(
         {
@@ -279,14 +307,7 @@ export async function registerJellyfinOperator(
       ),
       writeCreatorRegistry(
         {
-          videos: [
-            mapping,
-            ...registry.videos.filter(
-              (entry) =>
-                entry.itemId !== mapping.itemId &&
-                !entry.itemIds?.some((itemId) => itemId === mapping.itemId),
-            ),
-          ],
+          videos: [mapping, ...registry.videos],
         },
         options.registryPath,
       ),

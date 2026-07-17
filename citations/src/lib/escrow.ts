@@ -28,14 +28,13 @@ export function shouldEscrowSource(source: CreatorSource): boolean {
   return (
     process.env.TOLLGATE_ESCROW_UNVERIFIED !== "0" &&
     source.sourceKind === "external" &&
-    source.verifiedCreator !== true &&
-    source.probation !== false
+    source.verifiedCreator !== true
   );
 }
 
 function canReleaseEscrowForSource(source: CreatorSource): boolean {
   if (source.sourceKind !== "external") return false;
-  return source.verifiedCreator === true || source.probation === false;
+  return source.verifiedCreator === true;
 }
 
 function releasedEscrowHashes(receipts: PaymentReceipt[]): Set<string> {
@@ -94,11 +93,7 @@ function releaseQueryRecord(
     contributors: source.contributors,
   };
   const question = `Escrow release: ${source.title}`;
-  const releaseReason = source.verifiedCreator
-    ? `verified ${source.creator}`
-    : source.creatorClaimed
-      ? `recorded ${source.creator}'s self-attested creator claim`
-      : `cleared probation for ${source.creator}`;
+  const releaseReason = `verified ${source.creator}`;
   const answer = `Tollgate ${releaseReason} and released ${releasedReceiptHashes.length} escrowed source payment${releasedReceiptHashes.length === 1 ? "" : "s"} for "${source.title}".`;
   const queryHash = sha256Hex({
     question,

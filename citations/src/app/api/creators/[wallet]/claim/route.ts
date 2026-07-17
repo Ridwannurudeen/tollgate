@@ -1,10 +1,11 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { isAddress, getAddress, type Address } from "viem";
 import { readSources } from "@/lib/catalog";
 import { w3sExecuteContract } from "@/lib/circle-w3s";
 import { readFeeRouterClaimable } from "@/lib/fee-router";
 import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "@/lib/fee-router-contract";
-import { assertClaimRateLimit } from "@/lib/rate-limit";
+import { assertClaimRateLimit, requestIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -12,23 +13,32 @@ type Context = {
   params: Promise<{ wallet: string }>;
 };
 
-// Custodial creators have no key to sign with, so this endpoint cannot
-// require a wallet signature. The abuse surface is bounded instead:
-// claim() always pays the creator's own custodial wallet (never the
-// caller), no transaction is submitted when nothing is claimable, the
-// source must be verified or explicitly creator-claimed, and calls are rate
-// limited.
+function claimAuthorized(request: NextRequest, expected: string): boolean {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) return false;
+  const supplied = authorization.slice("Bearer ".length);
+  const suppliedHash = createHash("sha256").update(supplied).digest();
+  const expectedHash = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(suppliedHash, expectedHash);
+}
+
 export async function POST(request: NextRequest, context: Context) {
   const { wallet } = await context.params;
   if (!isAddress(wallet)) {
     return NextResponse.json({ error: "invalid wallet" }, { status: 400 });
   }
+  const claimToken = process.env.TOLLGATE_CUSTODIAL_CLAIM_TOKEN;
+  if (!claimToken) {
+    return NextResponse.json(
+      { error: "custodial claims are not configured" },
+      { status: 503 },
+    );
+  }
+  if (!claimAuthorized(request, claimToken)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
   const normalizedWallet = getAddress(wallet);
-  const rateLimitKey = `${
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "local"
-  }:${normalizedWallet.toLowerCase()}`;
+  const rateLimitKey = `${requestIp(request.headers)}:${normalizedWallet.toLowerCase()}`;
   try {
     assertClaimRateLimit(rateLimitKey);
   } catch (error) {
@@ -51,13 +61,11 @@ export async function POST(request: NextRequest, context: Context) {
     );
   }
   const source = custodialSources.find(
-    (candidate) =>
-      candidate.verifiedCreator === true ||
-      (candidate.creatorClaimed === true && candidate.probation === false),
+    (candidate) => candidate.verifiedCreator === true,
   );
   if (!source?.walletId) {
     return NextResponse.json(
-      { error: "verify or claim source ownership before claiming" },
+      { error: "verify source ownership before claiming" },
       { status: 403 },
     );
   }

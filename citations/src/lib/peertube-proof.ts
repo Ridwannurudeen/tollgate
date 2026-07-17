@@ -3,6 +3,7 @@ import path from "node:path";
 import { createPublicClient, http, type Hex } from "viem";
 import { ARC_CAIP2, ARC_RPC_URL, arcTestnet } from "./chain";
 import { FEE_ROUTER_ADDRESS } from "./fee-router-contract";
+import { projectPublicData } from "./public-data";
 
 export const PEERTUBE_FEE_ROUTER_TX =
   "0x1ed2e7caa90964100d843095acc4f3e5c5f5bf9203850e91d2cab8f838c1a49d" as Hex;
@@ -87,7 +88,7 @@ export async function buildPeerTubeProof() {
     readFeeRouterTx(),
   ]);
 
-  return {
+  return projectPublicData({
     generatedAt: new Date().toISOString(),
     status: "PUBLISHED-LOCAL-VALIDATED-PROOF-MIRROR",
     proofMirror: true,
@@ -122,5 +123,5 @@ export async function buildPeerTubeProof() {
         "Shared FeeRouter rail proof driven through plugin settlement code; not a public PeerTube-instance receipt.",
       ...feeRouterTx,
     },
-  };
+  });
 }

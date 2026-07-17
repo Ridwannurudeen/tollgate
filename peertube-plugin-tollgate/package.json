@@ -41,6 +41,6 @@
   "staticDirs": {},
   "translations": {},
   "dependencies": {
-    "viem": "^2.53.1"
+    "viem": "2.55.2"
   }
 }

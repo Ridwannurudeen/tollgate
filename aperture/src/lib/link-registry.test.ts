@@ -13,6 +13,28 @@ import {
 } from "./link-registry";
 
 describe("link registry", () => {
+  it("redacts historical email text without mutating stored link records", () => {
+    const link = {
+      id: "historical-link",
+      title: "Contact archive@example.com",
+      description: "Licensed by archive@example.com.",
+      ownerId: "owner-archive@example.com",
+      sourceUrl: "https://example.com/photo.jpg",
+      sourceContentHash: `0x${"1".repeat(64)}` as `0x${string}`,
+      priceAtomicUsdc: 2500,
+      createdAt: "2026-07-06T00:00:00.000Z",
+    };
+
+    const projected = publicLink(link);
+    const payload = JSON.stringify(projected);
+
+    expect(payload).not.toContain("archive@example.com");
+    expect(projected).not.toHaveProperty("sourceUrl");
+    expect(projected).not.toHaveProperty("sourceContentHash");
+    expect(link.title).toBe("Contact archive@example.com");
+    expect(link.sourceContentHash).toBe(`0x${"1".repeat(64)}`);
+  });
+
   it("registers a link and strips the source URL from public projections", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "aperture-links-"));
     const filePath = path.join(dir, "links.json");

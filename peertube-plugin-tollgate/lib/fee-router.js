@@ -1,6 +1,11 @@
 "use strict";
 
-const { createPublicClient, createWalletClient, http } = require("viem");
+const {
+  createPublicClient,
+  createWalletClient,
+  http,
+  parseEventLogs,
+} = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
 const { buildChain } = require("./arc");
 
@@ -77,6 +82,19 @@ const usdcAbi = [
   },
 ];
 
+const feeRouterEventsAbi = [
+  {
+    type: "event",
+    name: "SplitCreated",
+    inputs: [
+      { name: "splitId", type: "uint256", indexed: true },
+      { name: "creator", type: "address", indexed: true },
+      { name: "recipients", type: "address[]", indexed: false },
+      { name: "bps", type: "uint16[]", indexed: false },
+    ],
+  },
+];
+
 const SPLITS_KEY = "tollgate:fee-router-splits";
 
 // In-process serialization so two concurrent payouts can't both create a split
@@ -96,6 +114,27 @@ async function readSplits(storage) {
   return stored && Array.isArray(stored.splits) ? stored : { splits: [] };
 }
 
+async function waitForFinalizedTransaction(
+  publicClient,
+  transactionHash,
+  operation,
+) {
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: transactionHash,
+  });
+  if (receipt.status !== "success") {
+    throw new Error(`FeeRouter ${operation} transaction reverted.`);
+  }
+  if (
+    receipt.transactionHash.toLowerCase() !== transactionHash.toLowerCase()
+  ) {
+    throw new Error(
+      `FeeRouter ${operation} transaction was replaced before confirmation.`,
+    );
+  }
+  return receipt;
+}
+
 async function ensureCreatorSplit(recipient, clients, storage) {
   const { publicClient, walletClient, account, feeRouter, chain } = clients;
   return withSplitLock(async () => {
@@ -105,7 +144,7 @@ async function ensureCreatorSplit(recipient, clients, storage) {
     );
     if (existing) return existing;
 
-    const { result: splitId, request } = await publicClient.simulateContract({
+    const { request } = await publicClient.simulateContract({
       address: feeRouter,
       abi: feeRouterAbi,
       functionName: "createSplit",
@@ -117,11 +156,34 @@ async function ensureCreatorSplit(recipient, clients, storage) {
       ...request,
       account,
     });
-    await publicClient.waitForTransactionReceipt({ hash: createSplitTx });
+    const receipt = await waitForFinalizedTransaction(
+      publicClient,
+      createSplitTx,
+      "createSplit",
+    );
+    const [event] = parseEventLogs({
+      abi: feeRouterEventsAbi,
+      eventName: "SplitCreated",
+      logs: receipt.logs.filter(
+        (log) => log.address.toLowerCase() === feeRouter.toLowerCase(),
+      ),
+    });
+    if (
+      !event ||
+      event.args.creator.toLowerCase() !== account.address.toLowerCase() ||
+      event.args.recipients.length !== 1 ||
+      event.args.recipients[0].toLowerCase() !== recipient.toLowerCase() ||
+      event.args.bps.length !== 1 ||
+      Number(event.args.bps[0]) !== 10_000
+    ) {
+      throw new Error(
+        "FeeRouter createSplit transaction emitted no matching SplitCreated event.",
+      );
+    }
 
     const record = {
       wallet: recipient,
-      splitId: splitId.toString(),
+      splitId: event.args.splitId.toString(),
       createSplitTx,
       createdAt: new Date().toISOString(),
     };
@@ -190,7 +252,7 @@ async function routeCreatorPayment(opts) {
       account,
       chain,
     });
-    await publicClient.waitForTransactionReceipt({ hash: approveTx });
+    await waitForFinalizedTransaction(publicClient, approveTx, "approve");
   }
 
   const split = await ensureCreatorSplit(
@@ -207,7 +269,7 @@ async function routeCreatorPayment(opts) {
     account,
     chain,
   });
-  await publicClient.waitForTransactionReceipt({ hash: payTx });
+  await waitForFinalizedTransaction(publicClient, payTx, "pay");
 
   return {
     settlementMode: "forum-routed",

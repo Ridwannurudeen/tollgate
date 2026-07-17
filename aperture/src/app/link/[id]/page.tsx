@@ -6,8 +6,11 @@ import { SiteFooter } from "../../../components/SiteFooter";
 import { SiteNav } from "../../../components/SiteNav";
 import { getSessionOwner } from "../../../lib/account";
 import { APERTURE_LICENSE_FEE_ATOMIC_USDC } from "../../../lib/config";
-import { findLink } from "../../../lib/link-registry";
-import { readWalletForOwner } from "../../../lib/registry";
+import { findLink, publicLink } from "../../../lib/link-registry";
+import {
+  publicWalletRegistryEntry,
+  readWalletForOwner,
+} from "../../../lib/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,8 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
   if (!link) notFound();
   const photographer = await readWalletForOwner(link.ownerId);
   if (!photographer) notFound();
+  const projectedLink = publicLink(link);
+  const projectedPhotographer = publicWalletRegistryEntry(photographer);
   const sessionOwner = await getSessionOwner();
   const basePath = process.env.APERTURE_BASE_PATH ?? "/aperture";
   const price = link.priceAtomicUsdc || APERTURE_LICENSE_FEE_ATOMIC_USDC;
@@ -41,15 +46,15 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
 
         <section className="pageHeader">
           <p className="eyebrow">Aperture gated {mediaLabel}</p>
-          <h1>{link.title}</h1>
-          {link.description && (
-            <p className="linkDescription">{link.description}</p>
+          <h1>{projectedLink.title}</h1>
+          {projectedLink.description && (
+            <p className="linkDescription">{projectedLink.description}</p>
           )}
           <p>
-            {isVideo ? "Video" : "Photo"} by {photographer.displayName}. Unlock
-            this {mediaLabel} for{" "}
-            {formatUsdc(price)} digital dollars (USDC); the photographer is paid
-            instantly and the download receipt lands in the proof ledger.
+            {isVideo ? "Video" : "Photo"} by {projectedPhotographer.displayName}
+            . Unlock this {mediaLabel} for {formatUsdc(price)} digital dollars
+            (USDC); the photographer is paid instantly and the download receipt
+            lands in the proof ledger.
           </p>
         </section>
 
@@ -62,7 +67,7 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
             <figure className="previewFrame">
               <div className="mediaPreview">
                 <img
-                  alt={`Watermarked preview of ${link.title}`}
+                  alt={`Watermarked preview of ${projectedLink.title}`}
                   src={`${basePath}/link/${link.id}/preview`}
                 />
                 {isVideo && <span className="mediaBadge">video</span>}
@@ -82,7 +87,7 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
             basePath={basePath}
             id={link.id}
             priceText={`${formatUsdc(price)} USDC`}
-            title={link.title}
+            title={projectedLink.title}
           />
         </section>
 
@@ -91,7 +96,7 @@ export default async function GatedLinkPage({ params }: LinkPageProps) {
             basePath={basePath}
             currentOwnerId={sessionOwner.ownerId}
             linkId={link.id}
-            sellerName={photographer.displayName}
+            sellerName={projectedPhotographer.displayName}
           />
         )}
       </main>

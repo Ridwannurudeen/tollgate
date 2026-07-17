@@ -1,7 +1,4 @@
-import {
-  APERTURE_IMMICH_API_BASE_URL,
-  APERTURE_LICENSE_FEE_ATOMIC_USDC,
-} from "../src/lib/config";
+import { APERTURE_IMMICH_API_BASE_URL } from "../src/lib/config";
 import { processAccessLogLine } from "../src/lib/watcher";
 
 const demoLine = process.env.APERTURE_DEMO_ACCESS_LOG_LINE;
@@ -15,7 +12,6 @@ async function main() {
 
   const result = await processAccessLogLine(demoLine, {
     immichApiBaseUrl: APERTURE_IMMICH_API_BASE_URL,
-    amountAtomicUsdc: APERTURE_LICENSE_FEE_ATOMIC_USDC,
   });
 
   console.log(JSON.stringify(result, null, 2));

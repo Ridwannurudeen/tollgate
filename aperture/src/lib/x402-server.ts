@@ -1,9 +1,9 @@
 import {
-  createPublicClient,
   createWalletClient,
   http,
   publicActions,
   type Address,
+  type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
@@ -24,13 +24,13 @@ import { ExactEvmScheme as ExactEvmFacilitator } from "@x402/evm/exact/facilitat
 import { toFacilitatorEvmSigner, type FacilitatorEvmSigner } from "@x402/evm";
 import {
   ARC_CAIP2,
-  ARC_CHAIN_ID,
   ARC_GATEWAY_API_URL,
   ARC_GATEWAY_WALLET,
   ARC_RPC_URL,
   ARC_USDC,
   arcTestnet,
 } from "./chain";
+import { sha256Hex } from "./hash";
 
 export const PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE";
 export const PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED";
@@ -56,6 +56,14 @@ export type X402Settlement =
       reason: string;
       status: number;
     };
+
+export function x402PaymentIdentity(signatureHeader: string): Hex | null {
+  try {
+    return sha256Hex(decodePaymentSignatureHeader(signatureHeader));
+  } catch {
+    return null;
+  }
+}
 
 export function buildPaymentRequirements(
   payTo: Address,
@@ -99,15 +107,6 @@ export function buildGatewayPaymentRequirements(
       verifyingContract: ARC_GATEWAY_WALLET,
     },
   };
-}
-
-export function publicOrigin(headers: Headers, fallbackOrigin: string): string {
-  const host = headers.get("host");
-  if (!host) return fallbackOrigin;
-  const proto =
-    headers.get("x-forwarded-proto") ??
-    new URL(fallbackOrigin).protocol.replace(":", "");
-  return `${proto}://${host}`;
 }
 
 export function paymentRequiredBody(
@@ -184,56 +183,10 @@ function makeGatewayFacilitator() {
   });
 }
 
-async function verifyOnly(
-  payload: PaymentPayload,
-  requirements: PaymentRequirements,
-): Promise<{ ok: boolean; payer?: string; reason?: string }> {
-  const auth = (payload.payload as { authorization?: Record<string, unknown> })
-    .authorization;
-  if (!auth) return { ok: false, reason: "missing EIP-3009 authorization" };
-  const publicClient = createPublicClient({
-    chain: arcTestnet,
-    transport: http(ARC_RPC_URL),
-  });
-  const valid = await publicClient.verifyTypedData({
-    address: auth.from as `0x${string}`,
-    domain: {
-      name: requirements.extra.name as string,
-      version: requirements.extra.version as string,
-      chainId: ARC_CHAIN_ID,
-      verifyingContract: requirements.asset as `0x${string}`,
-    },
-    types: {
-      TransferWithAuthorization: [
-        { name: "from", type: "address" },
-        { name: "to", type: "address" },
-        { name: "value", type: "uint256" },
-        { name: "validAfter", type: "uint256" },
-        { name: "validBefore", type: "uint256" },
-        { name: "nonce", type: "bytes32" },
-      ],
-    },
-    primaryType: "TransferWithAuthorization",
-    message: {
-      from: auth.from as `0x${string}`,
-      to: auth.to as `0x${string}`,
-      value: BigInt(auth.value as string),
-      validAfter: BigInt(auth.validAfter as string),
-      validBefore: BigInt(auth.validBefore as string),
-      nonce: auth.nonce as `0x${string}`,
-    },
-    signature: (payload.payload as { signature: `0x${string}` }).signature,
-  });
-  return {
-    ok: valid,
-    payer: auth.from as string,
-    reason: valid ? undefined : "invalid signature",
-  };
-}
-
 export async function settleX402(
   signatureHeader: string,
   accepted: PaymentRequirements | PaymentRequirements[],
+  beforeSettle?: () => Promise<void>,
 ): Promise<X402Settlement> {
   const offered = Array.isArray(accepted) ? accepted : [accepted];
   let payload: PaymentPayload;
@@ -269,6 +222,7 @@ export async function settleX402(
           verifyRes.invalidReason ?? "Gateway payment verification failed",
       };
     }
+    await beforeSettle?.();
     const settleRes = await facilitator.settle(
       gatewayPayload,
       gatewayRequirements,
@@ -305,6 +259,7 @@ export async function settleX402(
         reason: verifyRes.invalidReason ?? "payment verification failed",
       };
     }
+    await beforeSettle?.();
     const settleRes = await facilitator.settle(payload, requirements);
     if (!settleRes.success) {
       return {
@@ -322,33 +277,9 @@ export async function settleX402(
     };
   }
 
-  if (process.env.APERTURE_ALLOW_VERIFY_ONLY !== "1") {
-    return {
-      ok: false,
-      status: 402,
-      reason:
-        "settlement not configured; set APERTURE_ALLOW_VERIFY_ONLY=1 to allow verify-only demo unlocks",
-    };
-  }
-
-  const verified = await verifyOnly(payload, requirements);
-  if (!verified.ok) {
-    return {
-      ok: false,
-      status: 402,
-      reason: verified.reason ?? "payment verification failed",
-    };
-  }
-  const response: SettleResponse = {
-    success: true,
-    transaction: "",
-    network: ARC_CAIP2,
-    payer: verified.payer,
-  };
   return {
-    ok: true,
-    mode: "x402-verified",
-    payer: verified.payer,
-    responseHeader: encodePaymentResponseHeader(response),
+    ok: false,
+    status: 503,
+    reason: "x402 settlement is not configured",
   };
 }

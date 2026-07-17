@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AgentPlanningError } from "@/lib/agent";
-import { assertQueryRateLimit } from "@/lib/rate-limit";
+import { publicSettlementResult } from "@/lib/public-data";
+import { assertQueryRateLimit, requestIp } from "@/lib/rate-limit";
 import { settleQuestion } from "@/lib/settlement";
 
 export const runtime = "nodejs";
@@ -26,23 +27,20 @@ function readCreator(body: unknown): string | undefined {
 
 export async function POST(request: NextRequest) {
   try {
-    const rateLimitKey =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
-      "local";
-    assertQueryRateLimit(rateLimitKey);
+    assertQueryRateLimit(requestIp(request.headers));
     const body = (await request.json()) as unknown;
     const question = readQuestion(body);
+    const creatorWallet = readCreator(body);
     const result = await settleQuestion(question, {
-      creatorWallet: readCreator(body),
+      ...(creatorWallet ? { creatorWallet } : {}),
+      settlePayments: false,
     });
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(publicSettlementResult(result), { status: 201 });
   } catch (error) {
     const strictPlannerFailure = error instanceof AgentPlanningError;
     const strictConfigurationFailure =
       error instanceof Error &&
-      error.message ===
-        "Judge-strict mode requires a configured LLM planner.";
+      error.message === "Judge-strict mode requires a configured LLM planner.";
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Query failed.",
@@ -52,7 +50,9 @@ export async function POST(request: NextRequest) {
             ? { stage: "configuration" }
             : {}),
       },
-      { status: strictPlannerFailure || strictConfigurationFailure ? 502 : 400 },
+      {
+        status: strictPlannerFailure || strictConfigurationFailure ? 502 : 400,
+      },
     );
   }
 }

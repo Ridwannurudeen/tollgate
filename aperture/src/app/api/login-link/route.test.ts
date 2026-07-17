@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
 const mocks = vi.hoisted(() => ({
@@ -29,6 +29,7 @@ function request(
   ip: string,
   email: string,
   host = "tollgate.gudman.xyz",
+  extraHeaders: Record<string, string> = {},
 ): NextRequest {
   return new NextRequest(
     "https://tollgate.gudman.xyz/aperture/api/login-link",
@@ -38,6 +39,7 @@ function request(
         "content-type": "application/json",
         host,
         "x-real-ip": ip,
+        ...extraHeaders,
       },
       body: JSON.stringify({ email }),
     },
@@ -45,7 +47,10 @@ function request(
 }
 
 describe("POST /api/login-link", () => {
+  const savedPublicOrigin = process.env.APERTURE_PUBLIC_ORIGIN;
+
   beforeEach(() => {
+    process.env.APERTURE_PUBLIC_ORIGIN = "https://tollgate.gudman.xyz";
     mocks.findOwnerByEmail.mockReset();
     mocks.generateLoginToken.mockReset();
     mocks.generateSignupToken.mockReset();
@@ -53,6 +58,14 @@ describe("POST /api/login-link", () => {
     mocks.sendSignupLinkEmail.mockReset();
     mocks.sendLoginLinkEmail.mockResolvedValue(true);
     mocks.sendSignupLinkEmail.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    if (savedPublicOrigin === undefined) {
+      delete process.env.APERTURE_PUBLIC_ORIGIN;
+    } else {
+      process.env.APERTURE_PUBLIC_ORIGIN = savedPublicOrigin;
+    }
   });
 
   it("returns the same success response and sends a signup link for unknown emails", async () => {
@@ -99,7 +112,8 @@ describe("POST /api/login-link", () => {
     expect(mocks.sendSignupLinkEmail).not.toHaveBeenCalled();
   });
 
-  it("falls back to the canonical origin for untrusted host headers", async () => {
+  it("uses the configured canonical origin for untrusted host headers", async () => {
+    process.env.APERTURE_PUBLIC_ORIGIN = "https://canonical.example";
     mocks.findOwnerByEmail.mockResolvedValue({
       ownerId: "owner-1",
       email: "jane@example.com",
@@ -110,11 +124,16 @@ describe("POST /api/login-link", () => {
       expiresAt: "2026-07-06T00:20:00.000Z",
     });
 
-    await POST(request("198.51.100.233", "jane@example.com", "evil.test"));
+    await POST(
+      request("198.51.100.233", "jane@example.com", "evil.test", {
+        "x-forwarded-host": "also-evil.test",
+        "x-forwarded-proto": "http",
+      }),
+    );
 
     expect(mocks.sendLoginLinkEmail).toHaveBeenCalledWith(
       "jane@example.com",
-      "https://tollgate.gudman.xyz/aperture/login/verify/" + "c".repeat(64),
+      "https://canonical.example/aperture/login/verify/" + "c".repeat(64),
     );
   });
 

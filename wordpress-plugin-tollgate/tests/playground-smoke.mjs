@@ -63,18 +63,8 @@ async function mockTollgateApi() {
       return;
     }
     if (request.url?.endsWith("/pay")) {
-      response.statusCode = 201;
-      response.end(
-        JSON.stringify({
-          paid: true,
-          created: true,
-          eventId: "wordpress:mock:hello-tollgate:reader",
-          queryId: "wordpress:mock:hello-tollgate:reader",
-          receiptHash: `0x${"a".repeat(64)}`,
-          settlementMode: "forum-routed",
-          amountAtomicUsdc: 2500,
-        }),
-      );
+      response.statusCode = 500;
+      response.end(JSON.stringify({ error: "unexpected pay request" }));
       return;
     }
     if (request.url === "/api/wordpress/proof") {
@@ -336,7 +326,8 @@ async function main() {
     assert.equal(humanResponse.status, 200);
     const humanHtml = await humanResponse.text();
     assert.match(humanHtml, /This post is gated by Tollgate/);
-    assert.match(humanHtml, /Unlock with Tollgate/);
+    assert.match(humanHtml, /Reader payment authorization is required/);
+    assert.doesNotMatch(humanHtml, /Unlock with Tollgate/);
     assert.doesNotMatch(humanHtml, /This content must stay behind/);
 
     const agentResponse = await fetch(`${baseUrl}/?p=${post.id}`, {
@@ -355,10 +346,10 @@ async function main() {
       `${baseUrl}/wp-json/tollgate/v1/pay/${post.id}`,
       { method: "POST" },
     );
-    assert.equal(payResponse.status, 200);
+    assert.equal(payResponse.status, 402);
     const payBody = await payResponse.json();
-    assert.equal(payBody.paid, true);
-    assert.equal(payBody.settlementMode, "forum-routed");
+    assert.equal(payBody.code, "tollgate_reader_payment_required");
+    assert.match(payBody.message, /Reader payment authorization is required/);
 
     const statusCalls = api.requests.filter((request) =>
       request.url?.endsWith("/status"),
@@ -367,9 +358,7 @@ async function main() {
       request.url?.endsWith("/pay"),
     );
     assert(statusCalls.length >= 2);
-    assert.equal(payCalls.length, 1);
-    assert.equal(payCalls[0].siteKey, "test-site-key");
-    assert.equal(payCalls[0].body.priceAtomicUsdc, 2500);
+    assert.equal(payCalls.length, 0);
 
     console.log(`WordPress Playground smoke passed at ${baseUrl}`);
   } finally {

@@ -21,7 +21,6 @@ console.log(
     {
       sourceId,
       payer: address,
-      payerWalletId: walletId,
       signedBy: "circle-w3s",
       settlementMode: body.settlementMode,
       receiptHash: body.receipt?.receiptHash,

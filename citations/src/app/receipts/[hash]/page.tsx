@@ -13,6 +13,7 @@ import {
   shortWallet,
 } from "@/lib/format";
 import { readLedger, verifyLedgerIntegrity } from "@/lib/ledger";
+import { publicLedger } from "@/lib/public-data";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,9 @@ function EvidenceRow({
 
 export default async function ReceiptPage({ params }: Props) {
   const { hash } = await params;
-  const ledger = await readLedger();
-  const verification = verifyLedgerIntegrity(ledger);
+  const rawLedger = await readLedger();
+  const verification = verifyLedgerIntegrity(rawLedger);
+  const ledger = publicLedger(rawLedger);
   const receipt = ledger.receipts.find(
     (candidate) => candidate.receiptHash === hash || candidate.id === hash,
   );

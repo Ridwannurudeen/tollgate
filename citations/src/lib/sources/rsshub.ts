@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { XMLParser } from "fast-xml-parser";
+import {
+  readCappedResponseText,
+  safeFetch,
+  type SafeFetchOptions,
+} from "../safe-fetch";
 import type { CreatorSource } from "../types";
 
 const CREATOR_REGISTRY_PATH = path.join(
@@ -10,6 +15,7 @@ const CREATOR_REGISTRY_PATH = path.join(
 );
 const WALLET_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const MAX_FEED_ITEMS_PER_CREATOR = 8;
+export const RSSHUB_MAX_RESPONSE_BYTES = 512 * 1024;
 
 export type CreatorFeedRegistration = {
   id: string;
@@ -220,21 +226,32 @@ export function parseCreatorFeed(
   }));
 }
 
-export async function readRsshubSources(): Promise<CreatorSource[]> {
+export async function readRsshubSources(
+  fetchOptions: SafeFetchOptions = {},
+): Promise<CreatorSource[]> {
   const registrations = await readCreatorFeedRegistry();
   const results = await Promise.all(
     registrations.map(async (registration) => {
       try {
-        const response = await fetch(registration.feedUrl, {
-          headers: {
-            accept: "application/rss+xml, application/atom+xml, text/xml",
+        const response = await safeFetch(
+          registration.feedUrl,
+          {
+            headers: {
+              accept: "application/rss+xml, application/atom+xml, text/xml",
+            },
+            signal: AbortSignal.timeout(5000),
           },
-          signal: AbortSignal.timeout(5000),
-        });
+          fetchOptions,
+        );
         if (!response.ok) {
+          await response.body?.cancel();
           throw new Error(`feed returned HTTP ${response.status}`);
         }
-        return parseCreatorFeed(await response.text(), registration);
+        const text = await readCappedResponseText(
+          response,
+          RSSHUB_MAX_RESPONSE_BYTES,
+        );
+        return parseCreatorFeed(text, registration);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "unknown error";

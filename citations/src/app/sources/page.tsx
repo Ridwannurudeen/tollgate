@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
 import { SourceCard } from "@/components/SourceCard";
-import { readSources } from "@/lib/catalog";
+import { publicSource, readSources } from "@/lib/catalog";
 import { readLedger, verifyLedgerIntegrity } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
 
 export default async function SourcesPage() {
-  const [sources, ledger] = await Promise.all([readSources(), readLedger()]);
+  const [rawSources, ledger] = await Promise.all([
+    readSources(),
+    readLedger(),
+  ]);
   const verification = verifyLedgerIntegrity(ledger);
+  const sources = rawSources.map((source) => publicSource(source));
   const externalCount = sources.filter(
     (source) => source.sourceKind === "external",
   ).length;

@@ -4,7 +4,6 @@ import type { WalletRegistryEntry } from "./types";
 import {
   accountKeyHash,
   generateAccountKey,
-  normalizeAccountEmail,
 } from "./account";
 import {
   LinkRegistryError,
@@ -112,19 +111,6 @@ function optionalWallet(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
-function optionalEmail(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "string") {
-    throw new LinkRegistryError("email must be a string.");
-  }
-  if (!value.trim()) return undefined;
-  const email = normalizeAccountEmail(value);
-  if (!email) {
-    throw new LinkRegistryError("email must be a valid address.");
-  }
-  return email;
-}
-
 function optionalDescription(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "string") {
@@ -147,7 +133,7 @@ function mediaKind(value: unknown): LinkMediaKind {
 }
 
 async function photographerForRegistration(
-  input: Pick<LinkRegistrationInput, "displayName" | "wallet" | "email">,
+  input: Pick<LinkRegistrationInput, "displayName" | "wallet">,
   deps: LinkRegistrationDeps,
 ): Promise<{
   accountKey?: string;
@@ -171,7 +157,6 @@ async function photographerForRegistration(
     MAX_NAME_LENGTH,
   );
   const wallet = optionalWallet(input.wallet);
-  const email = optionalEmail(input.email);
   const accountKey = (deps.generateAccountKey ?? generateAccountKey)();
   const ownerId = deps.ownerId?.() ?? `link-${randomUUID()}`;
   const photographer = await (deps.registerCreator ?? registerCreator)({
@@ -179,7 +164,6 @@ async function photographerForRegistration(
     displayName,
     wallet,
     accountKeyHash: accountKeyHash(accountKey),
-    ...(email ? { email } : {}),
   });
   return { accountKey, ownerId, photographer };
 }

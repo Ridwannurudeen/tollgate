@@ -37,8 +37,8 @@ export default async function Home() {
             Aperture gates uploaded photos, uploaded videos, and hosted photo
             URLs behind a receipt-checked paywall, then writes a payout to the
             owner that settles through Forum FeeRouter on Arc. It also runs as a
-            sidecar for Immich photo communities, watching shared-link downloads
-            the same way.
+            sidecar for Immich photo communities, authorizing paid shared-link
+            downloads the same way.
           </p>
           <div className="actions">
             <Link className="button primary" href="/link">
@@ -77,10 +77,10 @@ export default async function Home() {
 
       <section className="flow">
         {[
-          ["01", "Download click", "POST /api/download/archive?key=..."],
-          ["02", "Resolve owner", "GET /api/shared-links/me?key=..."],
-          ["03", "Map wallet", "Immich ownerId to Arc wallet registry"],
-          ["04", "Settle", "Forum FeeRouterV1 or local proof receipt"],
+          ["01", "Request license", "POST /aperture/api/license-download"],
+          ["02", "Resolve owner", "Immich ownerId to verified Arc wallet"],
+          ["03", "Settle", "x402 plus Forum FeeRouterV1 payout receipt"],
+          ["04", "Authorize", "One-use signed archive POST"],
         ].map(([step, title, body]) => (
           <div className="flowCard" key={step}>
             <span>{step}</span>
@@ -111,7 +111,7 @@ export default async function Home() {
           </Link>
           <Link href="/install">
             <span>VPS install</span>
-            <small>systemd, nginx, access-log watcher</small>
+            <small>systemd, nginx authorization, audit watcher</small>
           </Link>
           <Link href="/link">
             <span>Gate media</span>

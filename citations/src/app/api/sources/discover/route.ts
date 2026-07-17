@@ -7,7 +7,7 @@ import {
   type TollgateDeclaration,
 } from "@/lib/discovery";
 import { assertDiscoveryRateLimit } from "@/lib/rate-limit";
-import { safeFetch } from "@/lib/safe-fetch";
+import { readCappedResponseText, safeFetch } from "@/lib/safe-fetch";
 import type { CreatorSource } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -32,37 +32,6 @@ function requestIp(request: NextRequest): string {
     if (last) return last;
   }
   return "local";
-}
-
-// Reads a discovery response body with a hard size cap so a malicious host
-// cannot stream a huge body to exhaust memory within the timeout window.
-async function readCappedText(response: Response): Promise<string | null> {
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_DISCOVERY_BODY_BYTES) {
-    return null;
-  }
-  if (!response.body) return response.text();
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_DISCOVERY_BODY_BYTES) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
-  return new TextDecoder().decode(
-    chunks.reduce<Uint8Array>((acc, chunk) => {
-      const merged = new Uint8Array(acc.length + chunk.length);
-      merged.set(acc);
-      merged.set(chunk, acc.length);
-      return merged;
-    }, new Uint8Array(0)),
-  );
 }
 
 function publisherUrl(value: unknown): URL {
@@ -93,9 +62,14 @@ async function fetchTollgateJson(
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
     });
-    if (!response.ok) return null;
-    const text = await readCappedText(response);
-    if (text === null) return null;
+    if (!response.ok) {
+      await response.body?.cancel();
+      return null;
+    }
+    const text = await readCappedResponseText(
+      response,
+      MAX_DISCOVERY_BODY_BYTES,
+    );
     return parseTollgateJson(JSON.parse(text), url.toString());
   } catch {
     return null;
@@ -110,9 +84,14 @@ async function fetchTollgateMeta(
       headers: { accept: "text/html, application/xhtml+xml" },
       signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
     });
-    if (!response.ok) return null;
-    const text = await readCappedText(response);
-    if (text === null) return null;
+    if (!response.ok) {
+      await response.body?.cancel();
+      return null;
+    }
+    const text = await readCappedResponseText(
+      response,
+      MAX_DISCOVERY_BODY_BYTES,
+    );
     return parseTollgateMeta(text, url.toString());
   } catch {
     return null;
@@ -139,8 +118,7 @@ function registrationError(error: unknown): {
     return { message: error.message, status: error.status };
   }
   return {
-    message:
-      error instanceof Error ? error.message : "Source discovery failed.",
+    message: "Source discovery failed.",
     status: 400,
   };
 }

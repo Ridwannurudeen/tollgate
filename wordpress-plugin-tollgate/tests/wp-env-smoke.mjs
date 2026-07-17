@@ -88,14 +88,8 @@ async function mockTollgateApi() {
       return;
     }
     if (request.url?.endsWith("/pay")) {
-      response.statusCode = 201;
-      response.end(
-        JSON.stringify({
-          paid: true,
-          receiptHash: `0x${"b".repeat(64)}`,
-          settlementMode: "wp-env-mock",
-        }),
-      );
+      response.statusCode = 500;
+      response.end(JSON.stringify({ error: "unexpected pay request" }));
       return;
     }
     if (request.url === "/api/wordpress/proof") {
@@ -353,17 +347,15 @@ async function main() {
       `${baseUrl}/wp-json/tollgate/v1/pay/${postId}`,
       { method: "POST" },
     );
-    assert.equal(payResponse.status, 200);
+    assert.equal(payResponse.status, 402);
     const payBody = await payResponse.json();
-    assert.equal(payBody.paid, true);
-    assert.equal(payBody.settlementMode, "wp-env-mock");
+    assert.equal(payBody.code, "tollgate_reader_payment_required");
+    assert.match(payBody.message, /Reader payment authorization is required/);
 
     const payCalls = api.requests.filter((request) =>
       request.url?.endsWith("/pay"),
     );
-    assert.equal(payCalls.length, 1);
-    assert.equal(payCalls[0].siteKey, "test-site-key");
-    assert.equal(payCalls[0].body.priceAtomicUsdc, 2500);
+    assert.equal(payCalls.length, 0);
 
     console.log(
       `wp-env smoke passed for ${pluginName} at ${baseUrl} using mock API ${api.baseUrl}`,

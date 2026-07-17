@@ -1,12 +1,23 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getAddress, isAddress, type Address } from "viem";
+import { redactPublicText } from "./public-data";
 import type { WalletRegistry, WalletRegistryEntry } from "./types";
 
 const REGISTRY_PATH = path.join(process.cwd(), "data", "registry.json");
 const EMPTY_REGISTRY: WalletRegistry = { photographers: [] };
 let registryWriteLock: Promise<void> = Promise.resolve();
 const WALLET_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+
+export type PublicWalletRegistryEntry = Pick<
+  WalletRegistryEntry,
+  | "ownerId"
+  | "displayName"
+  | "wallet"
+  | "createdAt"
+  | "approvalStatus"
+  | "custody"
+>;
 
 function isHexHash(value: unknown): value is `0x${string}` {
   return typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value);
@@ -112,6 +123,19 @@ export async function readWalletForOwner(
   filePath: string = REGISTRY_PATH,
 ): Promise<WalletRegistryEntry | null> {
   return findWalletForOwner(await readWalletRegistry(filePath), ownerId);
+}
+
+export function publicWalletRegistryEntry(
+  entry: WalletRegistryEntry,
+): PublicWalletRegistryEntry {
+  return {
+    ownerId: redactPublicText(entry.ownerId),
+    displayName: redactPublicText(entry.displayName),
+    wallet: entry.wallet,
+    createdAt: entry.createdAt,
+    approvalStatus: entry.approvalStatus,
+    ...(entry.custody ? { custody: entry.custody } : {}),
+  };
 }
 
 export function upsertWalletRegistryEntry(
