@@ -18,17 +18,20 @@ Tollgate turns reuse into revenue: one Arc settlement core, six integration surf
 
 ## Traction snapshot (live, refresh via `/api/proof` before submission)
 
-| Metric                  | Live source                          | Value (as of 2026-07-08)          |
+| Metric                  | Live source                          | Value (as of 2026-07-17)          |
 | ----------------------- | ------------------------------------- | ----------------------------------- |
 | External sources        | `/api/proof` (`traction`)             | 20                                  |
 | Seed/fixture sources     | `/api/proof` (`traction`)             | 11                                  |
-| Paid queries            | `/api/proof` (`traction`)             | 25                                  |
-| Payout receipts         | `/api/proof` (`traction`)             | 459                                 |
+| Paid queries (total)    | `/api/proof` (`traction`)             | 32                                  |
+| Paid queries (independent readers) | `/api/proof` (`traction`)  | 13 across 11 self-funded wallets    |
+| Payout receipts         | `/api/proof` (`traction`)             | 480                                 |
 | Unique payer wallets    | `/api/proof` (`traction`)             | 13                                  |
 | Unique creator wallets  | `/api/proof` (`traction`)             | 14                                  |
-| Total test USDC routed  | `/api/proof` (`traction`)             | ~0.7608                             |
+| Total test USDC routed  | `/api/proof` (`traction`)             | ~0.7907                             |
 | Ledger integrity        | `/api/proof` (`ledger.verification`)  | `ok: true`, 0 issues                |
 | Aperture listings       | `/aperture/api/links`                 | 10 (photo + video, link + upload)   |
+
+Every reader-payment wallet is classified (`operator` / `fixture` / `self-funded-cold-human` / …) in committed [`data/actor-classes.json`](./citations/data/actor-classes.json), and `/api/proof` reports independent traction separately from total — we count only independent readers as traction.
 
 Real external adoption: several people outside the founding team found Tollgate through social media and self-served the full creator flow (email signup, upload their own photo/content, no hand-holding) — including one organic cold signup who returned to list a second item, and one person active across both Aperture and Citations. Full detail and honest caveats in [`docs/TRACTION.md`](./docs/TRACTION.md).
 
