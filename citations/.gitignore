@@ -18,3 +18,4 @@ npm-debug.log*
 wallets/local-keystore.dpapi.json
 
 public/tollgate.zip
+data/sources.json
