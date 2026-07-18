@@ -186,5 +186,29 @@ the Citations WS5 judge path is deployed:
 - [Jellyfin sidecar](../jellyfin-sidecar/README.md)
 - [PeerTube plugin](../peertube-plugin-tollgate/README.md)
 
+## External integration pilot (Shadow canary)
+
+A bounded, isolated canary settled Tollgate's contribution-split idea against a
+second Arc agent (Shadow Float's mirror router) on 2026-07-18. It is a
+cross-agent integration proof, not organic revenue and not the Citations WS5
+judge path.
+
+- One dust-sized mirror intent was published from the Forum source wallet
+  `0x13585c6004fbA9D7D49219a6435B68348fD30770` — tx
+  `0xccbd877f…b80b16` (success, Arc testnet block 52466900).
+- The routed mirror fee split exactly 70/30 through split `205`: source `7`,
+  protocol `3` micro-USDC (`SOURCE_FEE_SHARE_BPS = 7000`).
+- Verified read-only from chain state: both outstanding claimable balances
+  match the split, local fallback accrual was untouched (routed, not fallback),
+  and the splitter→FeeRouter allowance returned to `0`.
+- Canary contracts: MirrorFeeSplitter
+  `0xE901a54dDE4243940EEceD8C57F29fef5eC6eaca`, CanaryMirrorRouter
+  `0xC86C5e032A2e81E6Df7B0A60BC6cC830F52d939A`, isolated from Shadow's
+  production router. External routing was enabled only for the single publish
+  and disabled immediately after.
+
+Scope: a one-transaction pilot with both sides holding signed on-chain
+evidence. It does not represent recurring volume or independent demand.
+
 Built during the Lepton Agents Hackathon continuation. AI usage is documented
 in [AI_USAGE.md](AI_USAGE.md).
