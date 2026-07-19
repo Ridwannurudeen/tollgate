@@ -97,7 +97,7 @@ export const DEFAULT_CREATOR_SOURCES: CreatorSource[] = [
     creator: "Forum Protocol",
     handle: "@ggudman",
     wallet: "0x5555555555555555555555555555555555555555",
-    url: "https://forum.gudman.xyz",
+    url: "https://forum.gudman.xyz/mandates",
     summary:
       "Forum-style mandates bound an agent budget, publish receipts, and make spend controls enforceable instead of advisory.",
     tags: ["forum", "receipts", "mandates", "spend-control", "agents"],
