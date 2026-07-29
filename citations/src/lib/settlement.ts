@@ -26,6 +26,7 @@ import {
   attachTrackRecordEvidence,
   readLedger,
 } from "./ledger";
+import { claimPriceAtomicUsdc, claimSettlement } from "./payments";
 import { publishTrackRecordForAnswer } from "./track-record";
 import { payCitationsWithIntent, payGateAddress } from "./pay-gate";
 import {
@@ -448,6 +449,8 @@ export async function settlePaidQuestion(
         },
       );
     }
+  } else if (query.readerPayment && !query.readerPayment.refund) {
+    query.readerPayment = await attachClaimPricedRefund(query);
   }
   let preparedUseIntent: PreparedUseIntent | null;
   try {
@@ -643,11 +646,13 @@ async function attachReaderRefund(
   payment: QueryPaymentEvidence,
   reason: string,
   required = false,
+  refundAtomicUsdc = payment.amountAtomicUsdc,
 ): Promise<QueryPaymentEvidence> {
   if (
     !payment.payer ||
     !/^0x[0-9a-fA-F]{40}$/.test(payment.payer) ||
-    payment.amountAtomicUsdc <= 0
+    payment.amountAtomicUsdc <= 0 ||
+    refundAtomicUsdc <= 0
   ) {
     return payment;
   }
@@ -655,7 +660,7 @@ async function attachReaderRefund(
   try {
     refundTx = await refundReaderPayment(
       payment.payer as `0x${string}`,
-      payment.amountAtomicUsdc,
+      refundAtomicUsdc,
     );
   } catch (error) {
     if (required) throw error;
@@ -682,11 +687,50 @@ async function attachReaderRefund(
   return {
     ...payment,
     refund: {
-      amountAtomicUsdc: payment.amountAtomicUsdc,
+      amountAtomicUsdc: refundAtomicUsdc,
       transaction: refundTx,
       reason,
     },
   };
+}
+
+export function creatorPayoutTotal(query: QueryRecord): number {
+  return query.citations.reduce(
+    (sum, citation) =>
+      citation.payoutPolicy === "refund-unused"
+        ? sum
+        : sum + (citation.payoutAtomicUsdc ?? citation.amountAtomicUsdc),
+    0,
+  );
+}
+
+export function supportedClaimCount(query: QueryRecord): number {
+  return (query.claimSupport ?? []).filter(
+    (support) => support.status === "supported",
+  ).length;
+}
+
+// Settles the quoted ceiling down to what the answer actually delivered. A
+// failed refund is recorded on the payment rather than thrown: the answer and
+// the creator payouts are already valid, so the reader keeps the evidence.
+async function attachClaimPricedRefund(
+  query: QueryRecord,
+): Promise<QueryPaymentEvidence> {
+  const payment = query.readerPayment as QueryPaymentEvidence;
+  if (query.claimSupport === undefined) return payment;
+  const { refundAtomicUsdc } = claimSettlement({
+    supportedClaimCount: supportedClaimCount(query),
+    creatorPayoutAtomicUsdc: creatorPayoutTotal(query),
+    quotedAtomicUsdc: payment.amountAtomicUsdc,
+    claimPriceAtomicUsdc: claimPriceAtomicUsdc(),
+  });
+  if (refundAtomicUsdc <= 0) return payment;
+  return attachReaderRefund(
+    payment,
+    "claim-priced-settlement",
+    false,
+    refundAtomicUsdc,
+  );
 }
 
 async function refundFailedPaidQuery(
