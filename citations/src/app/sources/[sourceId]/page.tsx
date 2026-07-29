@@ -4,6 +4,7 @@ import { CopyWallet } from "@/components/CopyWallet";
 import { SiteNav } from "@/components/SiteNav";
 import { SourceVerifyPanel } from "@/components/SourceVerifyPanel";
 import { findSource, publicSource } from "@/lib/catalog";
+import { pendingEscrowReceipts } from "@/lib/escrow";
 import { formatUsdc, settlementLabel, shortHash } from "@/lib/format";
 import { groundingYield } from "@/lib/grounding-yield";
 import {
@@ -42,6 +43,11 @@ export default async function SourcePage({ params }: Props) {
   const latestReceipt = receipts[0];
   const sourceYield = groundingYield(ledger, sourceId);
   const status = sourceStatus(source);
+  const escrowReceipts = pendingEscrowReceipts(ledger.receipts, sourceId);
+  const escrowedAtomicUsdc = escrowReceipts.reduce(
+    (sum, receipt) => sum + receipt.amountAtomicUsdc,
+    0,
+  );
   const token = (() => {
     try {
       return verificationToken(source.id);
@@ -104,6 +110,14 @@ export default async function SourcePage({ params }: Props) {
             <span>citations</span>
             <strong>{evidence?.citationCount ?? 0}</strong>
           </div>
+          {escrowedAtomicUsdc > 0 && (
+            <div className="evidence-row">
+              <span>escrowed, awaiting verification</span>
+              <strong>
+                {`${formatUsdc(escrowedAtomicUsdc)} USDC across ${escrowReceipts.length} citation${escrowReceipts.length === 1 ? "" : "s"}`}
+              </strong>
+            </div>
+          )}
           <div className="evidence-row">
             <span>latest receipt</span>
             <strong>
@@ -178,6 +192,8 @@ export default async function SourcePage({ params }: Props) {
           sourceId={source.id}
           token={token}
           verified={source.verifiedCreator}
+          escrowedAtomicUsdc={escrowedAtomicUsdc}
+          escrowedCitationCount={escrowReceipts.length}
         />
 
         <section className="receipt-ledger">

@@ -1,14 +1,25 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { formatUsdc } from "@/lib/format";
 
 type Props = {
   sourceId: string;
   token: string | null;
   verified: boolean;
+  escrowedAtomicUsdc: number;
+  escrowedCitationCount: number;
 };
 
-export function SourceVerifyPanel({ sourceId, token, verified }: Props) {
+export function SourceVerifyPanel({
+  sourceId,
+  token,
+  verified,
+  escrowedAtomicUsdc,
+  escrowedCitationCount,
+}: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState("");
 
   async function check(method: "meta-tag" | "dns-txt") {
@@ -19,10 +30,18 @@ export function SourceVerifyPanel({ sourceId, token, verified }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ method }),
       });
-      const body = (await response.json()) as { error?: string };
+      const body = (await response.json()) as {
+        error?: string;
+        escrowRelease?: { released: boolean; amountAtomicUsdc: number };
+      };
       if (!response.ok)
         throw new Error(body.error ?? `HTTP ${response.status}`);
-      setStatus("Source verified.");
+      setStatus(
+        body.escrowRelease?.released
+          ? `Source verified. Released ${formatUsdc(body.escrowRelease.amountAtomicUsdc)} USDC.`
+          : "Source verified.",
+      );
+      router.refresh();
     } catch (error) {
       setStatus(
         error instanceof Error ? error.message : "Verification failed.",
@@ -72,7 +91,9 @@ export function SourceVerifyPanel({ sourceId, token, verified }: Props) {
       )}
       <p className="status-line" aria-live="polite">
         {status ||
-          "Meta-tag or DNS ownership verification releases escrowed payouts for this source."}
+          (escrowedAtomicUsdc > 0
+            ? `${formatUsdc(escrowedAtomicUsdc)} USDC is held in escrow across ${escrowedCitationCount} citation${escrowedCitationCount === 1 ? "" : "s"}. Verifying ownership releases it to this source's wallet.`
+            : "Meta-tag or DNS ownership verification releases escrowed payouts for this source.")}
       </p>
     </section>
   );
