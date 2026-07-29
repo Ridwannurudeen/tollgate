@@ -7,7 +7,7 @@ import {
   type Hex,
   type PublicClient,
 } from "viem";
-import { ARC_RPC_URL, arcTestnet } from "./chain";
+import { ARC_RPC_URL, arcChain } from "./chain";
 import { FORUM_ADDRESSES } from "./forum";
 
 export const SLASH_BOND_ADDRESS = FORUM_ADDRESSES.slashBondV1_1;
@@ -164,7 +164,7 @@ function isDemoSlashBondEvidence(
 
 export function createSlashBondPublicClient() {
   return createPublicClient({
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
 }

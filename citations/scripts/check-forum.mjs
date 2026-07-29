@@ -13,7 +13,7 @@ const FORUM_ADDRESSES = {
   covenantVaultFactory: "0xc9bbafd02d22dd75a9f043f50f126ac2fe22ca26",
 };
 
-const arcTestnet = defineChain({
+const arcChain = defineChain({
   id: ARC_CHAIN_ID,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -69,7 +69,7 @@ const covenantVaultFactoryReadAbi = [
 ];
 
 const client = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 

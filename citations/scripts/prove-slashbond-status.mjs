@@ -7,7 +7,7 @@ const SLASH_BOND_ADDRESS =
   process.env.LEPTONWEB_SLASH_BOND_ADDRESS ??
   "0xe6c8c31477a1d88fbdad6e7b4fc83ab8e6e34939";
 
-const arcTestnet = {
+const arcChain = {
   id: 5042002,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -156,7 +156,7 @@ const roleId = process.env.LEPTONWEB_SLASH_BOND_ROLE ?? "demo-payer";
 const execute = process.env.SLASHBOND_EXECUTE === "1";
 const wallet = await loadWallet(roleId);
 const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const statusBefore = await readStatus(publicClient);
@@ -176,7 +176,7 @@ if (execute) {
     );
     const walletClient = createWalletClient({
       account: wallet.account,
-      chain: arcTestnet,
+      chain: arcChain,
       transport: http(ARC_RPC_URL),
     });
     slashTx = await walletClient.writeContract({
@@ -185,7 +185,7 @@ if (execute) {
       functionName: "slash",
       args: [amount, reason],
       account: wallet.account,
-      chain: arcTestnet,
+      chain: arcChain,
     });
     await publicClient.waitForTransactionReceipt({ hash: slashTx });
   }

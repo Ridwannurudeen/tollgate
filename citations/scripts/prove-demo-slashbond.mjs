@@ -21,7 +21,7 @@ const UNBOND_DELAY = BigInt(process.env.SLASHBOND_UNBOND_DELAY ?? "86400");
 const BOND_AMOUNT = BigInt(process.env.SLASHBOND_BOND_AMOUNT ?? "1000");
 const SLASH_AMOUNT = BigInt(process.env.SLASHBOND_SLASH_AMOUNT ?? "1");
 
-const arcTestnet = {
+const arcChain = {
   id: 5042002,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -149,12 +149,12 @@ async function readStatus(publicClient, address) {
 const roleId = process.env.LEPTONWEB_SLASH_BOND_ROLE ?? "demo-payer";
 const wallet = await loadWallet(roleId);
 const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const walletClient = createWalletClient({
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const source = await readFile(
@@ -185,7 +185,7 @@ const deployTx = await walletClient.deployContract({
     UNBOND_DELAY,
   ],
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
 });
 const deployReceipt = await publicClient.waitForTransactionReceipt({
   hash: deployTx,
@@ -208,7 +208,7 @@ if (allowance < BOND_AMOUNT) {
     functionName: "approve",
     args: [deployReceipt.contractAddress, BOND_AMOUNT],
     account: wallet.account,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   await publicClient.waitForTransactionReceipt({ hash: approveTx });
 }
@@ -219,7 +219,7 @@ const bondTx = await walletClient.writeContract({
   functionName: "bond",
   args: [BOND_AMOUNT],
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
 });
 await publicClient.waitForTransactionReceipt({ hash: bondTx });
 
@@ -239,7 +239,7 @@ const slashTx = await walletClient.writeContract({
   functionName: "slash",
   args: [SLASH_AMOUNT, reasonHash],
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
 });
 await publicClient.waitForTransactionReceipt({ hash: slashTx });
 

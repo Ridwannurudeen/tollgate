@@ -5,7 +5,7 @@ import {
   type Hex,
   type PublicClient,
 } from "viem";
-import { ARC_CHAIN_ID, ARC_RPC_URL, arcTestnet } from "./chain";
+import { ARC_CHAIN_ID, ARC_RPC_URL, arcChain } from "./chain";
 
 export const FORUM_REFERENCE_BOT_ID =
   "0x826d03b1edbf2c7251b6ff4a521c01cda6c01c1bf84cff2e39fc85b4edd4f6cd";
@@ -86,7 +86,7 @@ export type ForumLiveness = {
 
 export function createForumPublicClient() {
   return createPublicClient({
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
 }

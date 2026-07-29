@@ -7,7 +7,7 @@ const ARC_RPC_URL =
 const DEFAULT_AGENT_WALLET = "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836";
 const PAID_QUERY_PRICE_ATOMIC_USDC = 10_000;
 
-const arcTestnet = defineChain({
+const arcChain = defineChain({
   id: ARC_CHAIN_ID,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -16,7 +16,7 @@ const arcTestnet = defineChain({
 });
 
 const client = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 

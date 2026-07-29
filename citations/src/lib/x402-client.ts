@@ -9,7 +9,14 @@ import {
   type SignTypedDataParameters,
   type WalletClient,
 } from "viem";
-import { ARC_CAIP2, ARC_CHAIN_ID, ARC_RPC_URL, arcTestnet } from "./chain";
+import {
+  ARC_CAIP2,
+  ARC_CHAIN_ID,
+  ARC_CHAIN_NAME,
+  ARC_EXPLORER_URL,
+  ARC_RPC_URL,
+  arcChain,
+} from "./chain";
 
 type EthereumProvider = {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
@@ -52,10 +59,10 @@ export async function connectArcWallet(): Promise<WalletClient> {
       params: [
         {
           chainId: chainIdHex(),
-          chainName: "Arc Testnet",
+          chainName: ARC_CHAIN_NAME,
           nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
           rpcUrls: [ARC_RPC_URL],
-          blockExplorerUrls: ["https://testnet.arcscan.app"],
+          blockExplorerUrls: [ARC_EXPLORER_URL],
         },
       ],
     });
@@ -63,7 +70,7 @@ export async function connectArcWallet(): Promise<WalletClient> {
 
   return createWalletClient({
     account,
-    chain: arcTestnet,
+    chain: arcChain,
     transport: custom(provider),
   });
 }

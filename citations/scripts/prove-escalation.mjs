@@ -19,7 +19,7 @@ const provider = {
   recipient: "0x5389688243328c26a92b301faEEAb5fbf9AFf105",
   priceAtomicUsdc: 1_000n,
 };
-const arcTestnet = defineChain({
+const arcChain = defineChain({
   id: 5042002,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -69,20 +69,20 @@ async function rpc(method, params = []) {
 
 const payer = await loadWallet(roleId);
 const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(rpcUrl),
 });
 const walletClient = createWalletClient({
   account: payer.account,
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(rpcUrl),
 });
 const chainId = Number(
   await retryRead("Arc RPC chain id", () => rpc("eth_chainId")),
 );
-if (chainId !== arcTestnet.id) {
+if (chainId !== arcChain.id) {
   throw new Error(
-    `Arc RPC returned chain ${chainId}, expected ${arcTestnet.id}.`,
+    `Arc RPC returned chain ${chainId}, expected ${arcChain.id}.`,
   );
 }
 const balance = await retryRead("Escalation payer balance", () =>

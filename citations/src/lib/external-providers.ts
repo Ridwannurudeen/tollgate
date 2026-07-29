@@ -1,5 +1,5 @@
 import type { Address, Hex, PublicClient } from "viem";
-import { ARC_USDC, arcTestnet } from "./chain";
+import { ARC_USDC, arcChain } from "./chain";
 import {
   createFeeRouterPublicClient,
   createFeeRouterSigner,
@@ -77,7 +77,7 @@ async function askCitePay(
       functionName: "transfer",
       args: [provider.recipient, BigInt(provider.priceAtomicUsdc)],
       account,
-      chain: arcTestnet,
+      chain: arcChain,
       nonce,
     }),
   );

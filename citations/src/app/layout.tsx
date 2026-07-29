@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ARC_CHAIN_ID, ARC_CHAIN_NAME, ARC_EXPLORER_URL } from "@/lib/chain";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -60,14 +61,10 @@ export default function RootLayout({
               </div>
               <div className="footer-col">
                 <p className="footer-head">Network</p>
-                <a
-                  href="https://testnet.arcscan.app"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Arc testnet explorer
+                <a href={ARC_EXPLORER_URL} target="_blank" rel="noreferrer">
+                  {`${ARC_CHAIN_NAME} explorer`}
                 </a>
-                <span className="footer-meta">chainId 5042002</span>
+                <span className="footer-meta">{`chainId ${ARC_CHAIN_ID}`}</span>
                 <span className="footer-meta">USDC · 6 decimals</span>
               </div>
             </nav>

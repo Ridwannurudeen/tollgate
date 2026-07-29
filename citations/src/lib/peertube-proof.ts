@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createPublicClient, http, type Hex } from "viem";
-import { ARC_CAIP2, ARC_RPC_URL, arcTestnet } from "./chain";
+import { ARC_CAIP2, ARC_RPC_URL, arcChain } from "./chain";
 import { FEE_ROUTER_ADDRESS } from "./fee-router-contract";
 import { projectPublicData } from "./public-data";
 
@@ -55,7 +55,7 @@ async function readPluginPackage(): Promise<PluginPackage> {
 async function readFeeRouterTx() {
   try {
     const publicClient = createPublicClient({
-      chain: arcTestnet,
+      chain: arcChain,
       transport: http(ARC_RPC_URL),
     });
     const [receipt, transaction] = await Promise.all([

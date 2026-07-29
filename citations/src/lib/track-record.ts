@@ -10,7 +10,7 @@ import {
   type PublicClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ARC_RPC_URL, arcTestnet } from "./chain";
+import { ARC_RPC_URL, arcChain } from "./chain";
 import { FORUM_ADDRESSES } from "./forum";
 import { stableStringify } from "./hash";
 import type { PaymentReceipt, QueryRecord, TrackRecordEvidence } from "./types";
@@ -165,7 +165,7 @@ export type TrackRecordPublishOptions = {
 
 export function createTrackRecordPublicClient() {
   return createPublicClient({
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
 }
@@ -353,7 +353,7 @@ export async function publishTrackRecordForAnswer(
   const publicClient = createTrackRecordPublicClient();
   const walletClient = createWalletClient({
     account,
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
 
@@ -365,7 +365,7 @@ export async function publishTrackRecordForAnswer(
       functionName: "registerBot",
       args: [botId, TRACK_RECORD_BOT_KIND_OTHER, account.address],
       account,
-      chain: arcTestnet,
+      chain: arcChain,
     });
     await publicClient.waitForTransactionReceipt({ hash: registerTx });
     state = await readTrackRecordState(botId, publicClient);
@@ -413,7 +413,7 @@ export async function publishTrackRecordForAnswer(
       signature,
     ],
     account,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   await publicClient.waitForTransactionReceipt({ hash: publishTx });
 

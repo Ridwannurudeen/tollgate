@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
 import { readSources } from "@/lib/catalog";
+import { ARC_EXPLORER_URL } from "@/lib/chain";
 import { formatDollars } from "@/lib/format";
 import { buildProofPack } from "@/lib/proof-pack";
 
 export const dynamic = "force-dynamic";
 
 const FEE_ROUTER = "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59";
-const ARC_EXPLORER = "https://testnet.arcscan.app";
+
 const APERTURE_PROOF_URL = "https://tollgate.gudman.xyz/aperture/api/proof";
 const PEERTUBE_PROOF_URL =
   "https://tollgate.gudman.xyz/plugins/tollgate/router/proof";
@@ -201,7 +202,7 @@ export default async function CorePage() {
               Forum FeeRouter at{" "}
               <a
                 className="receipt-link"
-                href={`${ARC_EXPLORER}/address/${FEE_ROUTER}`}
+                href={`${ARC_EXPLORER_URL}/address/${FEE_ROUTER}`}
                 target="_blank"
                 rel="noreferrer"
               >

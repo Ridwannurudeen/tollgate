@@ -1,3 +1,4 @@
+import { ARC_CAIP2, ARC_USDC } from "./chain";
 import { sha256Hex, stableStringify } from "./hash";
 import type {
   CreatorSource,
@@ -18,7 +19,7 @@ export type X402CiteToll = {
   wallet: `0x${string}`;
   sourceUrl: string;
   priceAtomicUsdc: number;
-  network: "eip155:5042002";
+  network: typeof ARC_CAIP2;
   asset: `0x${string}`;
 };
 
@@ -81,8 +82,8 @@ export function buildX402CiteToll(
     wallet: source.wallet,
     sourceUrl,
     priceAtomicUsdc: source.priceAtomicUsdc,
-    network: "eip155:5042002",
-    asset: "0x3600000000000000000000000000000000000000",
+    network: ARC_CAIP2,
+    asset: ARC_USDC,
   };
 }
 

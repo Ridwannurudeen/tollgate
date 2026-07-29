@@ -7,7 +7,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount, type LocalAccount } from "viem/accounts";
-import { ARC_CHAIN_ID, ARC_RPC_URL, arcTestnet } from "./chain";
+import { ARC_CHAIN_ID, ARC_RPC_URL, arcChain } from "./chain";
 import { withReservedNonce } from "./fee-router-nonce";
 import { sha256Hex } from "./hash";
 import { tollgateAgentWallet } from "./payments";
@@ -374,12 +374,12 @@ export async function anchorUseIntent(
 ): Promise<Hex> {
   const account = createUseIntentSigner();
   const publicClient = createPublicClient({
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
   const walletClient = createWalletClient({
     account,
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
   const transaction = await withReservedNonce(publicClient, account, (nonce) =>
@@ -389,7 +389,7 @@ export async function anchorUseIntent(
       functionName: "anchor",
       args: [useIntentContractValue(built.intent), signature],
       account,
-      chain: arcTestnet,
+      chain: arcChain,
       nonce,
     }),
   );

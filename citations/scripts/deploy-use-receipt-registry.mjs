@@ -16,7 +16,7 @@ const ARC_RPC_URL =
 const DEFAULT_AGENT_WALLET = "0x5C94b3aBb29c1dFcA24313B9A2D383960Cd69836";
 const execute = process.env.USE_RECEIPT_REGISTRY_EXECUTE === "1";
 
-const arcTestnet = defineChain({
+const arcChain = defineChain({
   id: ARC_CHAIN_ID,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -94,12 +94,12 @@ if (!execute) {
     process.env.LEPTONWEB_USE_INTENT_DEPLOYER_ROLE ?? "tollgate-agent-payee";
   const wallet = await loadWallet(role);
   const publicClient = createPublicClient({
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
   const walletClient = createWalletClient({
     account: wallet.account,
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
   const deployTx = await walletClient.deployContract({
@@ -107,7 +107,7 @@ if (!execute) {
     bytecode,
     args: [agentWallet],
     account: wallet.account,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   const receipt = await publicClient.waitForTransactionReceipt({
     hash: deployTx,

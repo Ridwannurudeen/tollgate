@@ -1,3 +1,5 @@
+import { ARC_EXPLORER_URL } from "./chain";
+
 export function formatUsdc(atomicUsdc: number): string {
   return (atomicUsdc / 1_000_000).toFixed(6);
 }
@@ -36,5 +38,5 @@ export function settlementLabel(mode: string): string {
 }
 
 export function arcscanTxUrl(tx: string): string {
-  return `https://testnet.arcscan.app/tx/${tx}`;
+  return `${ARC_EXPLORER_URL}/tx/${tx}`;
 }

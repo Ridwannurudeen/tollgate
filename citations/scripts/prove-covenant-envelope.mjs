@@ -11,7 +11,7 @@ const BOT_ID =
   process.env.LEPTONWEB_COVENANT_BOT_ID ??
   "0x434f104d66bd47acc44e9a77f3653075cbd18071da675682189101e96f316223";
 
-const arcTestnet = {
+const arcChain = {
   id: 5042002,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -197,12 +197,12 @@ const execute = process.env.COVENANT_EXECUTE === "1";
 const roleId = process.env.LEPTONWEB_COVENANT_ROLE ?? "demo-payer";
 const wallet = await loadWallet(roleId);
 const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const walletClient = createWalletClient({
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const budgetUsdc = BigInt(process.env.LEPTONWEB_COVENANT_BUDGET ?? "5000000");
@@ -233,7 +233,7 @@ if (vaults.length === 0 && execute) {
     functionName: "createVault",
     args: [mandate],
     account: wallet.account,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   await publicClient.waitForTransactionReceipt({ hash: createTx });
   vaults = await publicClient.readContract({

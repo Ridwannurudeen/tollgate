@@ -82,7 +82,7 @@ const usdcAbi = [
   },
 ];
 
-const arcTestnet = defineChain({
+const arcChain = defineChain({
   id: ARC_CHAIN_ID,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -149,7 +149,7 @@ assertValidSplit(recipients, bps);
 
 const payer = await loadWallet(payerRole);
 const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 
@@ -215,7 +215,7 @@ if (!readiness.ok) {
 } else if (execute) {
   const walletClient = createWalletClient({
     account: payer.account,
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   });
 
@@ -227,7 +227,7 @@ if (!readiness.ok) {
       functionName: "approve",
       args: [FEE_ROUTER, amount],
       account: payer.account,
-      chain: arcTestnet,
+      chain: arcChain,
     });
     await publicClient.waitForTransactionReceipt({ hash: approveTx });
   }
@@ -241,7 +241,7 @@ if (!readiness.ok) {
     functionName: "createSplit",
     args: [recipients, bps],
     account: payer.account.address,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   const createSplitTx = await walletClient.writeContract(createSplitRequest);
   await publicClient.waitForTransactionReceipt({ hash: createSplitTx });
@@ -252,7 +252,7 @@ if (!readiness.ok) {
     functionName: "pay",
     args: [splitId, amount],
     account: payer.account,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   await publicClient.waitForTransactionReceipt({ hash: payTx });
 

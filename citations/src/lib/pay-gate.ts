@@ -5,7 +5,7 @@ import {
   type Hex,
   type PublicClient,
 } from "viem";
-import { ARC_USDC, arcTestnet } from "./chain";
+import { ARC_USDC, arcChain } from "./chain";
 import {
   createFeeRouterPublicClient,
   createFeeRouterSigner,
@@ -243,7 +243,7 @@ export async function payCitationsWithIntent(
         functionName: "approve",
         args: [address, STANDING_FEE_ROUTER_ALLOWANCE],
         account,
-        chain: arcTestnet,
+        chain: arcChain,
         nonce,
       }),
     );
@@ -279,7 +279,7 @@ export async function payCitationsWithIntent(
       functionName: "payWithIntent",
       args: [useIntentContractValue(built.intent), signature, contractPayments],
       account,
-      chain: arcTestnet,
+      chain: arcChain,
       nonce,
     }),
   );

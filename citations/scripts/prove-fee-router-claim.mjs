@@ -6,7 +6,7 @@ const ARC_RPC_URL =
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
 const FEE_ROUTER_ADDRESS = "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59";
 
-const arcTestnet = {
+const arcChain = {
   id: 5042002,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -47,12 +47,12 @@ const usdcAbi = [
 const roleId = process.env.LEPTONWEB_FEE_ROUTER_CLAIM_ROLE ?? "creator-primary";
 const wallet = await loadWallet(roleId);
 const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const walletClient = createWalletClient({
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 
@@ -94,7 +94,7 @@ const claimTx = await walletClient.writeContract({
   abi: feeRouterClaimAbi,
   functionName: "claim",
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
 });
 const receipt = await publicClient.waitForTransactionReceipt({ hash: claimTx });
 

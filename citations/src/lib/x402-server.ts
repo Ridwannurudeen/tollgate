@@ -27,7 +27,7 @@ import {
   ARC_GATEWAY_WALLET,
   ARC_RPC_URL,
   ARC_USDC,
-  arcTestnet,
+  arcChain,
 } from "./chain";
 
 export const PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE";
@@ -153,7 +153,7 @@ function makeFacilitator() {
   const account = privateKeyToAccount(privateKey);
   const client = createWalletClient({
     account,
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
   }).extend(publicActions);
   const signer = toFacilitatorEvmSigner(

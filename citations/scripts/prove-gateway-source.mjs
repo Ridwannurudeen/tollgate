@@ -11,7 +11,7 @@ const minAvailableAtomicUsdc = BigInt(
 
 const wallet = await loadWallet(roleId);
 const gateway = new GatewayClient({
-  chain: "arcTestnet",
+  chain: "arcChain",
   privateKey: wallet.privateKey,
   rpcUrl: process.env.NEXT_PUBLIC_ARC_RPC_URL,
 });

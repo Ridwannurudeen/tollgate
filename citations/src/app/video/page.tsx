@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
+import { ARC_EXPLORER_URL } from "@/lib/chain";
 import { arcscanTxUrl } from "@/lib/format";
 import { readLedger, verifyLedgerIntegrity } from "@/lib/ledger";
 import { PEERTUBE_FEE_ROUTER_TX } from "@/lib/peertube-proof";
@@ -166,7 +167,7 @@ export default async function VideoPage() {
             <span>fee router</span>
             <strong>
               <a
-                href={`https://testnet.arcscan.app/address/${FEE_ROUTER}`}
+                href={`${ARC_EXPLORER_URL}/address/${FEE_ROUTER}`}
                 target="_blank"
                 rel="noreferrer"
               >

@@ -24,7 +24,7 @@ const erc20BalanceAbi = [
   },
 ];
 
-const arcTestnet = defineChain({
+const arcChain = defineChain({
   id: ARC_CHAIN_ID,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -43,7 +43,7 @@ const sources = JSON.parse(
 );
 
 const client = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 

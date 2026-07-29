@@ -12,7 +12,7 @@ import {
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ARC_RPC_URL, ARC_USDC, arcTestnet } from "./chain";
+import { ARC_RPC_URL, ARC_USDC, arcChain } from "./chain";
 import { w3sExecuteContract } from "./circle-w3s";
 import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "./fee-router-contract";
 import { withReservedNonce } from "./fee-router-nonce";
@@ -113,7 +113,7 @@ export type FeeRouterWriteContractRequest = {
   functionName: string;
   args?: readonly unknown[];
   account?: unknown;
-  chain?: typeof arcTestnet;
+  chain?: typeof arcChain;
   nonce?: number;
 };
 
@@ -153,7 +153,7 @@ export type CitationPaymentPlan = {
 
 export function createFeeRouterPublicClient() {
   return createPublicClient({
-    chain: arcTestnet,
+    chain: arcChain,
     transport: http(ARC_RPC_URL),
     pollingInterval: ARC_POLLING_INTERVAL_MS,
   });
@@ -369,7 +369,7 @@ export function createFeeRouterSigner(
       viemFeeRouterWalletClient(
         createWalletClient({
           account,
-          chain: arcTestnet,
+          chain: arcChain,
           transport: http(ARC_RPC_URL),
           pollingInterval: ARC_POLLING_INTERVAL_MS,
         }),
@@ -553,7 +553,7 @@ async function ensureCreatorSplit(
       functionName: "createSplit",
       args: [recipients, bps],
       account: account.address,
-      chain: arcTestnet,
+      chain: arcChain,
     });
     const createSplitTx = await withReservedNonce(
       publicClient,
@@ -746,7 +746,7 @@ export async function routeCitationPayments(
         functionName: "approve",
         args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
         account,
-        chain: arcTestnet,
+        chain: arcChain,
         nonce,
       }),
     );
@@ -773,7 +773,7 @@ export async function routeCitationPayments(
         functionName: "pay",
         args: [BigInt(split.splitId), BigInt(payment.amountAtomicUsdc)],
         account,
-        chain: arcTestnet,
+        chain: arcChain,
         nonce,
       }),
     );
@@ -843,7 +843,7 @@ export async function routeEscrowReleasePayment(
         functionName: "approve",
         args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
         account,
-        chain: arcTestnet,
+        chain: arcChain,
         nonce,
       }),
     );
@@ -877,7 +877,7 @@ export async function routeEscrowReleasePayment(
       functionName: "pay",
       args: [BigInt(split.splitId), amount],
       account,
-      chain: arcTestnet,
+      chain: arcChain,
       nonce,
     }),
   );
@@ -930,7 +930,7 @@ export async function refundReaderPayment(
       functionName: "transfer",
       args: [recipient, amount],
       account,
-      chain: arcTestnet,
+      chain: arcChain,
       nonce,
     }),
   );

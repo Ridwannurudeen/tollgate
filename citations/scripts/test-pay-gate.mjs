@@ -19,7 +19,7 @@ const FEE_ROUTER_ADDRESS = "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59";
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
 const execute = process.env.PAY_GATE_TEST_EXECUTE === "1";
 
-const arcTestnet = defineChain({
+const arcChain = defineChain({
   id: ARC_CHAIN_ID,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -344,12 +344,12 @@ const [signer, payer] = await Promise.all([
   loadWallet(payerRole),
 ]);
 const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const walletClient = createWalletClient({
   account: payer.account,
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const [
@@ -522,7 +522,7 @@ if (!execute) {
       functionName: "payWithIntent",
       args: [expiredIntent, expiredSignature, payments],
       account: payer.address,
-      chain: arcTestnet,
+      chain: arcChain,
     },
     "intent expired",
     "Expired intent",
@@ -543,7 +543,7 @@ if (!execute) {
       functionName: "payWithIntent",
       args: [overCapIntent, overCapSignature, payments],
       account: payer.address,
-      chain: arcTestnet,
+      chain: arcChain,
     },
     "spend exceeds intent max",
     "Over-cap intent",
@@ -570,7 +570,7 @@ if (!execute) {
       functionName: "payWithIntent",
       args: [invalidSignatureIntent, invalidSignature, payments],
       account: payer.address,
-      chain: arcTestnet,
+      chain: arcChain,
     },
     "invalid intent signer",
     "Invalid intent signer",
@@ -591,7 +591,7 @@ if (!execute) {
       functionName: "payWithIntent",
       args: [noAllowanceIntent, noAllowanceSignature, payments],
       account: "0x000000000000000000000000000000000000dEaD",
-      chain: arcTestnet,
+      chain: arcChain,
     },
     "invalid payer",
     "Unauthorized payer",
@@ -604,7 +604,7 @@ if (!execute) {
       functionName: "payWithIntent",
       args: [noAllowanceIntent, noAllowanceSignature, payments],
       account: payer.address,
-      chain: arcTestnet,
+      chain: arcChain,
     },
     "transfer amount exceeds allowance",
     "No-allowance payment",
@@ -616,7 +616,7 @@ if (!execute) {
     functionName: "approve",
     args: [payGate, amount],
     account: payer.account,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   await waitForSuccessfulTransaction(
     publicClient,
@@ -675,7 +675,7 @@ if (!execute) {
     functionName: "payWithIntent",
     args: [validIntent, signature, payments],
     account: payer.address,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   if (simulation.result.toLowerCase() !== digest.toLowerCase()) {
     throw new Error("PayGate simulation returned an unexpected intent digest.");
@@ -732,7 +732,7 @@ if (!execute) {
       functionName: "payWithIntent",
       args: [validIntent, signature, payments],
       account: payer.address,
-      chain: arcTestnet,
+      chain: arcChain,
     },
     "intent nonce used",
     "Reused nonce",

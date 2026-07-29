@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createWalletClient, custom, getAddress, type Hex } from "viem";
-import { ARC_CHAIN_ID, arcTestnet } from "@/lib/chain";
+import { ARC_CHAIN_ID, arcChain } from "@/lib/chain";
 import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "@/lib/fee-router-contract";
 import { arcscanTxUrl, formatDollars, shortHash } from "@/lib/format";
 
@@ -37,7 +37,7 @@ export function CreatorWithdrawPanel({
       throw new Error("No injected wallet found.");
     }
     const walletClient = createWalletClient({
-      chain: arcTestnet,
+      chain: arcChain,
       transport: custom(window.ethereum),
     });
     const [account] = await walletClient.requestAddresses();
@@ -50,7 +50,7 @@ export function CreatorWithdrawPanel({
       abi: feeRouterV1Abi,
       functionName: "claim",
       account,
-      chain: arcTestnet,
+      chain: arcChain,
     });
   }
 

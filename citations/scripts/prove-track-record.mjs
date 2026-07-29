@@ -24,7 +24,7 @@ const RECORD_V2_TYPEHASH = keccak256(
   ),
 );
 
-const arcTestnet = {
+const arcChain = {
   id: 5042002,
   name: "Arc Testnet",
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -237,12 +237,12 @@ function buildRecord(query, receipts, state) {
 const roleId = process.env.LEPTONWEB_TRACK_RECORD_ROLE ?? "demo-payer";
 const wallet = await loadWallet(roleId);
 const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 const walletClient = createWalletClient({
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(ARC_RPC_URL),
 });
 
@@ -284,7 +284,7 @@ if (signer.toLowerCase() === ZERO_ADDRESS) {
     functionName: "registerBot",
     args: [BOT_ID, BOT_KIND_OTHER, wallet.address],
     account: wallet.account,
-    chain: arcTestnet,
+    chain: arcChain,
   });
   await publicClient.waitForTransactionReceipt({ hash: registerTx });
   signer = wallet.address;
@@ -356,7 +356,7 @@ const publishTx = await walletClient.writeContract({
     signature,
   ],
   account: wallet.account,
-  chain: arcTestnet,
+  chain: arcChain,
 });
 const publishReceipt = await publicClient.waitForTransactionReceipt({
   hash: publishTx,
