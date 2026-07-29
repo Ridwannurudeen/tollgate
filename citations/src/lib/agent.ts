@@ -13,6 +13,7 @@ import { groundingYieldValue, type GroundingYieldMap } from "./grounding-yield";
 import { sha256Hex } from "./hash";
 import { completeAndParse, parseJsonObject } from "./json-parse";
 import { buildSourceContent } from "./source-content";
+import { x402Providers } from "./x402-buyer";
 import type {
   AgentBudget,
   AgentStep,
@@ -54,10 +55,7 @@ export type AgentOptions = {
   serverMode?: AgentServerMode;
 };
 
-export type AgentServerMode =
-  | "offline-preview"
-  | "production"
-  | "judge-strict";
+export type AgentServerMode = "offline-preview" | "production" | "judge-strict";
 
 export type AgentStage =
   | "appraise"
@@ -443,6 +441,16 @@ function escalationCapAtomicUsdc(): number {
   return Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : 0;
 }
 
+// Prefers the cheapest configured x402 endpoint so the escalation cap admits
+// the widest choice; with no allowlist configured this is the direct-transfer
+// provider the agent has always used.
+function defaultExternalProvider(): ExternalProvider {
+  const [cheapest] = x402Providers().sort(
+    (left, right) => left.priceAtomicUsdc - right.priceAtomicUsdc,
+  );
+  return cheapest ?? EXTERNAL_PROVIDERS.citepay;
+}
+
 function allocateFromAppraisals(
   appraisals: Appraisal[],
   sources: CreatorSource[],
@@ -675,65 +683,65 @@ async function runAgentLoop(
       externalProvider.priceAtomicUsdc <= escalationCapAtomicUsdc()
     ) {
       stage = "escalate";
-    // Money can move inside ask(): once it has, every failure below must
-    // still record the paid assist + an escalate step — a post-transfer
-    // error must never unwind to the deterministic fallback and lose the
-    // spend from the record.
-    let external: Awaited<ReturnType<ExternalProvider["ask"]>> | null = null;
-    try {
-      external = await externalProvider.ask(question);
-      externalAssists.push(external.assist);
-    } catch (error) {
-      if (error instanceof EscalationPaidError) {
-        externalAssists.push(error.assist);
+      // Money can move inside ask(): once it has, every failure below must
+      // still record the paid assist + an escalate step — a post-transfer
+      // error must never unwind to the deterministic fallback and lose the
+      // spend from the record.
+      let external: Awaited<ReturnType<ExternalProvider["ask"]>> | null = null;
+      try {
+        external = await externalProvider.ask(question);
+        externalAssists.push(external.assist);
+      } catch (error) {
+        if (error instanceof EscalationPaidError) {
+          externalAssists.push(error.assist);
+          steps.push({
+            index: steps.length,
+            name: "escalate",
+            summary: `Paid ${externalProvider.label} for external grounding, but the provider did not answer.`,
+            detail: error.message,
+            spentAtomicUsdc: error.assist.amountAtomicUsdc,
+          });
+          rationale = `${rationale} The agent paid ${externalProvider.label} to escalate, but the provider failed to answer; the payment is recorded and the answer keeps only registry-grounded claims.`;
+        }
+        // Pre-transfer failures (no money moved) fall through: no assist, no
+        // step — the loop result stands on its registry grounding.
+      }
+      if (external) {
+        // The external answer is untrusted third-party text: it reaches the
+        // final answer only through the merge model, or — if the merge fails —
+        // as a short, clearly delimited quote.
+        const quotedExternal = cleanModelText(external.answer, 400);
+        const fallbackAnswer = cleanModelText(
+          `${answer} ${externalProvider.label} (paid external assist) says: "${quotedExternal}"`,
+          MAX_ANSWER_LENGTH,
+        );
+        try {
+          const merge = await completeAndParse(
+            escalationMessages(
+              question,
+              answer,
+              externalProvider.label,
+              external.answer,
+            ),
+            llmConfig,
+            completeChat,
+            (text) => parseEscalationMerge(text, fallbackAnswer),
+          );
+          answer = merge.groundedAnswer;
+        } catch (error) {
+          if (strictMode) throw error;
+          answer = fallbackAnswer;
+        }
         steps.push({
           index: steps.length,
           name: "escalate",
-          summary: `Paid ${externalProvider.label} for external grounding, but the provider did not answer.`,
-          detail: error.message,
-          spentAtomicUsdc: error.assist.amountAtomicUsdc,
+          summary: `Bought external grounding from ${externalProvider.label} after unsupported claims remained.`,
+          detail: `Provider ${externalProvider.id} answered query ${external.assist.queryId ?? "without a query id"}.`,
+          spentAtomicUsdc: external.assist.amountAtomicUsdc,
         });
-        rationale = `${rationale} The agent paid ${externalProvider.label} to escalate, but the provider failed to answer; the payment is recorded and the answer keeps only registry-grounded claims.`;
+        rationale = `${rationale} Unsupported claims remained after registry reflect, so the agent escalated to ${externalProvider.label} and attributed the paid assist.`;
       }
-      // Pre-transfer failures (no money moved) fall through: no assist, no
-      // step — the loop result stands on its registry grounding.
     }
-    if (external) {
-      // The external answer is untrusted third-party text: it reaches the
-      // final answer only through the merge model, or — if the merge fails —
-      // as a short, clearly delimited quote.
-      const quotedExternal = cleanModelText(external.answer, 400);
-      const fallbackAnswer = cleanModelText(
-        `${answer} ${externalProvider.label} (paid external assist) says: "${quotedExternal}"`,
-        MAX_ANSWER_LENGTH,
-      );
-      try {
-        const merge = await completeAndParse(
-          escalationMessages(
-            question,
-            answer,
-            externalProvider.label,
-            external.answer,
-          ),
-          llmConfig,
-          completeChat,
-          (text) => parseEscalationMerge(text, fallbackAnswer),
-        );
-        answer = merge.groundedAnswer;
-      } catch (error) {
-        if (strictMode) throw error;
-        answer = fallbackAnswer;
-      }
-      steps.push({
-        index: steps.length,
-        name: "escalate",
-        summary: `Bought external grounding from ${externalProvider.label} after unsupported claims remained.`,
-        detail: `Provider ${externalProvider.id} answered query ${external.assist.queryId ?? "without a query id"}.`,
-        spentAtomicUsdc: external.assist.amountAtomicUsdc,
-      });
-      rationale = `${rationale} Unsupported claims remained after registry reflect, so the agent escalated to ${externalProvider.label} and attributed the paid assist.`;
-    }
-  }
 
     return {
       answer,
@@ -897,7 +905,8 @@ function deterministicFallback(
   return {
     ...record,
     agentMode: "deterministic",
-    agentRationale: record.citations.length === 0 ? record.agentRationale : reason,
+    agentRationale:
+      record.citations.length === 0 ? record.agentRationale : reason,
   };
 }
 
@@ -938,7 +947,7 @@ export async function createAgentQueryRecord(
       DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
       plannerChat,
       llmConfig,
-      options.externalProvider ?? EXTERNAL_PROVIDERS.citepay,
+      options.externalProvider ?? defaultExternalProvider(),
       options.strictMode === true,
       options.groundingYields,
     );

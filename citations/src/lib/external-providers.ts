@@ -41,7 +41,9 @@ export type ExternalProvider = {
   id: string;
   label: string;
   endpoint: string;
-  recipient: Address;
+  // Only the direct-transfer providers know the payee up front; x402 providers
+  // learn it from the payment challenge.
+  recipient?: Address;
   priceAtomicUsdc: number;
   ask(
     question: string,
