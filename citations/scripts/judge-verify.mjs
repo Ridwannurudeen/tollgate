@@ -22,6 +22,12 @@ import {
 const DEFAULT_TARGET_URL = "https://tollgate.gudman.xyz";
 const ARC_RPC_URL =
   process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network";
+const RPC_MAX_ATTEMPTS = 5;
+const RPC_RETRY_BASE_MS = 400;
+const RETRYABLE_NULL_METHODS = new Set([
+  "eth_getTransactionByHash",
+  "eth_getTransactionReceipt",
+]);
 const FEE_ROUTER_ADDRESS =
   "0xeff9bc359e8f2a5eabce55af3f1bb24f98eabf59".toLowerCase();
 const ARC_USDC_ADDRESS =
@@ -105,7 +111,11 @@ async function fetchJson(url) {
   }
 }
 
-async function rpcRequest(method, params) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function rpcAttempt(method, params) {
   const response = await fetch(ARC_RPC_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -119,6 +129,30 @@ async function rpcRequest(method, params) {
     throw new Error(`Arc RPC ${method} failed: ${payload.error.message}`);
   }
   return payload.result;
+}
+
+async function rpcRequest(method, params) {
+  let lastError = null;
+  for (let attempt = 0; attempt < RPC_MAX_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      await sleep(RPC_RETRY_BASE_MS * 2 ** (attempt - 1));
+    }
+    try {
+      const result = await rpcAttempt(method, params);
+      // A load-balanced Arc RPC can route a lookup to a backend that has not
+      // indexed an older transaction and answer null instead of erroring, so a
+      // missing transaction is retried before it is reported as absent.
+      if (result === null && RETRYABLE_NULL_METHODS.has(method)) {
+        lastError = null;
+        continue;
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  return null;
 }
 
 function actualAgentCounts(ledger) {
