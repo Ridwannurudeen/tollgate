@@ -1,3 +1,4 @@
+import { BaseError, NonceTooLowError } from "viem";
 import type { Address, PublicClient } from "viem";
 
 type FeeRouterNonceAccount = {
@@ -13,6 +14,20 @@ const nonceStates = new Map<string, NonceState>();
 const DEFAULT_MAX_IN_FLIGHT = 4;
 let inFlight = 0;
 const waiters: Array<() => void> = [];
+
+// The reserved nonce is cached per account and only reconciled on failure, so an
+// integrator signing anything else from the same address — a settlement
+// facilitator sharing the payout key is the common case — moves the chain ahead
+// of the cache and the next submission is rejected. The node rejects a too-low
+// nonce before it reaches the mempool, so that one case is safe to resubmit;
+// every other failure may already be in flight.
+function isNonceTooLow(error: unknown): boolean {
+  return (
+    error instanceof BaseError &&
+    error.walk((cause) => cause instanceof NonceTooLowError) instanceof
+      NonceTooLowError
+  );
+}
 
 function nonceConcurrencyLimit(): number {
   const raw = Number(process.env.TOLLGATE_FEE_ROUTER_NONCE_CONCURRENCY);
@@ -72,6 +87,11 @@ export function withReservedNonce<T>(
           [error, reconciliationError],
           "FeeRouter submission and nonce reconciliation both failed.",
         );
+      }
+      if (isNonceTooLow(error)) {
+        const reconciled = state.nextNonce;
+        state.nextNonce += 1;
+        return await task(reconciled);
       }
       throw error;
     } finally {
