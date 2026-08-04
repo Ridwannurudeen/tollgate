@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BaseError, NonceTooLowError } from "viem";
 import type { Address, PublicClient } from "viem";
 import {
   resetFeeRouterNonceStateForTests,
@@ -54,6 +55,24 @@ describe("withReservedNonce", () => {
 
     expect(seen).toEqual([10, 10]);
     expect(client.getTransactionCount).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries once when another signer on the account moved the nonce ahead", async () => {
+    const client = publicClient(10, 12);
+    const seen: number[] = [];
+
+    const nonce = await withReservedNonce(client, ACCOUNT, async (reserved) => {
+      seen.push(reserved);
+      if (reserved === 10) {
+        throw new BaseError("write failed", {
+          cause: new NonceTooLowError({}),
+        });
+      }
+      return reserved;
+    });
+
+    expect(seen).toEqual([10, 12]);
+    expect(nonce).toBe(12);
   });
 
   it("keeps queued calls on one state when reconciliation also fails", async () => {
