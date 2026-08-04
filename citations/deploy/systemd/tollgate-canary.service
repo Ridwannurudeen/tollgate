@@ -1,0 +1,32 @@
+# Tollgate paid-query canary (oneshot; driven by tollgate-canary.timer).
+# All output -> journald.
+#
+# Why this exists: /core answered 200 for two weeks while every paid query was
+# charging the reader and returning 502. Only a real paid query reaches the
+# facilitator, the nonce allocator, PayGate, and the ledger append.
+#
+# Install (VPS, one-time):
+#   cp deploy/systemd/tollgate-canary.service /etc/systemd/system/
+#   cp deploy/systemd/tollgate-canary.timer   /etc/systemd/system/
+#   install -m 600 /dev/null /etc/tollgate-canary.env
+#   # then add: TOLLGATE_CANARY_PAYER_PRIVATE_KEY=0x...
+#   # Use a wallet funded ONLY for this. Do not reuse the FeeRouter, facilitator,
+#   # or agent key — the canary must not share a nonce domain with settlement.
+#   systemctl daemon-reload
+#   systemctl start tollgate-canary.service   # run once, read the journal
+#   systemctl enable --now tollgate-canary.timer
+#
+# Rollback: systemctl disable --now tollgate-canary.timer
+#           rm /etc/systemd/system/tollgate-canary.{service,timer}; systemctl daemon-reload
+[Unit]
+Description=Tollgate paid-query canary
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/tollgate
+EnvironmentFile=/etc/tollgate-canary.env
+ExecStart=/opt/tollgate/scripts/canary.sh
+TimeoutStartSec=300
+NoNewPrivileges=true
+PrivateTmp=true

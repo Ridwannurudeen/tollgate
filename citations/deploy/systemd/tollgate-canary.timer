@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the Tollgate paid-query canary daily
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+# A missed window (box down, reboot) still runs rather than skipping a day
+# silently — silence is the failure mode this whole unit exists to catch.
+Persistent=true
+RandomizedDelaySec=300
+AccuracySec=1min
+Unit=tollgate-canary.service
+
+[Install]
+WantedBy=timers.target
