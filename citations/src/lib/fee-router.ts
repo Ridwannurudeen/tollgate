@@ -757,32 +757,52 @@ export async function routeCitationPayments(
     );
   }
 
-  for (const payment of payments) {
-    const split = await prepareCitationSplit(
-      payment,
-      publicClient,
-      walletClient,
-      account,
-      options,
-    );
-
-    const payTx = await withReservedNonce(publicClient, account, (nonce) =>
-      walletClient.writeContract({
-        address: FEE_ROUTER_ADDRESS,
-        abi: feeRouterV1Abi,
-        functionName: "pay",
-        args: [BigInt(split.splitId), BigInt(payment.amountAtomicUsdc)],
+  // Payouts run together rather than one round-trip after another;
+  // withReservedNonce serialises nonce allocation and caps how many submissions
+  // are in flight, and ensureCreatorSplit holds its own lock, so the only thing
+  // the sequential loop was still buying was latency. allSettled rather than
+  // Promise.all: a rejection must not return while sibling payouts are still
+  // unconfirmed, or a creator is paid on-chain with nothing recording it.
+  const settlements = await Promise.allSettled(
+    payments.map(async (payment) => {
+      const split = await prepareCitationSplit(
+        payment,
+        publicClient,
+        walletClient,
         account,
-        chain: arcChain,
-        nonce,
-      }),
-    );
-    await waitForSuccessfulTransaction(
-      publicClient,
-      payTx,
-      "FeeRouter pay transaction",
-    );
+        options,
+      );
 
+      const payTx = await withReservedNonce(publicClient, account, (nonce) =>
+        walletClient.writeContract({
+          address: FEE_ROUTER_ADDRESS,
+          abi: feeRouterV1Abi,
+          functionName: "pay",
+          args: [BigInt(split.splitId), BigInt(payment.amountAtomicUsdc)],
+          account,
+          chain: arcChain,
+          nonce,
+        }),
+      );
+      await waitForSuccessfulTransaction(
+        publicClient,
+        payTx,
+        "FeeRouter pay transaction",
+      );
+
+      return { payment, split, payTx };
+    }),
+  );
+
+  const failed = settlements.find(
+    (settlement): settlement is PromiseRejectedResult =>
+      settlement.status === "rejected",
+  );
+  if (failed) throw failed.reason;
+
+  for (const settlement of settlements) {
+    if (settlement.status !== "fulfilled") continue;
+    const { payment, split, payTx } = settlement.value;
     evidenceBySourceId[payment.sourceId] = {
       settlementMode: "forum-routed",
       payer: account.address,

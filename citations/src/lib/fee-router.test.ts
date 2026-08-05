@@ -546,6 +546,66 @@ describe("assertValidFeeRouterSplit", () => {
     }
   });
 
+  it("settles citation payouts concurrently rather than one at a time", async () => {
+    const base = oneCitationQuery();
+    const first = base.citations[0];
+    if (!first) throw new Error("missing test citation");
+    const second = {
+      ...first,
+      sourceId: `${first.sourceId}-second`,
+      wallet: "0x8888888888888888888888888888888888888888" as Address,
+    };
+    const query = {
+      ...base,
+      citations: [first, second],
+      totalAtomicUsdc: first.amountAtomicUsdc + second.amountAtomicUsdc,
+    };
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      first.wallet,
+      0n,
+      123n,
+      writes,
+    );
+
+    // Sequential settlement can never have two receipts outstanding at once, so
+    // the high-water mark is what distinguishes it from a concurrent one.
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const waitForReceipt =
+      publicClient.waitForTransactionReceipt.bind(publicClient);
+    publicClient.waitForTransactionReceipt = (async (
+      args: Parameters<typeof waitForReceipt>[0],
+    ) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return await waitForReceipt(args);
+      } finally {
+        inFlight -= 1;
+      }
+    }) as typeof publicClient.waitForTransactionReceipt;
+
+    try {
+      const evidence = await routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+        splitRegistryPath: registryPath,
+      });
+
+      expect(maxInFlight).toBeGreaterThan(1);
+      expect(evidence[first.sourceId]?.settlementMode).toBe("forum-routed");
+      expect(evidence[second.sourceId]?.settlementMode).toBe("forum-routed");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("reuses the creator split for repeat citation payouts", async () => {
     const query = oneCitationQuery();
     const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
@@ -856,7 +916,8 @@ describe("routeEscrowReleasePayment", () => {
       202n,
       writes,
     );
-    const originalWait = publicClient.waitForTransactionReceipt.bind(publicClient);
+    const originalWait =
+      publicClient.waitForTransactionReceipt.bind(publicClient);
     Object.assign(publicClient, {
       waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => {
         if (hash === `0x${"c".repeat(64)}`) {
