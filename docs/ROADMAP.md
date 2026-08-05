@@ -49,6 +49,21 @@ If by Month 6 none of these three are things a third party explicitly chose Toll
 
 Further out, unchanged in substance: agent-to-agent resale of sourced answers through the same split; metered accrual for streaming and compute; a portable, queryable trust layer so integrators stop re-solving ownership verification; and a first small-stakes mainnet relationship with a real creator. FeeRouter governance/decentralisation stays deliberately last — premature decentralisation is complexity with no users to justify it, and this document should keep saying so at every gate.
 
+Also still open, carried in from the wave plan this document replaces (the rest of that plan — escrow-until-verified, the keystore/W3S signer seam, custodial wallets and withdraw, RSS/Atom import, probation, multi-contributor splits, the MCP server, `/.well-known/tollgate.json`, the embeddable widget, and the Jellyfin sidecar — has shipped):
+
+- **Migrate the ledger from JSON to SQLite** while preserving hash-chain verification. `citations/data/ledger.json` is still the store, now 2.6MB and rewritten wholesale on every append. Not urgent at 180 queries; it becomes urgent well before it becomes obvious.
+- **A `@tollgate/reader` SDK** for agents and apps. `tollgate-pay-per-piece` is the *seller* half — gating and paying out. Nothing packages the buyer half, so every reader integration is still hand-rolled x402.
+- **The music lane** (Navidrome/scrobble-based settlement) remains a design in `docs/LANE-MUSIC.md`, not an implementation.
+
+## Verification ladder
+
+Ownership today is proven by wallet-signature (binds the payout wallet, does **not** clear probation — this closes the payout-diversion exploit), meta-tag and DNS-TXT (domain control, clears probation and releases escrow), and the deliberately weaker **creator-claimed** self-attestation for creators who control neither the hosting nor a domain. Creator-claimed is badged distinctly and never sets the strong `verifiedCreator` flag; that separation is the whole reason it is safe to offer.
+
+Two gaps remain:
+
+- **ORCID author verification.** Unbuilt — there is no `orcid` anywhere in `citations/src`. For academic content the creator can't meta-tag a third-party PDF or edit a journal's DNS. "Sign in with ORCID" (OAuth 3-legged, `/authenticate` scope) proves the person is that iD, then `GET api.orcid.org/v3.0/{iD}/works` matched against the registered **DOI** proves authorship. Needs a DOI field on source registration. Free public API, non-commercial terms; the researcher must have the paper listed in their ORCID record.
+- **First-claim provenance for media.** Aperture's duplicate detection only catches re-registration of content already on Tollgate. It does nothing about the first, novel claim of someone else's photo lifted from elsewhere. Closing that needs either a real dispute process — which requires introducing some payout hold, since instant payout leaves nothing to freeze — or provenance signals like C2PA Content Credentials for content that carries them. See `docs/SCOPE-APERTURE-DUPLICATE-DETECTION.md`.
+
 ## Media storage — Walrus as a future backend, not today
 
 Aperture's video/photo originals are stored on the VPS's local disk (verified: 111GB free on a shared, 91%-full disk). **Walrus** (Sui's decentralized blob-storage protocol) was considered and verified in detail: it has a simple HTTP PUT/GET publisher/aggregator API (no client-side wallet code needed), and testnet WAL has no real cost. But it's not the right fit for *today's* build: (1) the public testnet publisher caps blobs at **10 MiB by default** — smaller than the 100MB video cap this feature needs; (2) mainnet has **no free public publisher** — it costs real SUI/WAL and means running your own publisher node, ongoing infra; (3) it's a **Sui-ecosystem protocol**, and everything else in Tollgate (FeeRouter, x402, Circle Gateway) is deliberately Arc-only — introducing Walrus means a second chain dependency for a concern (storage) orthogonal to payment. Revisit if VPS disk actually becomes the constraint, or if a genuinely decentralized storage story becomes worth the added chain dependency — not squeezed into a payment-rail build under time pressure.
@@ -59,3 +74,7 @@ Aperture's video/photo originals are stored on the VPS's local disk (verified: 1
 - **If nothing outside the founding team ever integrates.** The SDK is published, documented, and proven against a toy app *we* wrote. That is not evidence it's usable. If no external integration exists and we are still shipping features on top of it, we are building on a foundation nobody but us has tested.
 - **If observability regresses.** A total payment outage went unnoticed for two weeks. The canary closes that specific hole; it does not make the system observable. Every new settlement path needs to answer "what proves this still works tomorrow" before it ships, not after it silently breaks.
 - **If the trust ladder never generalises past our own exploit fix.** Competitors on raw x402 catch up on the one thing we have and they don't, and "why build on Tollgate instead of x402 directly" evaporates.
+
+## Boundaries
+
+No mainnet rollout, package publishing, VPS deployment, or community submission happens without explicit operator approval.
