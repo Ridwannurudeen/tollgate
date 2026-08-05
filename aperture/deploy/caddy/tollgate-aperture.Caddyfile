@@ -1,0 +1,61 @@
+# Caddy port of the nginx auth_request payment gate.
+#
+# NOT VALIDATED against a running Caddy — the deployment host runs nginx and has
+# no caddy binary, so this was written against the documented behaviour of
+# forward_auth and handle_response rather than observed behaviour. Before
+# trusting it, run:
+#
+#   caddy validate --config ./tollgate-aperture.Caddyfile
+#   caddy run --config ./tollgate-aperture.Caddyfile   # then exercise both paths
+#
+# The nginx version in ../nginx/tollgate-aperture.locations.conf is the one
+# proven in production; treat this as a starting point, not a drop-in.
+
+tollgate.example.com {
+	# Aperture itself, unguarded.
+	handle /aperture* {
+		reverse_proxy 127.0.0.1:3036
+	}
+
+	# The gated download. forward_auth issues a GET subrequest (it never
+	# forwards the body), and grants access only on 2xx.
+	handle /immich/api/download/archive {
+		forward_auth 127.0.0.1:3036 {
+			uri /aperture/api/license-check
+
+			# The check reads these names; Caddy would otherwise send
+			# X-Forwarded-Method and X-Forwarded-Uri.
+			header_up X-Original-URI {uri}
+			header_up X-Original-Method {method}
+			header_up X-Original-Immich-Share-Key {header.X-Immich-Share-Key}
+			header_up X-Original-Immich-Share-Slug {header.X-Immich-Share-Slug}
+
+			# Without this, Caddy copies the check's 403 straight back to
+			# the client. The contract says an unlicensed download answers
+			# 402 with the pay link, which is what the x402 client reads.
+			@denied status 401 403
+			handle_response @denied {
+				header Content-Type application/json
+				respond `{"error":"payment required","pay":"/aperture/api/license-download"}` 402
+			}
+		}
+
+		rewrite * /api/download/archive
+		reverse_proxy 127.0.0.1:2283 {
+			# Stripped for the same reason nginx blanks them: leaving the
+			# share credential on the upstream request lets Immich serve the
+			# file on the strength of the shared link alone.
+			header_up -X-Immich-Share-Key
+			header_up -X-Immich-Share-Slug
+			flush_interval -1
+		}
+	}
+
+	# Remaining Immich API paths, ungated.
+	handle /immich/api/* {
+		uri strip_prefix /immich
+		reverse_proxy 127.0.0.1:2283 {
+			flush_interval -1
+		}
+	}
+}
