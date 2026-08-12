@@ -114,7 +114,8 @@ describe("proof of useful citation", () => {
   });
 
   it("repairs one malformed claim-extraction response", async () => {
-    const answer = "The receipt chain binds each useful claim to a source record.";
+    const answer =
+      "The receipt chain binds each useful claim to a source record.";
     const calls: ChatMessage[][] = [];
     const claims = await extractClaims(answer, async (messages) => {
       calls.push(messages);
@@ -195,7 +196,8 @@ describe("proof of useful citation", () => {
   });
 
   it("adds an omitted answer sentence so every sentence is verified", async () => {
-    const first = "The receipt chain binds each useful claim to a source record.";
+    const first =
+      "The receipt chain binds each useful claim to a source record.";
     const second = "Creator payouts remain tied to that public evidence trail.";
     const claims = await extractClaims(`${first} ${second}`, async () =>
       JSON.stringify({ claims: [first] }),
@@ -225,6 +227,35 @@ describe("proof of useful citation", () => {
     );
     expect(answer).toContain(support[0].claim);
     expect(answer).not.toContain(support[1].claim);
+  });
+
+  // Splicing a claim out leaves the punctuation that framed it, and the result
+  // is published verbatim on /ask — this is where ". First,", ": (1)" and
+  // ", with ." were actually born, not in the agent's own draft.
+  it("does not leave the removed claim's punctuation behind", () => {
+    const support: ClaimSupport[] = [
+      {
+        claim: "Agents can bound their spending in three ways",
+        sourceId: null,
+        span: null,
+        status: "unsupported",
+      },
+      {
+        claim:
+          "policy checks filter providers by price and trust before any payment occurs, which keeps the budget intact",
+        sourceId: "source-a",
+        span: "policy checks",
+        status: "supported",
+      },
+    ];
+
+    const answer = removeUnsupportedClaims(
+      `${support[0].claim}: ${support[1].claim}.`,
+      support,
+    );
+
+    expect(answer).not.toMatch(/^[\s.,;:—-]/);
+    expect(answer.startsWith("policy checks filter providers")).toBe(true);
   });
 
   it("computes hand-checkable assigned-support rewards", () => {
@@ -626,9 +657,7 @@ describe("proof of useful citation", () => {
 
   it("falls back to the engine split when every marginal contribution is zero", () => {
     const scores = scoreContribution(
-      [
-        { claim: "A", sourceId: null, span: null, status: "unsupported" },
-      ],
+      [{ claim: "A", sourceId: null, span: null, status: "unsupported" }],
       100,
       { "source-a": 3, "source-b": 1 },
     );
@@ -668,34 +697,36 @@ describe("proof of useful citation", () => {
     delete process.env.LEPTONWEB_LEAVE_ONE_OUT_CONTRIBUTION;
     const supportedClaim = "The receipt chain binds the supported claim.";
     const unsupportedClaim = "This unsupported sentence must be removed.";
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as {
-        messages: Array<{ role: string; content: string }>;
-      };
-      const system = body.messages[0]?.content ?? "";
-      const content = system.includes("claim extractor")
-        ? JSON.stringify({ claims: [supportedClaim, unsupportedClaim] })
-        : JSON.stringify({
-            supports: [
-              {
-                claim: supportedClaim,
-                sourceId: SOURCE.id,
-                span: "Excerpt: Verified source content.",
-              },
-              { claim: unsupportedClaim, sourceId: null, span: null },
-              {
-                claim:
-                  "Additional grounded context keeps this answer long enough for the verifier.",
-                sourceId: null,
-                span: null,
-              },
-            ],
-          });
-      return new Response(
-        JSON.stringify({ choices: [{ message: { content } }] }),
-        { headers: { "content-type": "application/json" } },
-      );
-    });
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as {
+          messages: Array<{ role: string; content: string }>;
+        };
+        const system = body.messages[0]?.content ?? "";
+        const content = system.includes("claim extractor")
+          ? JSON.stringify({ claims: [supportedClaim, unsupportedClaim] })
+          : JSON.stringify({
+              supports: [
+                {
+                  claim: supportedClaim,
+                  sourceId: SOURCE.id,
+                  span: "Excerpt: Verified source content.",
+                },
+                { claim: unsupportedClaim, sourceId: null, span: null },
+                {
+                  claim:
+                    "Additional grounded context keeps this answer long enough for the verifier.",
+                  sourceId: null,
+                  span: null,
+                },
+              ],
+            });
+        return new Response(
+          JSON.stringify({ choices: [{ message: { content } }] }),
+          { headers: { "content-type": "application/json" } },
+        );
+      },
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     try {

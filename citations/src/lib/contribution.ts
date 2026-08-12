@@ -1,9 +1,7 @@
+import { repairRedactedProse } from "./agent";
 import { NO_SOURCE_ANSWER } from "./engine";
 import { sha256Hex } from "./hash";
-import {
-  completeAndParseWithLlm,
-  parseJsonObject,
-} from "./json-parse";
+import { completeAndParseWithLlm, parseJsonObject } from "./json-parse";
 import { buildSourceContent } from "./source-content";
 import type { ChatMessage } from "./agent";
 import type {
@@ -117,7 +115,9 @@ export async function extractClaims(
     llm,
     parseExtractedClaims,
   );
-  const exactClaims = claims.filter((claim) => normalizedAnswer.includes(claim));
+  const exactClaims = claims.filter((claim) =>
+    normalizedAnswer.includes(claim),
+  );
   const uncoveredSentences = sentenceClaims(normalizedAnswer).filter(
     (sentence) => !exactClaims.some((claim) => sentence.includes(claim)),
   );
@@ -175,11 +175,12 @@ export async function verifyClaims(
     ]),
   );
   return claims.map((claim, index) => {
-    const row = rows?.find((candidate) => {
-      if (!isRecord(candidate)) return false;
-      const rowClaim = clean(candidate.claim, MAX_CLAIM_LENGTH);
-      return rowClaim === claim;
-    }) ?? rows?.[index];
+    const row =
+      rows?.find((candidate) => {
+        if (!isRecord(candidate)) return false;
+        const rowClaim = clean(candidate.claim, MAX_CLAIM_LENGTH);
+        return rowClaim === claim;
+      }) ?? rows?.[index];
     if (!isRecord(row)) {
       return {
         claim,
@@ -233,8 +234,7 @@ export function allocatePool(
   let allocated = 0;
   for (const sourceId of sourceIds) {
     const reward = Math.floor(
-      (poolAtomicUsdc * Math.max(0, weights.get(sourceId) ?? 0)) /
-        totalWeight,
+      (poolAtomicUsdc * Math.max(0, weights.get(sourceId) ?? 0)) / totalWeight,
     );
     rewards.set(sourceId, reward);
     allocated += reward;
@@ -529,7 +529,11 @@ export function removeUnsupportedClaims(
       hadUnremovableClaim = true;
     }
   }
-  const normalized = sanitized.replace(/\s+/g, " ").trim();
+  // Splicing the claim text out leaves the punctuation that framed it — a
+  // leading ": ", a stranded ". ", a dangling ", with ." This is where those
+  // seams are actually made, so this is where they get closed; repairing it in
+  // the agent could never work, because the agent runs before this does.
+  const normalized = repairRedactedProse(sanitized.replace(/\s+/g, " ").trim());
   return hadUnremovableClaim || normalized.length < 40
     ? NO_SOURCE_ANSWER
     : normalized;
