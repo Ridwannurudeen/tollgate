@@ -141,10 +141,11 @@ export function paymentRequiredHeaders(
   };
 }
 
-// Temporary diagnostic: @x402/evm's settle path catches the real settlement
-// error and collapses it to `invalid_exact_evm_transaction_failed`
-// (parseEip3009TransferError falls back to that constant when no regex
-// matches). Log the raw error — full viem detail and cause chain — to stderr
+// @x402/evm's settle path catches the real settlement error, regex-matches its
+// message against five known cases, and collapses everything else to
+// `invalid_exact_evm_transaction_failed` (parseEip3009TransferError's
+// fallback) — the 2026-08-12 production outage was undiagnosable because the
+// raw error died there. Log it — full viem detail and cause chain — to stderr
 // before the library classifies it, then rethrow unchanged.
 function logRawX402Error(source: string, error: unknown): void {
   try {
@@ -157,7 +158,7 @@ function logRawX402Error(source: string, error: unknown): void {
   }
 }
 
-function withRawErrorLogging(
+export function withRawErrorLogging(
   signer: FacilitatorEvmSigner,
 ): FacilitatorEvmSigner {
   const wrap =

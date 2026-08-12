@@ -2,7 +2,8 @@ import {
   decodePaymentRequiredHeader,
   encodePaymentSignatureHeader,
 } from "@x402/core/http";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { FacilitatorEvmSigner } from "@x402/evm";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GATEWAY_BATCHING_NAME,
   GATEWAY_BATCHING_VERSION,
@@ -13,6 +14,7 @@ import {
   paymentRequiredBody,
   paymentRequiredHeaders,
   settleX402,
+  withRawErrorLogging,
 } from "./x402-server";
 import { ARC_CAIP2, ARC_GATEWAY_WALLET, ARC_USDC } from "./chain";
 
@@ -113,5 +115,86 @@ describe("x402 source gateway helpers", () => {
       status: 503,
       reason: "x402 settlement is not configured",
     });
+  });
+});
+
+describe("withRawErrorLogging", () => {
+  function makeSigner(
+    overrides: Partial<FacilitatorEvmSigner>,
+  ): FacilitatorEvmSigner {
+    const unusedCall = () => {
+      throw new Error("unused signer method called");
+    };
+    return {
+      getAddresses: () => ["0x1111111111111111111111111111111111111111"],
+      readContract: unusedCall,
+      verifyTypedData: unusedCall,
+      writeContract: unusedCall,
+      sendTransaction: unusedCall,
+      waitForTransactionReceipt: unusedCall,
+      getCode: unusedCall,
+      ...overrides,
+    };
+  }
+
+  it("logs the raw error with its cause chain, then rethrows it unchanged", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const raw = Object.assign(
+        new Error(
+          "HTTP request failed.\n\nStatus: 503\nURL: https://rpc.example",
+        ),
+        {
+          details: "txpool is full",
+          cause: new Error("fetch failed"),
+        },
+      );
+      const signer = withRawErrorLogging(
+        makeSigner({
+          writeContract: () => Promise.reject(raw),
+        }),
+      );
+
+      await expect(
+        signer.writeContract({
+          address: "0x3600000000000000000000000000000000000000",
+          abi: [],
+          functionName: "transferWithAuthorization",
+          args: [],
+        }),
+      ).rejects.toBe(raw);
+
+      expect(error).toHaveBeenCalledTimes(1);
+      const [prefix, detail] = error.mock.calls[0];
+      expect(prefix).toBe("[x402-raw-error] signer.writeContract failed:");
+      expect(detail).toContain("HTTP request failed.");
+      expect(detail).toContain("txpool is full");
+      expect(detail).toContain("fetch failed");
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("passes successful calls through without logging", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const signer = withRawErrorLogging(
+        makeSigner({
+          getCode: () => Promise.resolve("0x6001"),
+        }),
+      );
+
+      await expect(
+        signer.getCode({
+          address: "0x3600000000000000000000000000000000000000",
+        }),
+      ).resolves.toBe("0x6001");
+      expect(signer.getAddresses()).toEqual([
+        "0x1111111111111111111111111111111111111111",
+      ]);
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+    }
   });
 });
