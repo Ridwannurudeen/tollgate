@@ -1176,9 +1176,9 @@ describe("repairRedactedProse", () => {
     expect(repaired).not.toMatch(/,\s*\./);
     expect(repaired).not.toMatch(/—\s*\./);
     expect(repaired).not.toMatch(/\bbut\s*\./);
-    expect(repaired.startsWith("Based on the purchased sources provided.")).toBe(
-      true,
-    );
+    expect(
+      repaired.startsWith("Based on the purchased sources provided."),
+    ).toBe(true);
     expect(repaired.endsWith("recomputable receipts.")).toBe(true);
   });
 
@@ -1189,6 +1189,25 @@ describe("repairRedactedProse", () => {
     expect(repairRedactedProse("Receipts are hash-linked and .")).toBe(
       "Receipts are hash-linked.",
     );
+  });
+
+  // Verbatim from the showcased answer on /ask after the first repair shipped:
+  // a dangling preposition survives, because it is not a conjunction and the
+  // comma is not adjacent to the full stop.
+  it("drops a preposition left dangling after a comma", () => {
+    const repaired = repairRedactedProse(
+      "A sponsor can reserve USDC for an agent, allowing purchases without pre-funding every wallet, with . Operators receive execution rights.",
+    );
+
+    expect(repaired).not.toMatch(/,\s*\w+\s*\./);
+    expect(repaired).toContain("pre-funding every wallet.");
+    expect(repaired).toContain("Operators receive execution rights.");
+  });
+
+  it("keeps a comma clause that still has content", () => {
+    const kept =
+      "The agent buys sources, with every payout carrying its own receipt.";
+    expect(repairRedactedProse(kept)).toBe(kept);
   });
 
   it("leaves well-formed prose untouched", () => {

@@ -574,23 +574,46 @@ describe("assertValidFeeRouterSplit", () => {
       writes,
     );
 
-    // Sequential settlement can never have two receipts outstanding at once, so
-    // the high-water mark is what distinguishes it from a concurrent one.
-    let inFlight = 0;
-    let maxInFlight = 0;
+    // Asserting on a high-water mark measured against a sleep is a race, and it
+    // lost that race twice on a loaded machine. Instead hold the first payout's
+    // receipt open until the second payout has actually been submitted: a
+    // concurrent implementation reaches the second write and releases the
+    // barrier, while a sequential one never can and trips the timeout.
+    let bothPaySubmitted!: () => void;
+    const secondPayStarted = new Promise<void>((resolve) => {
+      bothPaySubmitted = resolve;
+    });
+    let paySubmissions = 0;
+    let overlapped = false;
+    const write = walletClient.writeContract.bind(walletClient);
+    walletClient.writeContract = (async (
+      request: Parameters<typeof write>[0],
+    ) => {
+      const hash = await write(request);
+      if (request.functionName === "pay") {
+        paySubmissions += 1;
+        if (paySubmissions >= 2) bothPaySubmitted();
+      }
+      return hash;
+    }) as typeof walletClient.writeContract;
+
     const waitForReceipt =
       publicClient.waitForTransactionReceipt.bind(publicClient);
+    let heldFirstPayReceipt = false;
     publicClient.waitForTransactionReceipt = (async (
       args: Parameters<typeof waitForReceipt>[0],
     ) => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        return await waitForReceipt(args);
-      } finally {
-        inFlight -= 1;
+      const isPayReceipt = args.hash === `0x${"c".repeat(64)}`;
+      if (isPayReceipt && !heldFirstPayReceipt) {
+        heldFirstPayReceipt = true;
+        overlapped = await Promise.race([
+          secondPayStarted.then(() => true),
+          new Promise<boolean>((resolve) =>
+            setTimeout(() => resolve(false), 1_000),
+          ),
+        ]);
       }
+      return waitForReceipt(args);
     }) as typeof publicClient.waitForTransactionReceipt;
 
     try {
@@ -602,7 +625,8 @@ describe("assertValidFeeRouterSplit", () => {
         splitRegistryPath: registryPath,
       });
 
-      expect(maxInFlight).toBeGreaterThan(1);
+      expect(overlapped).toBe(true);
+      expect(paySubmissions).toBe(2);
       expect(evidence[first.sourceId]?.settlementMode).toBe("forum-routed");
       expect(evidence[second.sourceId]?.settlementMode).toBe("forum-routed");
     } finally {

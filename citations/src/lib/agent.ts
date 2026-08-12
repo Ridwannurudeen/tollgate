@@ -154,15 +154,26 @@ function cleanModelText(value: unknown, maxLength: number): string {
 // the seam is cheaper than trusting every model to tidy up after itself, and it
 // only ever removes punctuation that has no sentence left to attach to.
 export function repairRedactedProse(value: string): string {
-  return value
-    .replace(
-      /[\s,;—-]*\b(?:but|and|however|although|though|while|because|so|yet)\s*\./gi,
-      ".",
-    )
-    .replace(/\s*[,;—]\s*\./g, ".")
-    .replace(/\s+\./g, ".")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  return (
+    value
+      .replace(
+        /[\s,;—-]*\b(?:but|and|however|although|though|while|because|so|yet)\s*\./gi,
+        ".",
+      )
+      // A preposition orphaned by the cut survives the rule above — it is not a
+      // conjunction and the comma is no longer adjacent to the full stop, which
+      // is how "…every wallet, with ." reached the page. The leading comma is
+      // what makes this safe to strip: prose legitimately ends "signed off on."
+      // but never ", on."
+      .replace(
+        /,\s*\b(?:with|for|to|from|by|of|in|on|at|as|into|via|using|including|plus|per)\b\s*\./gi,
+        ".",
+      )
+      .replace(/\s*[,;—]\s*\./g, ".")
+      .replace(/\s+\./g, ".")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+  );
 }
 
 export function llmConfigFromEnv(): LlmConfig | null {
