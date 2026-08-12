@@ -1,9 +1,5 @@
-import {
-  createWalletClient,
-  http,
-  publicActions,
-  type Address,
-} from "viem";
+import { inspect } from "node:util";
+import { createWalletClient, http, publicActions, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   decodePaymentSignatureHeader,
@@ -145,6 +141,58 @@ export function paymentRequiredHeaders(
   };
 }
 
+// Temporary diagnostic: @x402/evm's settle path catches the real settlement
+// error and collapses it to `invalid_exact_evm_transaction_failed`
+// (parseEip3009TransferError falls back to that constant when no regex
+// matches). Log the raw error — full viem detail and cause chain — to stderr
+// before the library classifies it, then rethrow unchanged.
+function logRawX402Error(source: string, error: unknown): void {
+  try {
+    console.error(
+      `[x402-raw-error] ${source} failed:`,
+      inspect(error, { depth: 8 }),
+    );
+  } catch {
+    console.error(`[x402-raw-error] ${source} failed (uninspectable error)`);
+  }
+}
+
+function withRawErrorLogging(
+  signer: FacilitatorEvmSigner,
+): FacilitatorEvmSigner {
+  const wrap =
+    <Args extends unknown[], Result>(
+      method: string,
+      call: (...args: Args) => Promise<Result>,
+    ) =>
+    async (...args: Args): Promise<Result> => {
+      try {
+        return await call(...args);
+      } catch (error) {
+        logRawX402Error(`signer.${method}`, error);
+        throw error;
+      }
+    };
+  return {
+    ...signer,
+    readContract: wrap("readContract", signer.readContract.bind(signer)),
+    verifyTypedData: wrap(
+      "verifyTypedData",
+      signer.verifyTypedData.bind(signer),
+    ),
+    writeContract: wrap("writeContract", signer.writeContract.bind(signer)),
+    sendTransaction: wrap(
+      "sendTransaction",
+      signer.sendTransaction.bind(signer),
+    ),
+    waitForTransactionReceipt: wrap(
+      "waitForTransactionReceipt",
+      signer.waitForTransactionReceipt.bind(signer),
+    ),
+    getCode: wrap("getCode", signer.getCode.bind(signer)),
+  };
+}
+
 function makeFacilitator() {
   const privateKey = process.env.FACILITATOR_PRIVATE_KEY as
     | `0x${string}`
@@ -163,7 +211,7 @@ function makeFacilitator() {
   );
   return new x402Facilitator().register(
     ARC_CAIP2,
-    new ExactEvmFacilitator(signer),
+    new ExactEvmFacilitator(withRawErrorLogging(signer)),
   );
 }
 
@@ -241,6 +289,10 @@ export async function settleX402(
     const facilitator = makeFacilitator();
     const verifyRes = await facilitator.verify(payload, requirements);
     if (!verifyRes.isValid) {
+      console.error(
+        "[x402-raw-error] exact verify rejected:",
+        inspect(verifyRes, { depth: 8 }),
+      );
       return {
         ok: false,
         status: 402,
@@ -249,6 +301,10 @@ export async function settleX402(
     }
     const settleRes = await facilitator.settle(payload, requirements);
     if (!settleRes.success) {
+      console.error(
+        "[x402-raw-error] exact settle rejected:",
+        inspect(settleRes, { depth: 8 }),
+      );
       return {
         ok: false,
         status: 402,
