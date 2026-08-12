@@ -820,6 +820,12 @@ function buildLlmQueryRecord(
     DEFAULT_SOURCE_BUDGET_ATOMIC_USDC,
     groundingYields,
   );
+  // Repairing inside each parser kept missing a door — critique, escalation and
+  // redraft were all patched and a redacted answer still reached the page. This
+  // is the one place every answer must pass through on its way into a record, so
+  // the guarantee belongs here. Applied before the hash so the integrity hash
+  // covers exactly the text that gets published.
+  const answer = repairRedactedProse(loop.answer);
   const selectedIds = new Set(loop.selected.map((source) => source.id));
   const decisions: SourceDecision[] = citationMarket.decisions.map(
     (decision) => ({
@@ -888,7 +894,7 @@ function buildLlmQueryRecord(
     readerPaymentHash: readerPayment?.paymentHash,
   });
   const answerHash = sha256Hex({
-    answer: loop.answer,
+    answer,
     citations,
     sourceDecisions: decisions,
     agentBudget: budget,
@@ -906,7 +912,7 @@ function buildLlmQueryRecord(
   return {
     id,
     question,
-    answer: loop.answer,
+    answer,
     queryHash,
     answerHash,
     totalAtomicUsdc: spentAtomicUsdc,
