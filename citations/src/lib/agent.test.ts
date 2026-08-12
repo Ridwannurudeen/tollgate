@@ -1214,6 +1214,19 @@ describe("repairRedactedProse", () => {
     ).toBe("First, policy enforcement before hiring checks agent prices.");
   });
 
+  // Verbatim tail from /ask: the cut took the closing sentence and left its
+  // full stop marooned after the surviving one.
+  it("collapses a full stop marooned at the end", () => {
+    expect(
+      repairRedactedProse("any third party can pause the vault if needed. ."),
+    ).toBe("any third party can pause the vault if needed.");
+  });
+
+  it("leaves a deliberate ellipsis alone", () => {
+    const kept = "The agent appraises, buys, drafts... then pays each creator.";
+    expect(repairRedactedProse(kept)).toBe(kept);
+  });
+
   it("keeps a comma clause that still has content", () => {
     const kept =
       "The agent buys sources, with every payout carrying its own receipt.";

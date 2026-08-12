@@ -170,6 +170,10 @@ export function repairRedactedProse(value: string): string {
         ".",
       )
       .replace(/\s*[,;—]\s*\./g, ".")
+      // A cut at the end leaves the removed sentence's stop marooned after the
+      // surviving one — "…if needed. ." Collapse the pair. Requiring whitespace
+      // between them keeps a deliberate ellipsis intact.
+      .replace(/\.\s+\./g, ".")
       .replace(/\s+\./g, ".")
       // When the cut takes the opening clause, that sentence's own full stop is
       // left leading the answer — ". First, policy enforcement…" went out this
@@ -409,7 +413,12 @@ function parseDraft(text: string): Draft {
   if (!isRecord(parsed)) {
     throw new Error("LLM draft JSON must be an object.");
   }
-  const answer = cleanModelText(parsed.answer, MAX_ANSWER_LENGTH);
+  // The redraft path assigns this answer straight through, so repairing only at
+  // critique and escalation left the third door open — a redrafted answer went
+  // out opening on a bare full stop. Repair every answer where it enters.
+  const answer = repairRedactedProse(
+    cleanModelText(parsed.answer, MAX_ANSWER_LENGTH),
+  );
   if (answer.length < 40) {
     throw new Error("LLM draft answer was too short.");
   }
