@@ -171,6 +171,11 @@ export function repairRedactedProse(value: string): string {
       )
       .replace(/\s*[,;—]\s*\./g, ".")
       .replace(/\s+\./g, ".")
+      // When the cut takes the opening clause, that sentence's own full stop is
+      // left leading the answer — ". First, policy enforcement…" went out this
+      // way. Strip punctuation stranded at the very start; a real answer opens
+      // on a word.
+      .replace(/^[\s.,;:—-]+/, "")
       .replace(/\s{2,}/g, " ")
       .trim()
   );

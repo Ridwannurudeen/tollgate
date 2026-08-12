@@ -1204,6 +1204,16 @@ describe("repairRedactedProse", () => {
     expect(repaired).toContain("Operators receive execution rights.");
   });
 
+  // Verbatim from /ask after the preposition rule shipped: the cut took the
+  // opening clause and left its full stop leading the answer.
+  it("strips a full stop stranded at the start", () => {
+    expect(
+      repairRedactedProse(
+        ". First, policy enforcement before hiring checks agent prices.",
+      ),
+    ).toBe("First, policy enforcement before hiring checks agent prices.");
+  });
+
   it("keeps a comma clause that still has content", () => {
     const kept =
       "The agent buys sources, with every payout carrying its own receipt.";
