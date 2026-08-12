@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentPlanningError,
   createAgentQueryRecord,
+  repairRedactedProse,
   type ChatMessage,
 } from "./agent";
 import { DEFAULT_CREATOR_SOURCES } from "./catalog";
@@ -216,9 +217,7 @@ describe("createAgentQueryRecord", () => {
   });
 
   it("runs the appraise/allocate/draft/critique loop when all claims are grounded", async () => {
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
         return JSON.stringify({
@@ -284,9 +283,7 @@ describe("createAgentQueryRecord", () => {
 
   it("returns an honest no-source record when the LLM buys nothing", async () => {
     const stages: string[] = [];
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       stages.push(stage);
       if (stage === "appraise") {
@@ -346,9 +343,7 @@ describe("createAgentQueryRecord", () => {
   });
 
   it("keeps only grounded claims when an unsupported claim cannot be bought", async () => {
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
         return JSON.stringify({
@@ -407,9 +402,7 @@ describe("createAgentQueryRecord", () => {
 
   it("escalates to a paid external provider when gated on and unsupported claims remain", async () => {
     const stages: string[] = [];
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       stages.push(stage);
       if (stage === "appraise") {
@@ -497,9 +490,7 @@ describe("createAgentQueryRecord", () => {
         );
       },
     };
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
         return JSON.stringify({
@@ -570,9 +561,7 @@ describe("createAgentQueryRecord", () => {
 
   it("does not escalate by default when the env gate is off", async () => {
     const stages: string[] = [];
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       stages.push(stage);
       if (stage === "appraise") {
@@ -635,9 +624,7 @@ describe("createAgentQueryRecord", () => {
 
   it("does not escalate when there are no unsupported claims", async () => {
     const stages: string[] = [];
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       stages.push(stage);
       if (stage === "appraise") {
@@ -697,9 +684,7 @@ describe("createAgentQueryRecord", () => {
 
   it("does not escalate when the cap is below the provider price", async () => {
     const stages: string[] = [];
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       stages.push(stage);
       if (stage === "appraise") {
@@ -762,9 +747,7 @@ describe("createAgentQueryRecord", () => {
 
   it("reflects by buying one more source to ground an unsupported claim", async () => {
     let draftCalls = 0;
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
         return JSON.stringify({
@@ -845,9 +828,7 @@ describe("createAgentQueryRecord", () => {
   });
 
   it("allocates by grounding-per-USDC, dropping a costlier lower-value source", async () => {
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
         return JSON.stringify({
@@ -991,9 +972,7 @@ describe("createAgentQueryRecord", () => {
         },
       ]),
     );
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
         return JSON.stringify({
@@ -1045,9 +1024,7 @@ describe("createAgentQueryRecord", () => {
   });
 
   it("marks bought-but-unused sources for refund before payout", async () => {
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
         return JSON.stringify({
@@ -1115,9 +1092,7 @@ describe("createAgentQueryRecord", () => {
   });
 
   it("treats sources omitted from sourceUsage as used and never refunds them", async () => {
-    const completeChat = async (
-      messages: ChatMessage[],
-    ) => {
+    const completeChat = async (messages: ChatMessage[]) => {
       const stage = stageOf(messages);
       if (stage === "appraise") {
         return JSON.stringify({
@@ -1185,5 +1160,45 @@ describe("createAgentQueryRecord", () => {
         (citation) => citation.payoutPolicy !== "refund-unused",
       ),
     ).toBe(true);
+  });
+});
+
+describe("repairRedactedProse", () => {
+  // Verbatim from production on 2026-08-12: the critique step removed two
+  // unsupported clauses and left their punctuation behind, so the showcased
+  // answer on /ask read as a sentence with a hole in it.
+  const PRODUCTION_BREAKAGE =
+    "Based on the purchased sources provided, . The sources discuss related systems—CitePay Markets' proof-of-paid-citation receipts, Shadow Float V2's sponsor-backed USDC capacity and onchain receipts on Arc, and Forum's covenant accounts for agent spend control with recomputable receipts—but .";
+
+  it("closes the gaps left when a claim is cut out", () => {
+    const repaired = repairRedactedProse(PRODUCTION_BREAKAGE);
+
+    expect(repaired).not.toMatch(/,\s*\./);
+    expect(repaired).not.toMatch(/—\s*\./);
+    expect(repaired).not.toMatch(/\bbut\s*\./);
+    expect(repaired.startsWith("Based on the purchased sources provided.")).toBe(
+      true,
+    );
+    expect(repaired.endsWith("recomputable receipts.")).toBe(true);
+  });
+
+  it("drops a connective left dangling before the full stop", () => {
+    expect(repairRedactedProse("It settles on Arc, but .")).toBe(
+      "It settles on Arc.",
+    );
+    expect(repairRedactedProse("Receipts are hash-linked and .")).toBe(
+      "Receipts are hash-linked.",
+    );
+  });
+
+  it("leaves well-formed prose untouched", () => {
+    const clean =
+      "The agent buys the sources it cites, and every payout carries a receipt — anyone can verify the chain.";
+    expect(repairRedactedProse(clean)).toBe(clean);
+  });
+
+  it("does not mangle an em-dash clause that still has content", () => {
+    const kept = "Arc settles in USDC—the same asset it charges gas in.";
+    expect(repairRedactedProse(kept)).toBe(kept);
   });
 });

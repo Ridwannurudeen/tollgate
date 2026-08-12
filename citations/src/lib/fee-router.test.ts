@@ -550,10 +550,14 @@ describe("assertValidFeeRouterSplit", () => {
     const base = oneCitationQuery();
     const first = base.citations[0];
     if (!first) throw new Error("missing test citation");
+    // Same creator wallet on purpose. ensureCreatorSplit serialises split
+    // creation behind a lock, so two different wallets would queue behind each
+    // other and the only overlap left would be a race this test cannot rely on.
+    // Sharing a wallet means one split is created and reused, leaving the two
+    // pay transactions genuinely concurrent.
     const second = {
       ...first,
       sourceId: `${first.sourceId}-second`,
-      wallet: "0x8888888888888888888888888888888888888888" as Address,
     };
     const query = {
       ...base,

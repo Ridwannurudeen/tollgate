@@ -4,7 +4,12 @@ import { createPaidFetch } from "./x402-paid-fetch.mjs";
 
 const ARC_RPC_URL = "https://rpc.testnet.arc.network";
 const ARC_USDC = "0x3600000000000000000000000000000000000000";
-const QUESTION = "How does Tollgate prove paid citations with x402 receipts on Arc?";
+// Deliberately a question the registered corpus can actually answer. The canary
+// runs daily and /ask showcases the *latest* answer, so asking about Tollgate
+// itself — which no registered source covers — published "there is no
+// information about Tollgate" to the front page every morning.
+const QUESTION =
+  "How can a spend-controlled agent buy publisher content without abusing its budget?";
 
 // A paid query is the only probe that reaches the facilitator, the nonce
 // allocator, PayGate, and the ledger append. Every one of those failed silently

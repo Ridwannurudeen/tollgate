@@ -148,6 +148,23 @@ function cleanModelText(value: unknown, maxLength: number): string {
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
+// The critique stage is told to keep only claims a purchased source backs, and
+// models comply by deleting the clause and leaving its punctuation standing —
+// which reached the public answer on /ask as "…sources provided, ." Repairing
+// the seam is cheaper than trusting every model to tidy up after itself, and it
+// only ever removes punctuation that has no sentence left to attach to.
+export function repairRedactedProse(value: string): string {
+  return value
+    .replace(
+      /[\s,;—-]*\b(?:but|and|however|although|though|while|because|so|yet)\s*\./gi,
+      ".",
+    )
+    .replace(/\s*[,;—]\s*\./g, ".")
+    .replace(/\s+\./g, ".")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function llmConfigFromEnv(): LlmConfig | null {
   const apiKey =
     process.env.LEPTONWEB_LLM_API_KEY ?? process.env.OPENAI_API_KEY;
@@ -259,7 +276,7 @@ function critiqueMessages(
     {
       role: "system",
       content:
-        "You are Tollgate. STEP 3 is SELF-CRITIQUE: check that every claim is supported by one of the purchased sourceIds. Rewrite the answer so it only keeps claims backed by a purchased source. In sourceUsage, list EVERY purchased sourceId with used true or false; a source omitted from sourceUsage is treated as used. Return strict JSON.",
+        'You are Tollgate. STEP 3 is SELF-CRITIQUE: check that every claim is supported by one of the purchased sourceIds. Rewrite the answer so it only keeps claims backed by a purchased source. groundedAnswer MUST be complete, publishable prose: when you drop a claim, rewrite the sentence around it rather than deleting the clause and leaving its comma, dash or conjunction behind. Never emit a fragment such as "provided, ." or "receipts—but ." If nothing survives, say plainly in one full sentence that the purchased sources do not answer the question. In sourceUsage, list EVERY purchased sourceId with used true or false; a source omitted from sourceUsage is treated as used. Return strict JSON.',
     },
     {
       role: "user",
@@ -400,7 +417,9 @@ function parseCritique(text: string, fallbackAnswer: string): Critique {
   if (!isRecord(parsed)) {
     throw new Error("LLM critique JSON must be an object.");
   }
-  const grounded = cleanModelText(parsed.groundedAnswer, MAX_ANSWER_LENGTH);
+  const grounded = repairRedactedProse(
+    cleanModelText(parsed.groundedAnswer, MAX_ANSWER_LENGTH),
+  );
   const verdict = cleanModelText(parsed.verdict, MAX_REASON_LENGTH);
   // Only an explicit used:false marks a source unused. Omission from
   // sourceUsage means "used" — a forgetful model must never refund a cited
@@ -429,7 +448,9 @@ function parseEscalationMerge(
   if (!isRecord(parsed)) {
     throw new Error("LLM escalation JSON must be an object.");
   }
-  const grounded = cleanModelText(parsed.groundedAnswer, MAX_ANSWER_LENGTH);
+  const grounded = repairRedactedProse(
+    cleanModelText(parsed.groundedAnswer, MAX_ANSWER_LENGTH),
+  );
   return {
     groundedAnswer: grounded.length >= 40 ? grounded : fallbackAnswer,
   };
