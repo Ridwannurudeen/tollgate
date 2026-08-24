@@ -80,10 +80,16 @@ The core package accepts any store with this interface:
 type SplitRegistryStore = {
   read(): Promise<FeeRouterSplitRegistry>;
   write(registry: FeeRouterSplitRegistry): Promise<void>;
+  getOrInsert?(
+    key: FeeRouterSplitKey,
+    insert: () => Promise<FeeRouterSplitRecord>,
+  ): Promise<{ record: FeeRouterSplitRecord; inserted: boolean }>;
 };
 ```
 
-The Node-only `createFileSplitRegistryStore(path)` implementation lives at `tollgate-pay-per-piece/stores/file`. It writes a temporary sibling and renames it over the target so readers never observe partial JSON. The registry, nonce, and same-payer payment locks are process-local; run one process per payer account or supply external coordination when multiple workers share a payer.
+The optional operation claims a split identity before it invokes the on-chain insert callback. Existing two-method stores keep working through the process-local fallback; stores that coordinate multiple writers should implement `getOrInsert` and leave ambiguous failed claims pending rather than retrying an on-chain transaction.
+
+The Node-only `createFileSplitRegistryStore(path)` implementation lives at `tollgate-pay-per-piece/stores/file`. It keeps the registry JSON format unchanged, writes a temporary sibling and renames it over the target, and uses sibling pending claims plus a short write lock to coordinate cooperating processes on one host. A crashed or ambiguous creation stays pending for manual chain reconciliation. Independent hosts and network filesystems need a database-backed implementation with a unique split-identity constraint. Nonce and same-payer payment locks remain process-local; run one process per payer account or supply external coordination when multiple workers share a payer.
 
 ## Optional x402 paid fetch
 

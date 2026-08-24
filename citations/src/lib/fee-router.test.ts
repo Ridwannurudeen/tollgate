@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createFileSplitRegistryStore } from "tollgate-pay-per-piece/stores/file";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   encodeAbiParameters,
@@ -15,7 +16,6 @@ import { createQueryRecord } from "./engine";
 import {
   assertValidFeeRouterSplit,
   createFeeRouterPublicClient,
-  readFeeRouterSplitRegistry,
   refundReaderPayment,
   routeCitationPayments,
   routeEscrowReleasePayment,
@@ -103,6 +103,7 @@ function mockClients(
 ) {
   let createdRecipients: Address[] = [recipient];
   let createdBps = [10_000];
+  const contractWrites: ContractCall[] = [];
   const publicClient = {
     readContract: async ({ functionName }: { functionName: string }) => {
       if (functionName === "balanceOf") return 1_000_000n;
@@ -153,7 +154,9 @@ function mockClients(
     }),
   } as unknown as PublicClient;
   const walletClient = {
-    writeContract: async ({ functionName, args, account }: ContractCall) => {
+    writeContract: async (request: ContractCall) => {
+      contractWrites.push(request);
+      const { functionName, args, account } = request;
       writes.push(functionName);
       if (functionName === "createSplit") {
         createSplitAccounts.push(account);
@@ -174,7 +177,7 @@ function mockClients(
       return `0x${txByte.repeat(64)}` as Hex;
     },
   } as FeeRouterWalletClient;
-  return { publicClient, walletClient };
+  return { publicClient, walletClient, contractWrites };
 }
 
 describe("assertValidFeeRouterSplit", () => {
@@ -353,7 +356,7 @@ describe("assertValidFeeRouterSplit", () => {
     const writes: string[] = [];
     const paidSplitIds: bigint[] = [];
     const createSplitAccounts: unknown[] = [];
-    const { publicClient, walletClient } = mockClients(
+    const { publicClient, walletClient, contractWrites } = mockClients(
       query.citations[0].wallet,
       0n,
       123n,
@@ -372,6 +375,7 @@ describe("assertValidFeeRouterSplit", () => {
       });
 
       expect(writes).toEqual(["approve", "createSplit", "pay"]);
+      expect(contractWrites[0]?.args).toEqual([FEE_ROUTER, 1_000_000n]);
       expect(paidSplitIds).toEqual([123n]);
       expect(accountAddress(createSplitAccounts[0])).toBe(
         privateKeyToAccount(TEST_KEY).address,
@@ -382,6 +386,57 @@ describe("assertValidFeeRouterSplit", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("reduces a legacy oversized allowance to the policy ceiling", async () => {
+    const query = oneCitationQuery();
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const writes: string[] = [];
+    const { publicClient, walletClient, contractWrites } = mockClients(
+      query.citations[0].wallet,
+      10_000_000_000n,
+      123n,
+      writes,
+    );
+
+    try {
+      await routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+        splitRegistryPath: path.join(dir, "fee-router-splits.json"),
+      });
+
+      expect(contractWrites[0]?.args).toEqual([FEE_ROUTER, 1_000_000n]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a citation batch above the allowance ceiling before writing", async () => {
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      payoutAtomicUsdc: 1_000_001,
+    }));
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      0n,
+      123n,
+      writes,
+    );
+
+    await expect(
+      routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+      }),
+    ).rejects.toThrow("exceeds the FeeRouter allowance ceiling");
+    expect(writes).toEqual([]);
   });
 
   it("uses the split id from the mined SplitCreated event when the prediction races", async () => {
@@ -672,8 +727,16 @@ describe("assertValidFeeRouterSplit", () => {
   });
 
   it("normalizes legacy split records to the core tenant", async () => {
+    const query = oneCitationQuery();
     const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
     const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      1_000_000n,
+      124n,
+      writes,
+    );
 
     try {
       await writeFile(
@@ -681,9 +744,9 @@ describe("assertValidFeeRouterSplit", () => {
         `${JSON.stringify({
           splits: [
             {
-              wallet: "0x7777777777777777777777777777777777777777",
-              splitId: "42",
-              recipients: ["0x7777777777777777777777777777777777777777"],
+              wallet: query.citations[0].wallet,
+              splitId: "124",
+              recipients: [query.citations[0].wallet],
               bps: [10_000],
               createSplitTx: `0x${"a".repeat(64)}`,
               createdAt: "2026-07-07T00:00:00.000Z",
@@ -693,8 +756,18 @@ describe("assertValidFeeRouterSplit", () => {
         "utf8",
       );
 
-      const registry = await readFeeRouterSplitRegistry(registryPath);
+      await routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+        splitRegistryPath: registryPath,
+      });
 
+      expect(writes).toEqual(["pay"]);
+      const registry = await createFileSplitRegistryStore(registryPath, {
+        legacyTenantId: "citations-core",
+      }).read();
       expect(registry.splits[0]?.tenantId).toBe("citations-core");
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -746,7 +819,7 @@ describe("assertValidFeeRouterSplit", () => {
         tenantId: "wp_site_a",
       });
 
-      const registry = await readFeeRouterSplitRegistry(registryPath);
+      const registry = await createFileSplitRegistryStore(registryPath).read();
 
       expect(registry.splits.map((split) => split.tenantId).sort()).toEqual([
         "wp_site_a",
@@ -903,6 +976,28 @@ describe("assertValidFeeRouterSplit", () => {
 });
 
 describe("routeEscrowReleasePayment", () => {
+  it("rejects an escrow release above the allowance ceiling before writing", async () => {
+    const source = DEFAULT_CREATOR_SOURCES[0];
+    if (!source) throw new Error("missing test source");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      source.wallet,
+      0n,
+      201n,
+      writes,
+    );
+
+    await expect(
+      routeEscrowReleasePayment(source, 1_000_001, ["receipt-a"], {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+      }),
+    ).rejects.toThrow("exceeds the FeeRouter allowance ceiling");
+    expect(writes).toEqual([]);
+  });
+
   it("rejects a reverted approval before creating a split", async () => {
     const source = DEFAULT_CREATOR_SOURCES[0];
     if (!source) throw new Error("missing test source");

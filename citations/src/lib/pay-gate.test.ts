@@ -277,6 +277,7 @@ describe("PayGate configuration and planning", () => {
         "createSplit",
         "payWithIntent",
       ]);
+      expect(writes[0]?.args).toEqual([PAY_GATE, 1_000_000n]);
       expect(writes.map((write) => write.nonce)).toEqual([30, 31, 32]);
       expect(result.transaction).toBe(PAY_GATE_TX);
       expect(Object.values(result.evidenceBySourceId)).toEqual([
@@ -290,6 +291,33 @@ describe("PayGate configuration and planning", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("rejects a batch above the allowance ceiling before writing", async () => {
+    const query = createQueryRecord(
+      "How should PayGate route creator evidence?",
+      "2026-07-12T12:00:00.000Z",
+    );
+    const citation = query.citations[0];
+    if (!citation) throw new Error("missing fixture citation");
+    query.citations = [
+      { ...citation, payoutAtomicUsdc: 1_000_001 },
+    ];
+    query.totalAtomicUsdc = 1_000_001;
+    const built = builtIntent(query.queryHash as Hex, 1_000_001n);
+    const writes: FeeRouterWriteContractRequest[] = [];
+    const clients = mockClients(built, writes);
+
+    await expect(
+      payCitationsWithIntent(query, built, `0x${"7".repeat(130)}` as Hex, {
+        address: PAY_GATE as Address,
+        enabled: true,
+        privateKey: PRIVATE_KEY,
+        publicClient: clients.publicClient,
+        walletClient: clients.walletClient,
+      }),
+    ).rejects.toThrow("exceeds the FeeRouter allowance ceiling");
+    expect(writes).toEqual([]);
   });
 
   it("rejects reverted and replaced PayGate receipts", async () => {

@@ -24,10 +24,39 @@ export type FeeRouterSplitRegistry = {
   splits: FeeRouterSplitRecord[];
 };
 
+export type ParseFeeRouterSplitRegistryOptions = {
+  legacyTenantId?: string;
+};
+
+export type FeeRouterSplitKey = {
+  tenantId: string;
+  wallet: Address;
+  recipients: Address[];
+  bps: number[];
+};
+
+export type SplitRegistryGetOrInsertResult = {
+  record: FeeRouterSplitRecord;
+  inserted: boolean;
+};
+
 export type SplitRegistryStore = {
   read(): Promise<FeeRouterSplitRegistry>;
   write(registry: FeeRouterSplitRegistry): Promise<void>;
+  getOrInsert?(
+    key: FeeRouterSplitKey,
+    insert: () => Promise<FeeRouterSplitRecord>,
+  ): Promise<SplitRegistryGetOrInsertResult>;
 };
+
+export type CreateFeeRouterSplit = () => Promise<{
+  splitId: bigint;
+  txHash: Hex;
+}>;
+
+export type VerifyFeeRouterSplit = (
+  record: FeeRouterSplitRecord,
+) => Promise<void>;
 
 function isNonZeroAddressString(value: unknown): value is Address {
   return (
@@ -68,15 +97,25 @@ function isUint256String(value: unknown): value is string {
 
 export function parseFeeRouterSplitRegistry(
   value: unknown,
+  options: ParseFeeRouterSplitRegistryOptions = {},
 ): FeeRouterSplitRegistry {
   if (!value || typeof value !== "object") return { splits: [] };
   const splits = (value as Record<string, unknown>).splits;
   if (!Array.isArray(splits)) return { splits: [] };
+  const legacyTenantId =
+    options.legacyTenantId === undefined
+      ? null
+      : normalizeTenantId(options.legacyTenantId);
   return {
     splits: splits.flatMap((split) => {
       if (!split || typeof split !== "object") return [];
       const record = split as Record<string, unknown>;
-      const tenantId = normalizeStoredTenantId(record.tenantId);
+      const tenantId =
+        normalizeStoredTenantId(record.tenantId) ??
+        (record.tenantId === undefined ||
+        (typeof record.tenantId === "string" && !record.tenantId.trim())
+          ? legacyTenantId
+          : null);
       if (
         tenantId &&
         isNonZeroAddressString(record.wallet) &&
@@ -145,52 +184,71 @@ function sameBpsList(
   );
 }
 
+export function feeRouterSplitMatchesKey(
+  split: FeeRouterSplitRecord,
+  key: FeeRouterSplitKey,
+): boolean {
+  return (
+    split.tenantId === key.tenantId &&
+    split.wallet.toLowerCase() === key.wallet.toLowerCase() &&
+    sameAddressList(split.recipients, key.recipients) &&
+    sameBpsList(split.bps, key.bps)
+  );
+}
+
+export function findFeeRouterSplit(
+  registry: FeeRouterSplitRegistry,
+  key: FeeRouterSplitKey,
+): FeeRouterSplitRecord | undefined {
+  return registry.splits.find((split) => feeRouterSplitMatchesKey(split, key));
+}
+
+async function verifyCreatorSplit(
+  record: FeeRouterSplitRecord,
+  recipients: Address[],
+  bps: number[],
+  publicClient?: PublicClient,
+): Promise<void> {
+  const split = await readFeeRouterSplit(BigInt(record.splitId), publicClient);
+  if (
+    !sameAddressList(split.recipients, recipients) ||
+    !sameBpsList(split.bps, bps)
+  ) {
+    throw new Error(
+      `FeeRouter split ${record.splitId} does not match creator recipients.`,
+    );
+  }
+}
+
 export async function ensureCreatorSplit(
   store: SplitRegistryStore,
   tenantIdInput: string,
   wallet: Address,
   recipients: Address[],
   bps: number[],
-  signer: FeeRouterSigner,
+  signer: FeeRouterSigner | undefined,
   publicClient?: PublicClient,
+  createCreatorSplit?: CreateFeeRouterSplit,
+  verifyStoredSplit?: VerifyFeeRouterSplit,
 ): Promise<FeeRouterSplitRecord> {
   assertValidFeeRouterSplit(recipients, bps);
   if (!isNonZeroAddressString(wallet)) {
     throw new Error("FeeRouter wallet must be a non-zero EVM address.");
   }
   const tenantId = normalizeTenantId(tenantIdInput);
-  return withSplitRegistryLock(async () => {
-    const registry = await store.read();
-    const existing = registry.splits.find(
-      (split) =>
-        split.tenantId === tenantId &&
-        split.wallet.toLowerCase() === wallet.toLowerCase() &&
-        sameAddressList(split.recipients, recipients) &&
-        sameBpsList(split.bps, bps),
-    );
-    if (existing) {
-      const split = await readFeeRouterSplit(
-        BigInt(existing.splitId),
-        publicClient,
-      );
-      if (
-        !sameAddressList(split.recipients, recipients) ||
-        !sameBpsList(split.bps, bps)
-      ) {
-        throw new Error(
-          `FeeRouter split ${existing.splitId} does not match creator recipients.`,
-        );
+  const key: FeeRouterSplitKey = { tenantId, wallet, recipients, bps };
+  const insert = async (): Promise<FeeRouterSplitRecord> => {
+    let created: Awaited<ReturnType<CreateFeeRouterSplit>>;
+    if (createCreatorSplit) {
+      created = await createCreatorSplit();
+    } else {
+      if (!signer) {
+        throw new Error("FeeRouter signer or split creator is required.");
       }
-      return existing;
+      created = await createSplit(signer, recipients, bps, publicClient);
     }
-
-    const { splitId, txHash } = await createSplit(
-      signer,
-      recipients,
-      bps,
-      publicClient,
-    );
-    const record: FeeRouterSplitRecord = {
+    const { splitId, txHash } = created;
+    return {
       tenantId,
       wallet,
       splitId: splitId.toString(),
@@ -199,6 +257,32 @@ export async function ensureCreatorSplit(
       createSplitTx: txHash,
       createdAt: new Date().toISOString(),
     };
+  };
+
+  if (store.getOrInsert) {
+    const result = await store.getOrInsert(key, insert);
+    if (!feeRouterSplitMatchesKey(result.record, key)) {
+      throw new Error("FeeRouter split store returned a different identity.");
+    }
+    if (!result.inserted) {
+      if (verifyStoredSplit) await verifyStoredSplit(result.record);
+      else {
+        await verifyCreatorSplit(result.record, recipients, bps, publicClient);
+      }
+    }
+    return result.record;
+  }
+
+  return withSplitRegistryLock(async () => {
+    const registry = await store.read();
+    const existing = findFeeRouterSplit(registry, key);
+    if (existing) {
+      if (verifyStoredSplit) await verifyStoredSplit(existing);
+      else await verifyCreatorSplit(existing, recipients, bps, publicClient);
+      return existing;
+    }
+
+    const record = await insert();
     await store.write({ splits: [...registry.splits, record] });
     return record;
   });

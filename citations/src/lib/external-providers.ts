@@ -2,8 +2,8 @@ import type { Address, Hex, PublicClient } from "viem";
 import { ARC_USDC, arcChain } from "./chain";
 import {
   createFeeRouterPublicClient,
-  createFeeRouterSigner,
   usdcRouterAbi,
+  withFeeRouterSigner,
   type FeeRouterWalletClient,
 } from "./fee-router";
 import { withReservedNonce } from "./fee-router-nonce";
@@ -67,87 +67,97 @@ async function askCitePay(
 ): Promise<ExternalProviderAnswer> {
   const provider = EXTERNAL_PROVIDERS.citepay;
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
-  const { account, walletClient } = createFeeRouterSigner({
-    privateKey: options.privateKey,
-    publicClient,
-    walletClient: options.walletClient,
-  });
-  const transaction = await withReservedNonce(publicClient, account, (nonce) =>
-    walletClient.writeContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "transfer",
-      args: [provider.recipient, BigInt(provider.priceAtomicUsdc)],
-      account,
-      chain: arcChain,
-      nonce,
-    }),
-  );
-  const receipt = await publicClient.waitForTransactionReceipt({
-    hash: transaction,
-  });
-  if (receipt.status !== "success") {
-    throw new Error(`CitePay transfer failed with status ${receipt.status}.`);
-  }
-
-  // Money has moved from here on: any failure below must surface the paid
-  // assist so the caller records the spend instead of losing it.
-  const paidAssist: ExternalAssist = {
-    provider: provider.id,
-    endpoint: provider.endpoint,
-    amountAtomicUsdc: provider.priceAtomicUsdc,
-    transaction,
-    answerHash: sha256Hex(""),
-  };
-  let response: Response;
-  try {
-    response = await (options.fetch ?? fetch)(provider.endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "X-Arc-Tx-Hash": transaction,
-      },
-      body: JSON.stringify({ query: question }),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "network error";
-    throw new EscalationPaidError(
-      `CitePay escalation paid but the request failed: ${message}`,
-      paidAssist,
-    );
-  }
-  const payload = (await response.json().catch(() => null)) as unknown;
-  if (!response.ok) {
-    throw new EscalationPaidError(
-      `CitePay escalation paid but got HTTP ${response.status}.`,
-      paidAssist,
-    );
-  }
-  if (!isRecord(payload)) {
-    throw new EscalationPaidError(
-      "CitePay escalation paid but returned an invalid response.",
-      paidAssist,
-    );
-  }
-  const answer = textField(payload.answer, 1_600);
-  if (!answer) {
-    throw new EscalationPaidError(
-      "CitePay escalation paid but returned no answer.",
-      paidAssist,
-    );
-  }
-
-  const queryId = textField(payload.queryId, 120);
-  const queryHash = textField(payload.queryHash, 120);
-  return {
-    answer,
-    assist: {
-      ...paidAssist,
-      answerHash: sha256Hex(answer),
-      ...(queryId ? { queryId } : {}),
-      ...(queryHash ? { queryHash } : {}),
+  return withFeeRouterSigner(
+    {
+      privateKey: options.privateKey,
+      publicClient,
+      walletClient: options.walletClient,
     },
-  };
+    async ({ account, walletClient }) => {
+      const transaction = await withReservedNonce(
+        publicClient,
+        account,
+        (nonce) =>
+          walletClient.writeContract({
+            address: ARC_USDC,
+            abi: usdcRouterAbi,
+            functionName: "transfer",
+            args: [provider.recipient, BigInt(provider.priceAtomicUsdc)],
+            account,
+            chain: arcChain,
+            nonce,
+          }),
+      );
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: transaction,
+      });
+      if (receipt.status !== "success") {
+        throw new Error(
+          `CitePay transfer failed with status ${receipt.status}.`,
+        );
+      }
+
+      // Money has moved from here on: any failure below must surface the paid
+      // assist so the caller records the spend instead of losing it.
+      const paidAssist: ExternalAssist = {
+        provider: provider.id,
+        endpoint: provider.endpoint,
+        amountAtomicUsdc: provider.priceAtomicUsdc,
+        transaction,
+        answerHash: sha256Hex(""),
+      };
+      let response: Response;
+      try {
+        response = await (options.fetch ?? fetch)(provider.endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "X-Arc-Tx-Hash": transaction,
+          },
+          body: JSON.stringify({ query: question }),
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "network error";
+        throw new EscalationPaidError(
+          `CitePay escalation paid but the request failed: ${message}`,
+          paidAssist,
+        );
+      }
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new EscalationPaidError(
+          `CitePay escalation paid but got HTTP ${response.status}.`,
+          paidAssist,
+        );
+      }
+      if (!isRecord(payload)) {
+        throw new EscalationPaidError(
+          "CitePay escalation paid but returned an invalid response.",
+          paidAssist,
+        );
+      }
+      const answer = textField(payload.answer, 1_600);
+      if (!answer) {
+        throw new EscalationPaidError(
+          "CitePay escalation paid but returned no answer.",
+          paidAssist,
+        );
+      }
+
+      const queryId = textField(payload.queryId, 120);
+      const queryHash = textField(payload.queryHash, 120);
+      return {
+        answer,
+        assist: {
+          ...paidAssist,
+          answerHash: sha256Hex(answer),
+          ...(queryId ? { queryId } : {}),
+          ...(queryHash ? { queryHash } : {}),
+        },
+      };
+    },
+  );
 }
 
 export const EXTERNAL_PROVIDERS = {

@@ -1,5 +1,9 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  ensureCreatorSplit,
+  type FeeRouterSplitRecord,
+} from "tollgate-pay-per-piece";
+import { createFileSplitRegistryStore } from "tollgate-pay-per-piece/stores/file";
 import {
   createPublicClient,
   createWalletClient,
@@ -14,8 +18,10 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { ARC_RPC_URL, ARC_USDC, arcChain } from "./chain";
 import { w3sExecuteContract } from "./circle-w3s";
+import { feeRouterAllowanceTarget } from "./fee-router-allowance";
 import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "./fee-router-contract";
 import { withReservedNonce } from "./fee-router-nonce";
+import { withFeeRouterSignerOperation } from "./fee-router-signer-lifecycle";
 import type {
   Citation,
   CreatorSource,
@@ -23,21 +29,20 @@ import type {
   ReceiptEvidence,
 } from "./types";
 
+export { assertValidFeeRouterSplit } from "tollgate-pay-per-piece";
+
 const SPLIT_REGISTRY_PATH = path.join(
   process.cwd(),
   "data",
   "fee-router-splits.json",
 );
+const DEFAULT_FEE_ROUTER_TENANT_ID = "citations-core";
+export const feeRouterSplitRegistryStore =
+  createFileSplitRegistryStore(SPLIT_REGISTRY_PATH, {
+    legacyTenantId: DEFAULT_FEE_ROUTER_TENANT_ID,
+  });
 const FEE_ROUTER_CLAIMABLE_CACHE_TTL_MS = 60_000;
 const ARC_POLLING_INTERVAL_MS = 250;
-const DEFAULT_FEE_ROUTER_TENANT_ID = "citations-core";
-// Approving the exact payout amount resets the allowance to ~0 after every pay,
-// so concurrent payouts (demand engine + live queries) race a tiny allowance and
-// revert with "transfer amount exceeds allowance". Instead top up to a large
-// bounded standing allowance so many payouts clear without re-approving; actual
-// spend stays capped by the payer wallet's USDC balance regardless of allowance.
-export const STANDING_FEE_ROUTER_ALLOWANCE = 10_000_000_000n; // 10,000 USDC (atomic, 6dp)
-let splitRegistryLock: Promise<void> = Promise.resolve();
 type FeeRouterClaimableCacheEntry =
   | { value: bigint; fetchedAt: number }
   | { error: unknown; fetchedAt: number };
@@ -126,20 +131,6 @@ export type FeeRouterSigner = {
   walletClient: FeeRouterWalletClient;
 };
 
-export type FeeRouterSplitRecord = {
-  tenantId: string;
-  wallet: Address;
-  splitId: string;
-  recipients: Address[];
-  bps: number[];
-  createSplitTx: Hex;
-  createdAt: string;
-};
-
-export type FeeRouterSplitRegistry = {
-  splits: FeeRouterSplitRecord[];
-};
-
 export type PlannedCitationPayment = {
   sourceId: string;
   citation: Citation;
@@ -174,22 +165,6 @@ export async function waitForSuccessfulTransaction(
     throw new Error(`${operation} failed with status ${receipt.status}.`);
   }
   return receipt;
-}
-
-export function assertValidFeeRouterSplit(
-  recipients: Address[],
-  bps: number[],
-): void {
-  if (recipients.length === 0) {
-    throw new Error("FeeRouter split needs at least one recipient.");
-  }
-  if (recipients.length !== bps.length) {
-    throw new Error("FeeRouter recipients and bps length mismatch.");
-  }
-  const totalBps = bps.reduce((sum, value) => sum + value, 0);
-  if (totalBps !== 10_000) {
-    throw new Error(`FeeRouter bps must sum to 10000; got ${totalBps}.`);
-  }
 }
 
 export async function readFeeRouterReadiness(
@@ -377,85 +352,20 @@ export function createFeeRouterSigner(
   };
 }
 
-function isAddressString(value: unknown): value is Address {
-  return typeof value === "string" && /^0x[a-fA-F0-9]{40}$/.test(value);
-}
-
-function isHexString(value: unknown): value is Hex {
-  return typeof value === "string" && /^0x[a-fA-F0-9]+$/.test(value);
+export function withFeeRouterSigner<T>(
+  options: FeeRouterRouteOptions,
+  task: (signer: FeeRouterSigner) => Promise<T>,
+): Promise<T> {
+  return withFeeRouterSignerOperation(
+    () => createFeeRouterSigner(options),
+    task,
+  );
 }
 
 function normalizeFeeRouterTenantId(value: unknown): string {
   return typeof value === "string" && value.trim()
     ? value.trim().slice(0, 120)
     : DEFAULT_FEE_ROUTER_TENANT_ID;
-}
-
-function parseFeeRouterSplitRegistry(value: unknown): FeeRouterSplitRegistry {
-  if (!value || typeof value !== "object") return { splits: [] };
-  const splits = (value as Record<string, unknown>).splits;
-  if (!Array.isArray(splits)) return { splits: [] };
-  return {
-    splits: splits.flatMap((split) => {
-      if (!split || typeof split !== "object") return [];
-      const record = split as Record<string, unknown>;
-      if (
-        isAddressString(record.wallet) &&
-        typeof record.splitId === "string" &&
-        Array.isArray(record.recipients) &&
-        record.recipients.every(isAddressString) &&
-        Array.isArray(record.bps) &&
-        record.bps.every((bps) => typeof bps === "number") &&
-        isHexString(record.createSplitTx) &&
-        typeof record.createdAt === "string"
-      ) {
-        return [
-          {
-            tenantId: normalizeFeeRouterTenantId(record.tenantId),
-            wallet: record.wallet,
-            splitId: record.splitId,
-            recipients: record.recipients,
-            bps: record.bps,
-            createSplitTx: record.createSplitTx,
-            createdAt: record.createdAt,
-          },
-        ];
-      }
-      return [];
-    }),
-  };
-}
-
-export async function readFeeRouterSplitRegistry(
-  filePath: string = SPLIT_REGISTRY_PATH,
-): Promise<FeeRouterSplitRegistry> {
-  try {
-    const parsed = JSON.parse(await readFile(filePath, "utf8")) as unknown;
-    return parseFeeRouterSplitRegistry(parsed);
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") return { splits: [] };
-    throw error;
-  }
-}
-
-export async function writeFeeRouterSplitRegistry(
-  registry: FeeRouterSplitRegistry,
-  filePath: string = SPLIT_REGISTRY_PATH,
-): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
-  await writeFile(tmpPath, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
-  await rename(tmpPath, filePath);
-}
-
-function withSplitRegistryLock<T>(write: () => Promise<T>): Promise<T> {
-  const run = splitRegistryLock.then(write, write);
-  splitRegistryLock = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
 }
 
 function sameAddressList(
@@ -474,7 +384,7 @@ function sameBpsList(a: readonly number[], b: readonly number[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-async function verifyCreatorSplit(
+async function verifyStoredCreatorSplit(
   record: FeeRouterSplitRecord,
   recipients: Address[],
   bps: number[],
@@ -522,76 +432,37 @@ function createdSplitFromReceipt(
   return created.splitId;
 }
 
-async function ensureCreatorSplit(
-  tenantId: string,
-  wallet: Address,
+async function createCreatorSplit(
   recipients: Address[],
   bps: number[],
   publicClient: PublicClient,
   walletClient: FeeRouterWalletClient,
   account: { address: Address },
-  registryPath: string = SPLIT_REGISTRY_PATH,
-): Promise<FeeRouterSplitRecord> {
-  assertValidFeeRouterSplit(recipients, bps);
-  return withSplitRegistryLock(async () => {
-    const registry = await readFeeRouterSplitRegistry(registryPath);
-    const existing = registry.splits.find(
-      (split) =>
-        split.tenantId === tenantId &&
-        split.wallet.toLowerCase() === wallet.toLowerCase() &&
-        sameAddressList(split.recipients, recipients) &&
-        sameBpsList(split.bps, bps),
-    );
-    if (existing) {
-      await verifyCreatorSplit(existing, recipients, bps, publicClient);
-      return existing;
-    }
-
-    const { request } = await publicClient.simulateContract({
-      address: FEE_ROUTER_ADDRESS,
-      abi: feeRouterV1Abi,
-      functionName: "createSplit",
-      args: [recipients, bps],
-      account: account.address,
-      chain: arcChain,
-    });
-    const createSplitTx = await withReservedNonce(
-      publicClient,
-      account,
-      (nonce) =>
-        walletClient.writeContract({
-          ...request,
-          account,
-          nonce,
-        }),
-    );
-    const receipt = await waitForSuccessfulTransaction(
-      publicClient,
-      createSplitTx,
-      "FeeRouter createSplit transaction",
-    );
-    const splitId = createdSplitFromReceipt(
-      receipt,
-      account.address,
-      recipients,
-      bps,
-    );
-
-    const record: FeeRouterSplitRecord = {
-      tenantId,
-      wallet,
-      splitId: splitId.toString(),
-      recipients,
-      bps,
-      createSplitTx,
-      createdAt: new Date().toISOString(),
-    };
-    await writeFeeRouterSplitRegistry(
-      { splits: [...registry.splits, record] },
-      registryPath,
-    );
-    return record;
+): Promise<{ splitId: bigint; txHash: Hex }> {
+  const { request } = await publicClient.simulateContract({
+    address: FEE_ROUTER_ADDRESS,
+    abi: feeRouterV1Abi,
+    functionName: "createSplit",
+    args: [recipients, bps],
+    account: account.address,
+    chain: arcChain,
   });
+  const txHash = await withReservedNonce(publicClient, account, (nonce) =>
+    walletClient.writeContract({
+      ...request,
+      account,
+      nonce,
+    }),
+  );
+  const receipt = await waitForSuccessfulTransaction(
+    publicClient,
+    txHash,
+    "FeeRouter createSplit transaction",
+  );
+  return {
+    splitId: createdSplitFromReceipt(receipt, account.address, recipients, bps),
+    txHash,
+  };
 }
 
 function feeRouterTenantId(options: FeeRouterRouteOptions): string {
@@ -687,15 +558,34 @@ export async function prepareCitationSplit(
   options: FeeRouterRouteOptions = {},
 ): Promise<FeeRouterSplitRecord> {
   const splitInput = splitForCitation(payment.citation);
+  const store = options.splitRegistryPath
+    ? createFileSplitRegistryStore(options.splitRegistryPath, {
+        legacyTenantId: DEFAULT_FEE_ROUTER_TENANT_ID,
+      })
+    : feeRouterSplitRegistryStore;
   return ensureCreatorSplit(
+    store,
     feeRouterTenantId(options),
     splitInput.wallet,
     splitInput.recipients,
     splitInput.bps,
-    publicClient,
-    walletClient,
-    account,
-    options.splitRegistryPath,
+    undefined,
+    undefined,
+    () =>
+      createCreatorSplit(
+        splitInput.recipients,
+        splitInput.bps,
+        publicClient,
+        walletClient,
+        account,
+      ),
+    (record) =>
+      verifyStoredCreatorSplit(
+        record,
+        splitInput.recipients,
+        splitInput.bps,
+        publicClient,
+      ),
   );
 }
 
@@ -714,107 +604,112 @@ export async function routeCitationPayments(
   }
 
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
-  const { account, walletClient } = createFeeRouterSigner(options);
-  const totalAtomicUsdc = payments.reduce(
-    (sum, payment) => sum + BigInt(payment.amountAtomicUsdc),
-    0n,
-  );
-  const [balance, allowance] = await Promise.all([
-    publicClient.readContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "balanceOf",
-      args: [account.address],
-    }),
-    publicClient.readContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "allowance",
-      args: [account.address, FEE_ROUTER_ADDRESS],
-    }),
-  ]);
-
-  if (balance < totalAtomicUsdc) {
-    throw new Error("FeeRouter payer has insufficient USDC asset balance.");
-  }
-
-  if (allowance < totalAtomicUsdc) {
-    const approveTx = await withReservedNonce(publicClient, account, (nonce) =>
-      walletClient.writeContract({
+  return withFeeRouterSigner(options, async ({ account, walletClient }) => {
+    const totalAtomicUsdc = payments.reduce(
+      (sum, payment) => sum + BigInt(payment.amountAtomicUsdc),
+      0n,
+    );
+    const allowanceTarget = feeRouterAllowanceTarget(totalAtomicUsdc);
+    const [balance, allowance] = await Promise.all([
+      publicClient.readContract({
         address: ARC_USDC,
         abi: usdcRouterAbi,
-        functionName: "approve",
-        args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
-        account,
-        chain: arcChain,
-        nonce,
+        functionName: "balanceOf",
+        args: [account.address],
       }),
-    );
-    await waitForSuccessfulTransaction(
-      publicClient,
-      approveTx,
-      "FeeRouter approval transaction",
-    );
-  }
+      publicClient.readContract({
+        address: ARC_USDC,
+        abi: usdcRouterAbi,
+        functionName: "allowance",
+        args: [account.address, FEE_ROUTER_ADDRESS],
+      }),
+    ]);
 
-  // Payouts run together rather than one round-trip after another;
-  // withReservedNonce serialises nonce allocation and caps how many submissions
-  // are in flight, and ensureCreatorSplit holds its own lock, so the only thing
-  // the sequential loop was still buying was latency. allSettled rather than
-  // Promise.all: a rejection must not return while sibling payouts are still
-  // unconfirmed, or a creator is paid on-chain with nothing recording it.
-  const settlements = await Promise.allSettled(
-    payments.map(async (payment) => {
-      const split = await prepareCitationSplit(
-        payment,
+    if (balance < totalAtomicUsdc) {
+      throw new Error("FeeRouter payer has insufficient USDC asset balance.");
+    }
+
+    if (allowance !== allowanceTarget) {
+      const approveTx = await withReservedNonce(
         publicClient,
-        walletClient,
         account,
-        options,
-      );
-
-      const payTx = await withReservedNonce(publicClient, account, (nonce) =>
-        walletClient.writeContract({
-          address: FEE_ROUTER_ADDRESS,
-          abi: feeRouterV1Abi,
-          functionName: "pay",
-          args: [BigInt(split.splitId), BigInt(payment.amountAtomicUsdc)],
-          account,
-          chain: arcChain,
-          nonce,
-        }),
+        (nonce) =>
+          walletClient.writeContract({
+            address: ARC_USDC,
+            abi: usdcRouterAbi,
+            functionName: "approve",
+            args: [FEE_ROUTER_ADDRESS, allowanceTarget],
+            account,
+            chain: arcChain,
+            nonce,
+          }),
       );
       await waitForSuccessfulTransaction(
         publicClient,
-        payTx,
-        "FeeRouter pay transaction",
+        approveTx,
+        "FeeRouter approval transaction",
       );
+    }
 
-      return { payment, split, payTx };
-    }),
-  );
+    // Payouts run together rather than one round-trip after another;
+    // withReservedNonce serialises nonce allocation and caps how many submissions
+    // are in flight, and the split store claims each identity, so the only thing
+    // the sequential loop was still buying was latency. allSettled rather than
+    // Promise.all: a rejection must not return while sibling payouts are still
+    // unconfirmed, or a creator is paid on-chain with nothing recording it.
+    const settlements = await Promise.allSettled(
+      payments.map(async (payment) => {
+        const split = await prepareCitationSplit(
+          payment,
+          publicClient,
+          walletClient,
+          account,
+          options,
+        );
 
-  const failed = settlements.find(
-    (settlement): settlement is PromiseRejectedResult =>
-      settlement.status === "rejected",
-  );
-  if (failed) throw failed.reason;
+        const payTx = await withReservedNonce(publicClient, account, (nonce) =>
+          walletClient.writeContract({
+            address: FEE_ROUTER_ADDRESS,
+            abi: feeRouterV1Abi,
+            functionName: "pay",
+            args: [BigInt(split.splitId), BigInt(payment.amountAtomicUsdc)],
+            account,
+            chain: arcChain,
+            nonce,
+          }),
+        );
+        await waitForSuccessfulTransaction(
+          publicClient,
+          payTx,
+          "FeeRouter pay transaction",
+        );
 
-  for (const settlement of settlements) {
-    if (settlement.status !== "fulfilled") continue;
-    const { payment, split, payTx } = settlement.value;
-    evidenceBySourceId[payment.sourceId] = {
-      settlementMode: "forum-routed",
-      payer: account.address,
-      transaction: payTx,
-      paymentResource: `forum-fee-router:${FEE_ROUTER_ADDRESS}`,
-      feeRouterSplitId: split.splitId,
-      feeRouterCreateSplitTx: split.createSplitTx,
-      feeRouterPayTx: payTx,
-    };
-  }
+        return { payment, split, payTx };
+      }),
+    );
 
-  return evidenceBySourceId;
+    const failed = settlements.find(
+      (settlement): settlement is PromiseRejectedResult =>
+        settlement.status === "rejected",
+    );
+    if (failed) throw failed.reason;
+
+    for (const settlement of settlements) {
+      if (settlement.status !== "fulfilled") continue;
+      const { payment, split, payTx } = settlement.value;
+      evidenceBySourceId[payment.sourceId] = {
+        settlementMode: "forum-routed",
+        payer: account.address,
+        transaction: payTx,
+        paymentResource: `forum-fee-router:${FEE_ROUTER_ADDRESS}`,
+        feeRouterSplitId: split.splitId,
+        feeRouterCreateSplitTx: split.createSplitTx,
+        feeRouterPayTx: payTx,
+      };
+    }
+
+    return evidenceBySourceId;
+  });
 }
 
 export async function routeEscrowReleasePayment(
@@ -833,35 +728,87 @@ export async function routeEscrowReleasePayment(
   }
 
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
-  const { account, walletClient } = createFeeRouterSigner(options);
-  const tenantId = feeRouterTenantId(options);
-  const amount = BigInt(amountAtomicUsdc);
-  const [balance, allowance] = await Promise.all([
-    publicClient.readContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "balanceOf",
-      args: [account.address],
-    }),
-    publicClient.readContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "allowance",
-      args: [account.address, FEE_ROUTER_ADDRESS],
-    }),
-  ]);
-
-  if (balance < amount) {
-    throw new Error("FeeRouter payer has insufficient USDC asset balance.");
-  }
-
-  if (allowance < amount) {
-    const approveTx = await withReservedNonce(publicClient, account, (nonce) =>
-      walletClient.writeContract({
+  return withFeeRouterSigner(options, async ({ account, walletClient }) => {
+    const tenantId = feeRouterTenantId(options);
+    const amount = BigInt(amountAtomicUsdc);
+    const allowanceTarget = feeRouterAllowanceTarget(amount);
+    const [balance, allowance] = await Promise.all([
+      publicClient.readContract({
         address: ARC_USDC,
         abi: usdcRouterAbi,
-        functionName: "approve",
-        args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
+        functionName: "balanceOf",
+        args: [account.address],
+      }),
+      publicClient.readContract({
+        address: ARC_USDC,
+        abi: usdcRouterAbi,
+        functionName: "allowance",
+        args: [account.address, FEE_ROUTER_ADDRESS],
+      }),
+    ]);
+
+    if (balance < amount) {
+      throw new Error("FeeRouter payer has insufficient USDC asset balance.");
+    }
+
+    if (allowance !== allowanceTarget) {
+      const approveTx = await withReservedNonce(
+        publicClient,
+        account,
+        (nonce) =>
+          walletClient.writeContract({
+            address: ARC_USDC,
+            abi: usdcRouterAbi,
+            functionName: "approve",
+            args: [FEE_ROUTER_ADDRESS, allowanceTarget],
+            account,
+            chain: arcChain,
+            nonce,
+          }),
+      );
+      await waitForSuccessfulTransaction(
+        publicClient,
+        approveTx,
+        "FeeRouter escrow approval transaction",
+      );
+    }
+
+    const recipients = source.contributors?.map(
+      (contributor) => contributor.wallet,
+    ) ?? [source.wallet];
+    const bps = source.contributors?.map(
+      (contributor) => contributor.shareBps,
+    ) ?? [10_000];
+    const store = options.splitRegistryPath
+      ? createFileSplitRegistryStore(options.splitRegistryPath, {
+          legacyTenantId: DEFAULT_FEE_ROUTER_TENANT_ID,
+        })
+      : feeRouterSplitRegistryStore;
+    const split = await ensureCreatorSplit(
+      store,
+      tenantId,
+      source.wallet,
+      recipients,
+      bps,
+      undefined,
+      undefined,
+      () =>
+        createCreatorSplit(
+          recipients,
+          bps,
+          publicClient,
+          walletClient,
+          account,
+        ),
+      (record) =>
+        verifyStoredCreatorSplit(record, recipients, bps, publicClient),
+    );
+    const payTx = await withReservedNonce(publicClient, account, (nonce) =>
+      walletClient.writeContract({
+        address: FEE_ROUTER_ADDRESS,
+        abi: feeRouterV1Abi,
+        functionName: "pay",
+        args: [BigInt(split.splitId), amount],
         account,
         chain: arcChain,
         nonce,
@@ -869,55 +816,22 @@ export async function routeEscrowReleasePayment(
     );
     await waitForSuccessfulTransaction(
       publicClient,
-      approveTx,
-      "FeeRouter escrow approval transaction",
+      payTx,
+      "FeeRouter escrow pay transaction",
     );
-  }
 
-  const recipients = source.contributors?.map(
-    (contributor) => contributor.wallet,
-  ) ?? [source.wallet];
-  const bps = source.contributors?.map(
-    (contributor) => contributor.shareBps,
-  ) ?? [10_000];
-  const split = await ensureCreatorSplit(
-    tenantId,
-    source.wallet,
-    recipients,
-    bps,
-    publicClient,
-    walletClient,
-    account,
-    options.splitRegistryPath,
-  );
-  const payTx = await withReservedNonce(publicClient, account, (nonce) =>
-    walletClient.writeContract({
-      address: FEE_ROUTER_ADDRESS,
-      abi: feeRouterV1Abi,
-      functionName: "pay",
-      args: [BigInt(split.splitId), amount],
-      account,
-      chain: arcChain,
-      nonce,
-    }),
-  );
-  await waitForSuccessfulTransaction(
-    publicClient,
-    payTx,
-    "FeeRouter escrow pay transaction",
-  );
-
-  return {
-    settlementMode: "forum-routed",
-    payer: account.address,
-    transaction: payTx,
-    paymentResource: `forum-fee-router:${FEE_ROUTER_ADDRESS}`,
-    feeRouterSplitId: split.splitId,
-    feeRouterCreateSplitTx: split.createSplitTx,
-    feeRouterPayTx: payTx,
-    payoutPolicy: "escrow-release",
-    releasedReceiptHashes,
-  };
+    return {
+      settlementMode: "forum-routed",
+      payer: account.address,
+      transaction: payTx,
+      paymentResource: `forum-fee-router:${FEE_ROUTER_ADDRESS}`,
+      feeRouterSplitId: split.splitId,
+      feeRouterCreateSplitTx: split.createSplitTx,
+      feeRouterPayTx: payTx,
+      payoutPolicy: "escrow-release",
+      releasedReceiptHashes,
+    };
+  });
 }
 
 // Returns a reader's on-chain payment when a paid query is unanswerable (no
@@ -934,30 +848,31 @@ export async function refundReaderPayment(
   if (!feeRouterSettlementEnabled(options)) return null;
   if (!Number.isInteger(amountAtomicUsdc) || amountAtomicUsdc <= 0) return null;
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
-  const { account, walletClient } = createFeeRouterSigner(options);
-  const amount = BigInt(amountAtomicUsdc);
-  const balance = (await publicClient.readContract({
-    address: ARC_USDC,
-    abi: usdcRouterAbi,
-    functionName: "balanceOf",
-    args: [account.address],
-  })) as bigint;
-  if (balance < amount) return null;
-  const refundTx = await withReservedNonce(publicClient, account, (nonce) =>
-    walletClient.writeContract({
+  return withFeeRouterSigner(options, async ({ account, walletClient }) => {
+    const amount = BigInt(amountAtomicUsdc);
+    const balance = (await publicClient.readContract({
       address: ARC_USDC,
       abi: usdcRouterAbi,
-      functionName: "transfer",
-      args: [recipient, amount],
-      account,
-      chain: arcChain,
-      nonce,
-    }),
-  );
-  await waitForSuccessfulTransaction(
-    publicClient,
-    refundTx,
-    "FeeRouter refund transaction",
-  );
-  return refundTx;
+      functionName: "balanceOf",
+      args: [account.address],
+    })) as bigint;
+    if (balance < amount) return null;
+    const refundTx = await withReservedNonce(publicClient, account, (nonce) =>
+      walletClient.writeContract({
+        address: ARC_USDC,
+        abi: usdcRouterAbi,
+        functionName: "transfer",
+        args: [recipient, amount],
+        account,
+        chain: arcChain,
+        nonce,
+      }),
+    );
+    await waitForSuccessfulTransaction(
+      publicClient,
+      refundTx,
+      "FeeRouter refund transaction",
+    );
+    return refundTx;
+  });
 }

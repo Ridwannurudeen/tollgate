@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BaseError, NonceTooLowError } from "viem";
 import type { Address, PublicClient } from "viem";
 import {
+  retireFeeRouterNonceState,
   resetFeeRouterNonceStateForTests,
   withReservedNonce,
 } from "./fee-router-nonce";
@@ -127,5 +128,29 @@ describe("withReservedNonce", () => {
     );
 
     expect(maxActive).toBe(2);
+  });
+
+  it("keeps nonce caches separate across signer rotation", async () => {
+    const nextAccount = {
+      address: "0x8888888888888888888888888888888888888888" as Address,
+    };
+    const client = publicClient(10, 40);
+
+    await expect(
+      withReservedNonce(client, ACCOUNT, async (nonce) => nonce),
+    ).resolves.toBe(10);
+    await expect(
+      withReservedNonce(client, nextAccount, async (nonce) => nonce),
+    ).resolves.toBe(40);
+  });
+
+  it("retires one signer cache and reloads its pending nonce", async () => {
+    const client = publicClient(10, 25);
+
+    await withReservedNonce(client, ACCOUNT, async (nonce) => nonce);
+    await retireFeeRouterNonceState(ACCOUNT);
+    await expect(
+      withReservedNonce(client, ACCOUNT, async (nonce) => nonce),
+    ).resolves.toBe(25);
   });
 });

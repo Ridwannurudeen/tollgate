@@ -8,15 +8,15 @@ import {
 import { ARC_USDC, arcChain } from "./chain";
 import {
   createFeeRouterPublicClient,
-  createFeeRouterSigner,
   feeRouterSettlementEnabled,
   planCitationPayments,
   prepareCitationSplit,
-  STANDING_FEE_ROUTER_ALLOWANCE,
   usdcRouterAbi,
   waitForSuccessfulTransaction,
+  withFeeRouterSigner,
   type FeeRouterRouteOptions,
 } from "./fee-router";
+import { feeRouterAllowanceTarget } from "./fee-router-allowance";
 import { FEE_ROUTER_ADDRESS } from "./fee-router-contract";
 import { withReservedNonce } from "./fee-router-nonce";
 import type { QueryRecord, ReceiptEvidence } from "./types";
@@ -210,120 +210,131 @@ export async function payCitationsWithIntent(
     plannedPayments,
     built.intent,
   );
+  const allowanceTarget = feeRouterAllowanceTarget(total);
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
-  const { account, walletClient } = createFeeRouterSigner(options);
-  await assertPayGateConfiguration(
-    publicClient,
-    address,
-    built,
-    account.address,
-  );
-  const [balance, allowance] = await Promise.all([
-    publicClient.readContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "balanceOf",
-      args: [account.address],
-    }),
-    publicClient.readContract({
-      address: ARC_USDC,
-      abi: usdcRouterAbi,
-      functionName: "allowance",
-      args: [account.address, address],
-    }),
-  ]);
-  if (balance < total) {
-    throw new Error("PayGate payer has insufficient USDC asset balance.");
-  }
-  if (allowance < total) {
-    const approval = await withReservedNonce(publicClient, account, (nonce) =>
-      walletClient.writeContract({
+  return withFeeRouterSigner(options, async ({ account, walletClient }) => {
+    await assertPayGateConfiguration(
+      publicClient,
+      address,
+      built,
+      account.address,
+    );
+    const [balance, allowance] = await Promise.all([
+      publicClient.readContract({
         address: ARC_USDC,
         abi: usdcRouterAbi,
-        functionName: "approve",
-        args: [address, STANDING_FEE_ROUTER_ALLOWANCE],
-        account,
-        chain: arcChain,
-        nonce,
+        functionName: "balanceOf",
+        args: [account.address],
+      }),
+      publicClient.readContract({
+        address: ARC_USDC,
+        abi: usdcRouterAbi,
+        functionName: "allowance",
+        args: [account.address, address],
+      }),
+    ]);
+    if (balance < total) {
+      throw new Error("PayGate payer has insufficient USDC asset balance.");
+    }
+    if (allowance !== allowanceTarget) {
+      const approval = await withReservedNonce(publicClient, account, (nonce) =>
+        walletClient.writeContract({
+          address: ARC_USDC,
+          abi: usdcRouterAbi,
+          functionName: "approve",
+          args: [address, allowanceTarget],
+          account,
+          chain: arcChain,
+          nonce,
+        }),
+      );
+      await waitForSuccessfulTransaction(
+        publicClient,
+        approval,
+        "PayGate approval transaction",
+      );
+    }
+
+    const preparedPayments = await Promise.all(
+      plan.payments.map(async (payment) => ({
+        payment,
+        split: await prepareCitationSplit(
+          payment,
+          publicClient,
+          walletClient,
+          account,
+          options,
+        ),
+      })),
+    );
+    const contractPayments: PayGatePayment[] = preparedPayments.map(
+      ({ payment, split }) => ({
+        splitId: BigInt(split.splitId),
+        amount: BigInt(payment.amountAtomicUsdc),
       }),
     );
-    await waitForSuccessfulTransaction(
+    const transaction = await withReservedNonce(
       publicClient,
-      approval,
-      "PayGate approval transaction",
-    );
-  }
-
-  const preparedPayments = await Promise.all(
-    plan.payments.map(async (payment) => ({
-      payment,
-      split: await prepareCitationSplit(
-        payment,
-        publicClient,
-        walletClient,
-        account,
-        options,
-      ),
-    })),
-  );
-  const contractPayments: PayGatePayment[] = preparedPayments.map(
-    ({ payment, split }) => ({
-      splitId: BigInt(split.splitId),
-      amount: BigInt(payment.amountAtomicUsdc),
-    }),
-  );
-  const transaction = await withReservedNonce(publicClient, account, (nonce) =>
-    walletClient.writeContract({
-      address,
-      abi: payGateAbi,
-      functionName: "payWithIntent",
-      args: [useIntentContractValue(built.intent), signature, contractPayments],
       account,
-      chain: arcChain,
-      nonce,
-    }),
-  );
-  const receipt = await waitForSuccessfulTransaction(
-    publicClient,
-    transaction,
-    "PayGate settlement transaction",
-  );
-  const paidEvents = parseEventLogs({
-    abi: payGateAbi,
-    eventName: "PaidWithIntent",
-    logs: receipt.logs,
-  }).filter((event) => event.address.toLowerCase() === address.toLowerCase());
-  if (paidEvents.length !== 1) {
-    throw new Error("PayGate settlement receipt has no unique payment event.");
-  }
-  const paid = paidEvents[0].args;
-  if (
-    paid.queryHash.toLowerCase() !== built.intent.queryHash.toLowerCase() ||
-    paid.digest.toLowerCase() !== built.digest.toLowerCase() ||
-    paid.payer.toLowerCase() !== account.address.toLowerCase() ||
-    paid.total !== total
-  ) {
-    throw new Error(
-      "PayGate settlement event does not match the signed payment.",
+      (nonce) =>
+        walletClient.writeContract({
+          address,
+          abi: payGateAbi,
+          functionName: "payWithIntent",
+          args: [
+            useIntentContractValue(built.intent),
+            signature,
+            contractPayments,
+          ],
+          account,
+          chain: arcChain,
+          nonce,
+        }),
     );
-  }
-
-  const evidenceBySourceId = { ...plan.evidenceBySourceId };
-  for (const { payment, split } of preparedPayments) {
-    evidenceBySourceId[payment.sourceId] = {
-      settlementMode: "forum-routed",
-      payer: account.address,
+    const receipt = await waitForSuccessfulTransaction(
+      publicClient,
       transaction,
-      paymentResource: `tollgate-pay-gate:${address}`,
-      feeRouterSplitId: split.splitId,
-      feeRouterCreateSplitTx: split.createSplitTx,
-      feeRouterPayTx: transaction,
+      "PayGate settlement transaction",
+    );
+    const paidEvents = parseEventLogs({
+      abi: payGateAbi,
+      eventName: "PaidWithIntent",
+      logs: receipt.logs,
+    }).filter((event) => event.address.toLowerCase() === address.toLowerCase());
+    if (paidEvents.length !== 1) {
+      throw new Error(
+        "PayGate settlement receipt has no unique payment event.",
+      );
+    }
+    const paid = paidEvents[0].args;
+    if (
+      paid.queryHash.toLowerCase() !== built.intent.queryHash.toLowerCase() ||
+      paid.digest.toLowerCase() !== built.digest.toLowerCase() ||
+      paid.payer.toLowerCase() !== account.address.toLowerCase() ||
+      paid.total !== total
+    ) {
+      throw new Error(
+        "PayGate settlement event does not match the signed payment.",
+      );
+    }
+
+    const evidenceBySourceId = { ...plan.evidenceBySourceId };
+    for (const { payment, split } of preparedPayments) {
+      evidenceBySourceId[payment.sourceId] = {
+        settlementMode: "forum-routed",
+        payer: account.address,
+        transaction,
+        paymentResource: `tollgate-pay-gate:${address}`,
+        feeRouterSplitId: split.splitId,
+        feeRouterCreateSplitTx: split.createSplitTx,
+        feeRouterPayTx: transaction,
+      };
+    }
+    return {
+      evidenceBySourceId,
+      transaction,
+      digest: built.digest,
+      payGateAddress: address,
     };
-  }
-  return {
-    evidenceBySourceId,
-    transaction,
-    digest: built.digest,
-    payGateAddress: address,
-  };
+  });
 }

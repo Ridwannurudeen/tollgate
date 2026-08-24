@@ -104,6 +104,21 @@ export function withReservedNonce<T>(
   return run;
 }
 
+export async function retireFeeRouterNonceState(
+  account: FeeRouterNonceAccount,
+): Promise<void> {
+  const key = account.address.toLowerCase();
+  const state = nonceStates.get(key);
+  if (!state) return;
+  while (true) {
+    const queue = state.queue;
+    await queue;
+    if (state.queue !== queue) continue;
+    if (nonceStates.get(key) === state) nonceStates.delete(key);
+    return;
+  }
+}
+
 export function resetFeeRouterNonceStateForTests(): void {
   nonceStates.clear();
   inFlight = 0;
