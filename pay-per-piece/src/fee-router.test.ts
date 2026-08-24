@@ -374,6 +374,43 @@ describe("ensureCreatorSplit", () => {
     expect(writes.map((write) => write.functionName)).toEqual(["createSplit"]);
   });
 
+  it("uses the store atomic operation when it is available", async () => {
+    let insertCalls = 0;
+    let createCalls = 0;
+    const store: SplitRegistryStore = {
+      read: async () => {
+        throw new Error("atomic store must not fall back to read");
+      },
+      write: async () => {
+        throw new Error("atomic store must not fall back to write");
+      },
+      getOrInsert: async (_key, insert) => {
+        insertCalls += 1;
+        return { record: await insert(), inserted: true };
+      },
+    };
+    const { publicClient, signer, writes } = mockClients();
+
+    const record = await ensureCreatorSplit(
+      store,
+      "toy-paywall",
+      RECIPIENT,
+      [RECIPIENT],
+      [10_000],
+      signer,
+      publicClient,
+      async () => {
+        createCalls += 1;
+        return { splitId: 42n, txHash: CREATE_TX };
+      },
+    );
+
+    expect(record.splitId).toBe("42");
+    expect(insertCalls).toBe(1);
+    expect(createCalls).toBe(1);
+    expect(writes).toEqual([]);
+  });
+
   it("requires an explicit tenant id", async () => {
     const store: SplitRegistryStore = {
       read: async () => ({ splits: [] }),

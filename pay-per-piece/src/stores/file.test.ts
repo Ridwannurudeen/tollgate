@@ -3,12 +3,37 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Address, Hex } from "viem";
-import type { FeeRouterSplitRegistry } from "../split-registry.js";
+import type {
+  FeeRouterSplitKey,
+  FeeRouterSplitRecord,
+  FeeRouterSplitRegistry,
+} from "../split-registry.js";
 import { createFileSplitRegistryStore } from "./file.js";
 
 const directories: string[] = [];
 const WALLET = "0x7777777777777777777777777777777777777777" as Address;
 const TX = `0x${"a".repeat(64)}` as Hex;
+
+function splitKey(tenantId: string, wallet: Address): FeeRouterSplitKey {
+  return {
+    tenantId,
+    wallet,
+    recipients: [wallet],
+    bps: [10_000],
+  };
+}
+
+function splitRecord(
+  key: FeeRouterSplitKey,
+  splitId: string,
+): FeeRouterSplitRecord {
+  return {
+    ...key,
+    splitId,
+    createSplitTx: TX,
+    createdAt: "2026-07-09T00:00:00.000Z",
+  };
+}
 
 async function temporaryRegistry() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "tollgate-sdk-"));
@@ -59,6 +84,87 @@ describe("createFileSplitRegistryStore", () => {
         name.includes(".tmp."),
       ),
     ).toEqual([]);
+  });
+
+  it("claims a split before creation and rejects a concurrent creator", async () => {
+    const { store } = await temporaryRegistry();
+    if (!store.getOrInsert) throw new Error("missing atomic store operation");
+    const key = splitKey("toy-paywall", WALLET);
+    let releaseCreation!: () => void;
+    const creationBlocked = new Promise<void>((resolve) => {
+      releaseCreation = resolve;
+    });
+    let creationStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      creationStarted = resolve;
+    });
+    let secondInsertCalled = false;
+
+    const first = store.getOrInsert(key, async () => {
+      creationStarted();
+      await creationBlocked;
+      return splitRecord(key, "42");
+    });
+    await started;
+
+    await expect(
+      store.getOrInsert(key, async () => {
+        secondInsertCalled = true;
+        return splitRecord(key, "43");
+      }),
+    ).rejects.toThrow("pending reconciliation");
+
+    releaseCreation();
+    await expect(first).resolves.toEqual({
+      record: splitRecord(key, "42"),
+      inserted: true,
+    });
+    expect(secondInsertCalled).toBe(false);
+    await expect(
+      store.getOrInsert(key, async () => splitRecord(key, "43")),
+    ).resolves.toEqual({ record: splitRecord(key, "42"), inserted: false });
+  });
+
+  it("keeps an ambiguous failed creation reserved", async () => {
+    const { store } = await temporaryRegistry();
+    if (!store.getOrInsert) throw new Error("missing atomic store operation");
+    const key = splitKey("toy-paywall", WALLET);
+    let retryCalled = false;
+
+    await expect(
+      store.getOrInsert(key, async () => {
+        throw new Error("receipt timed out");
+      }),
+    ).rejects.toThrow("receipt timed out");
+    await expect(
+      store.getOrInsert(key, async () => {
+        retryCalled = true;
+        return splitRecord(key, "43");
+      }),
+    ).rejects.toThrow("pending reconciliation");
+    expect(retryCalled).toBe(false);
+  });
+
+  it("preserves concurrent inserts for different split identities", async () => {
+    const { store } = await temporaryRegistry();
+    if (!store.getOrInsert) throw new Error("missing atomic store operation");
+    const firstKey = splitKey("tenant-a", WALLET);
+    const secondWallet =
+      "0x8888888888888888888888888888888888888888" as Address;
+    const secondKey = splitKey("tenant-b", secondWallet);
+
+    await Promise.all([
+      store.getOrInsert(firstKey, async () => splitRecord(firstKey, "42")),
+      store.getOrInsert(secondKey, async () => splitRecord(secondKey, "43")),
+    ]);
+
+    const registry = await store.read();
+    registry.splits.sort((left, right) =>
+      left.tenantId.localeCompare(right.tenantId),
+    );
+    expect(registry).toEqual({
+      splits: [splitRecord(firstKey, "42"), splitRecord(secondKey, "43")],
+    });
   });
 
   it("drops records without an explicit tenant", async () => {
