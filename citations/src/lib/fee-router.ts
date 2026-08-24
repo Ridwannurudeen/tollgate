@@ -34,11 +34,13 @@ const SPLIT_REGISTRY_PATH = path.join(
   "data",
   "fee-router-splits.json",
 );
+const DEFAULT_FEE_ROUTER_TENANT_ID = "citations-core";
 export const feeRouterSplitRegistryStore =
-  createFileSplitRegistryStore(SPLIT_REGISTRY_PATH);
+  createFileSplitRegistryStore(SPLIT_REGISTRY_PATH, {
+    legacyTenantId: DEFAULT_FEE_ROUTER_TENANT_ID,
+  });
 const FEE_ROUTER_CLAIMABLE_CACHE_TTL_MS = 60_000;
 const ARC_POLLING_INTERVAL_MS = 250;
-const DEFAULT_FEE_ROUTER_TENANT_ID = "citations-core";
 // Approving the exact payout amount resets the allowance to ~0 after every pay,
 // so concurrent payouts (demand engine + live queries) race a tiny allowance and
 // revert with "transfer amount exceeds allowance". Instead top up to a large
@@ -556,7 +558,9 @@ export async function prepareCitationSplit(
 ): Promise<FeeRouterSplitRecord> {
   const splitInput = splitForCitation(payment.citation);
   const store = options.splitRegistryPath
-    ? createFileSplitRegistryStore(options.splitRegistryPath)
+    ? createFileSplitRegistryStore(options.splitRegistryPath, {
+        legacyTenantId: DEFAULT_FEE_ROUTER_TENANT_ID,
+      })
     : feeRouterSplitRegistryStore;
   return ensureCreatorSplit(
     store,
@@ -766,7 +770,9 @@ export async function routeEscrowReleasePayment(
     (contributor) => contributor.shareBps,
   ) ?? [10_000];
   const store = options.splitRegistryPath
-    ? createFileSplitRegistryStore(options.splitRegistryPath)
+    ? createFileSplitRegistryStore(options.splitRegistryPath, {
+        legacyTenantId: DEFAULT_FEE_ROUTER_TENANT_ID,
+      })
     : feeRouterSplitRegistryStore;
   const split = await ensureCreatorSplit(
     store,

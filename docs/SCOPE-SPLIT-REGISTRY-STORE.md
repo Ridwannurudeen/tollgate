@@ -43,10 +43,19 @@ The Node file store implements the new operation with sibling metadata:
   the completed record is appended;
 - the existing temporary-file-and-rename write for the registry itself.
 
-`fee-router-splits.json` does not change. Existing files load without migration,
-and new writes remain the same `{ "splits": [...] }` JSON accepted by
-`parseFeeRouterSplitRegistry`. Pending claims and the write lock are separate
-sibling paths.
+The `fee-router-splits.json` schema does not change. Existing tenant-bearing
+files load as before, and new writes remain the same `{ "splits": [...] }` JSON
+accepted by `parseFeeRouterSplitRegistry`. Pending claims and the write lock are
+separate sibling paths.
+
+Legacy records may omit `tenantId` or contain an empty value. The parser and
+file store accept an explicit `legacyTenantId` option that assigns those records
+to the caller's chosen tenant while preserving every other validation rule.
+The option is deliberately caller-owned: the published SDK cannot infer an
+external integrator's tenant or hardcode Tollgate's `citations-core` identity.
+Citations supplies `citations-core` at each store construction site. Once a
+legacy registry is read and written, the normalized records persist that tenant
+in the unchanged JSON shape.
 
 On a local filesystem this prevents two cooperating processes on one host from
 creating the same tuple and prevents concurrent inserts for different tuples

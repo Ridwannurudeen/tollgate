@@ -13,6 +13,17 @@ import { createFileSplitRegistryStore } from "./file.js";
 const directories: string[] = [];
 const WALLET = "0x7777777777777777777777777777777777777777" as Address;
 const TX = `0x${"a".repeat(64)}` as Hex;
+const LEGACY_SPLITS = Array.from({ length: 12 }, (_, index) => {
+  const wallet = `0x${(index + 1).toString(16).padStart(40, "0")}` as Address;
+  return {
+    wallet,
+    splitId: String(135 + index),
+    recipients: [wallet],
+    bps: [10_000],
+    createSplitTx: TX,
+    createdAt: "2026-07-09T00:00:00.000Z",
+  };
+});
 
 function splitKey(tenantId: string, wallet: Address): FeeRouterSplitKey {
   return {
@@ -169,14 +180,18 @@ describe("createFileSplitRegistryStore", () => {
     });
   });
 
-  it("drops records without an explicit tenant", async () => {
-    const { filePath, store } = await temporaryRegistry();
+  it("uses the explicit legacy tenant for an empty stored tenant", async () => {
+    const { filePath } = await temporaryRegistry();
+    const store = createFileSplitRegistryStore(filePath, {
+      legacyTenantId: "citations-core",
+    });
     await store.write({ splits: [] });
     await writeFile(
       filePath,
       JSON.stringify({
         splits: [
           {
+            tenantId: "",
             wallet: WALLET,
             splitId: "42",
             recipients: [WALLET],
@@ -191,7 +206,61 @@ describe("createFileSplitRegistryStore", () => {
 
     const registry = await store.read();
 
-    expect(registry.splits).toEqual([]);
+    expect(registry.splits[0]?.tenantId).toBe("citations-core");
+  });
+
+  it("round trips 12 legacy records without loss or duplicate creation", async () => {
+    const { filePath } = await temporaryRegistry();
+    const store = createFileSplitRegistryStore(filePath, {
+      legacyTenantId: "citations-core",
+    });
+    await store.write({ splits: [] });
+    await writeFile(
+      filePath,
+      `${JSON.stringify({ splits: LEGACY_SPLITS }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const registry = await store.read();
+    expect(registry.splits).toHaveLength(12);
+    expect(
+      registry.splits.every(
+        ({ tenantId }) => tenantId === "citations-core",
+      ),
+    ).toBe(true);
+    if (!store.getOrInsert) throw new Error("missing atomic store operation");
+    const existing = registry.splits[0];
+    if (!existing) throw new Error("missing legacy split fixture");
+    let createCalls = 0;
+
+    await expect(
+      store.getOrInsert(
+        {
+          tenantId: existing.tenantId,
+          wallet: existing.wallet,
+          recipients: existing.recipients,
+          bps: existing.bps,
+        },
+        async () => {
+          createCalls += 1;
+          return splitRecord(splitKey("citations-core", WALLET), "999");
+        },
+      ),
+    ).resolves.toEqual({ record: existing, inserted: false });
+    expect(createCalls).toBe(0);
+
+    await store.write(registry);
+
+    const written = JSON.parse(await readFile(filePath, "utf8")) as {
+      splits: Array<{ tenantId?: string }>;
+    };
+    expect(written.splits).toHaveLength(12);
+    expect(
+      written.splits.every(
+        ({ tenantId }) => tenantId === "citations-core",
+      ),
+    ).toBe(true);
+    await expect(store.read()).resolves.toEqual(registry);
   });
 
   it("drops records with invalid on-chain identifiers", async () => {
