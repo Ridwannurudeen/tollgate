@@ -388,6 +388,32 @@ describe("assertValidFeeRouterSplit", () => {
     }
   });
 
+  it("reduces a legacy oversized allowance to the policy ceiling", async () => {
+    const query = oneCitationQuery();
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const writes: string[] = [];
+    const { publicClient, walletClient, contractWrites } = mockClients(
+      query.citations[0].wallet,
+      10_000_000_000n,
+      123n,
+      writes,
+    );
+
+    try {
+      await routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+        splitRegistryPath: path.join(dir, "fee-router-splits.json"),
+      });
+
+      expect(contractWrites[0]?.args).toEqual([FEE_ROUTER, 1_000_000n]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a citation batch above the allowance ceiling before writing", async () => {
     const query = oneCitationQuery();
     query.citations = query.citations.map((citation) => ({

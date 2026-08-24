@@ -236,7 +236,7 @@ export async function payCitationsWithIntent(
     if (balance < total) {
       throw new Error("PayGate payer has insufficient USDC asset balance.");
     }
-    if (allowance < total) {
+    if (allowance !== allowanceTarget) {
       const approval = await withReservedNonce(publicClient, account, (nonce) =>
         walletClient.writeContract({
           address: ARC_USDC,

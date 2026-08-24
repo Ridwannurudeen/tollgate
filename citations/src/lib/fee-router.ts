@@ -625,7 +625,7 @@ export async function routeCitationPayments(
       throw new Error("FeeRouter payer has insufficient USDC asset balance.");
     }
 
-    if (allowance < totalAtomicUsdc) {
+    if (allowance !== allowanceTarget) {
       const approveTx = await withReservedNonce(
         publicClient,
         account,
@@ -747,7 +747,7 @@ export async function routeEscrowReleasePayment(
       throw new Error("FeeRouter payer has insufficient USDC asset balance.");
     }
 
-    if (allowance < amount) {
+    if (allowance !== allowanceTarget) {
       const approveTx = await withReservedNonce(
         publicClient,
         account,
