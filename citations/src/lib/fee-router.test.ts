@@ -1,6 +1,7 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createFileSplitRegistryStore } from "tollgate-pay-per-piece/stores/file";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   encodeAbiParameters,
@@ -15,7 +16,6 @@ import { createQueryRecord } from "./engine";
 import {
   assertValidFeeRouterSplit,
   createFeeRouterPublicClient,
-  readFeeRouterSplitRegistry,
   refundReaderPayment,
   routeCitationPayments,
   routeEscrowReleasePayment,
@@ -671,36 +671,6 @@ describe("assertValidFeeRouterSplit", () => {
     }
   });
 
-  it("normalizes legacy split records to the core tenant", async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
-    const registryPath = path.join(dir, "fee-router-splits.json");
-
-    try {
-      await writeFile(
-        registryPath,
-        `${JSON.stringify({
-          splits: [
-            {
-              wallet: "0x7777777777777777777777777777777777777777",
-              splitId: "42",
-              recipients: ["0x7777777777777777777777777777777777777777"],
-              bps: [10_000],
-              createSplitTx: `0x${"a".repeat(64)}`,
-              createdAt: "2026-07-07T00:00:00.000Z",
-            },
-          ],
-        })}\n`,
-        "utf8",
-      );
-
-      const registry = await readFeeRouterSplitRegistry(registryPath);
-
-      expect(registry.splits[0]?.tenantId).toBe("citations-core");
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
   it("keeps split registry entries isolated by tenant", async () => {
     const query = oneCitationQuery();
     const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
@@ -746,7 +716,7 @@ describe("assertValidFeeRouterSplit", () => {
         tenantId: "wp_site_a",
       });
 
-      const registry = await readFeeRouterSplitRegistry(registryPath);
+      const registry = await createFileSplitRegistryStore(registryPath).read();
 
       expect(registry.splits.map((split) => split.tenantId).sort()).toEqual([
         "wp_site_a",

@@ -8,10 +8,13 @@
   "description": "LeptonWeb is a paid knowledge network for AI agents. The first wedge is Tollgate: an answer engine that pays creators per cited source and writes attribution receipts.",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm --prefix ../pay-per-piece run build",
     "build": "next build",
     "start": "next start",
+    "pretypecheck": "npm --prefix ../pay-per-piece run build",
     "typecheck": "tsc --noEmit",
     "sync:wordpress-zip": "node scripts/sync-wordpress-zip.mjs",
+    "pretest": "npm --prefix ../pay-per-piece run build",
     "test": "vitest run",
     "bench": "vite-node bench/run.ts",
     "refetch:content": "node scripts/refetch-source-content.mjs",
@@ -62,6 +65,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "solc": "^0.8.35",
+    "tollgate-pay-per-piece": "file:../pay-per-piece",
     "undici": "6.27.0",
     "viem": "^2.52.0"
   },

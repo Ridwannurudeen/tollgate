@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { publicSource, readSources } from "./catalog";
 import { actorClassCounts, summarizeActorPayments } from "./actor-class";
-import { readFeeRouterSplitRegistry } from "./fee-router";
+import { feeRouterSplitRegistryStore } from "./fee-router";
 import { readLedger, summarizeCreators, verifyLedgerIntegrity } from "./ledger";
 import { tollgateAgentWallet } from "./payments";
 import { payGateAddress } from "./pay-gate";
@@ -33,7 +33,7 @@ export async function buildProofPack() {
   const [ledger, sources, splitRegistry, deployedCommit] = await Promise.all([
     readLedger(),
     readSources(),
-    readFeeRouterSplitRegistry(),
+    feeRouterSplitRegistryStore.read(),
     readDeployedCommit(),
   ]);
   const creators = summarizeCreators(ledger);
