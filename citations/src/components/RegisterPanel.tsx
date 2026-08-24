@@ -25,6 +25,7 @@ type SourceFormState = {
   handle: string;
   wallet: string;
   url: string;
+  doi: string;
   summary: string;
   tags: string;
   notifyEmail: string;
@@ -54,6 +55,7 @@ const EMPTY_SOURCE_FORM: SourceFormState = {
   handle: "",
   wallet: "",
   url: "",
+  doi: "",
   summary: "",
   tags: "",
   notifyEmail: "",
@@ -88,6 +90,7 @@ export function RegisterPanel() {
       handle: sourceForm.handle,
       wallet: sourceForm.wallet,
       url: sourceForm.url,
+      doi: sourceForm.doi,
       summary: sourceForm.summary,
       tags: sourceForm.tags,
       notifyEmail: sourceForm.notifyEmail,
@@ -426,6 +429,16 @@ export function RegisterPanel() {
             value={sourceForm.url}
             onChange={(event) => updateSourceForm("url", event.target.value)}
           />
+          <label htmlFor="source-doi">DOI (research papers)</label>
+          <input
+            id="source-doi"
+            placeholder="10.5555/example-paper"
+            value={sourceForm.doi}
+            onChange={(event) => updateSourceForm("doi", event.target.value)}
+          />
+          <small className="field-hint">
+            Optional. Add a DOI to verify authorship by signing in with ORCID.
+          </small>
           <label htmlFor="source-wallet">Payout wallet</label>
           <input
             id="source-wallet"
