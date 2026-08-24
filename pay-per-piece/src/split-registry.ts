@@ -24,6 +24,10 @@ export type FeeRouterSplitRegistry = {
   splits: FeeRouterSplitRecord[];
 };
 
+export type ParseFeeRouterSplitRegistryOptions = {
+  legacyTenantId?: string;
+};
+
 export type FeeRouterSplitKey = {
   tenantId: string;
   wallet: Address;
@@ -93,15 +97,25 @@ function isUint256String(value: unknown): value is string {
 
 export function parseFeeRouterSplitRegistry(
   value: unknown,
+  options: ParseFeeRouterSplitRegistryOptions = {},
 ): FeeRouterSplitRegistry {
   if (!value || typeof value !== "object") return { splits: [] };
   const splits = (value as Record<string, unknown>).splits;
   if (!Array.isArray(splits)) return { splits: [] };
+  const legacyTenantId =
+    options.legacyTenantId === undefined
+      ? null
+      : normalizeTenantId(options.legacyTenantId);
   return {
     splits: splits.flatMap((split) => {
       if (!split || typeof split !== "object") return [];
       const record = split as Record<string, unknown>;
-      const tenantId = normalizeStoredTenantId(record.tenantId);
+      const tenantId =
+        normalizeStoredTenantId(record.tenantId) ??
+        (record.tenantId === undefined ||
+        (typeof record.tenantId === "string" && !record.tenantId.trim())
+          ? legacyTenantId
+          : null);
       if (
         tenantId &&
         isNonZeroAddressString(record.wallet) &&

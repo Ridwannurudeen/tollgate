@@ -14,6 +14,7 @@ import {
   parseFeeRouterSplitRegistry,
   type FeeRouterSplitKey,
   type FeeRouterSplitRegistry,
+  type ParseFeeRouterSplitRegistryOptions,
   type SplitRegistryGetOrInsertResult,
   type SplitRegistryStore,
 } from "../split-registry.js";
@@ -44,11 +45,12 @@ function delay(milliseconds: number): Promise<void> {
 
 export function createFileSplitRegistryStore(
   filePath: string,
+  options: ParseFeeRouterSplitRegistryOptions = {},
 ): SplitRegistryStore {
   const read = async (): Promise<FeeRouterSplitRegistry> => {
     try {
       const parsed = JSON.parse(await readFile(filePath, "utf8")) as unknown;
-      return parseFeeRouterSplitRegistry(parsed);
+      return parseFeeRouterSplitRegistry(parsed, options);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "ENOENT") return { splits: [] };

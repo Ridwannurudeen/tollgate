@@ -14,9 +14,10 @@
   claims and a short exclusive append lock. Same-process contenders share the
   winning promise; another process that encounters an unresolved claim fails
   closed for reconciliation instead of submitting another on-chain split.
-- Kept the primary registry bytes unchanged: it is still the same formatted
-  `{ "splits": [...] }` JSON parsed by `parseFeeRouterSplitRegistry`. Coordination
-  state lives in sibling paths.
+- Kept the primary registry schema unchanged: it is still the same formatted
+  `{ "splits": [...] }` JSON parsed by `parseFeeRouterSplitRegistry`. A normalized
+  legacy write adds the resolved `tenantId`; coordination state lives in sibling
+  paths.
 - Added SDK coverage for the optional atomic path, concurrent same-tuple reuse,
   ambiguous-failure reservation, concurrent different-tuple appends, and the
   unchanged registry JSON representation.
@@ -66,13 +67,13 @@ paths redirected under `.briefs/`:
   ignored by `.gitignore`. The new scope document was force-added because the
   brief requires it, and its tone follows `docs/ROADMAP.md` and
   `docs/RECIPE-PAYMENT-GATE.md` instead.
-- The existing live registry was not opened or modified. Compatibility was
-  verified against the parser and byte-format tests, not against production
-  contents.
+- During the original split-store work, the live registry was not opened or
+  modified; compatibility was checked only against the then-current parser and
+  format tests. The corrective brief established that production records omit
+  `tenantId`, and the corrective coverage below now uses that legacy shape.
 - The old citations-only test that assigned a missing `tenantId` to
-  `citations-core` was removed with the private parser. The SDK parser requires
-  the explicit tenant field, matching the brief's verified statement that live
-  records already carry `tenantId`.
+  `citations-core` was removed with the private parser. That lost behavior is
+  restored below through the SDK's caller-explicit legacy tenant option.
 - `pay-per-piece/package-lock.json` was already modified at session start to
   match the package name and 0.1.2 version. That existing correction was
   preserved while advancing the lockfile to 0.1.3.
@@ -80,3 +81,32 @@ paths redirected under `.briefs/`:
   after a crash. Automatic age-based cleanup is deliberately not implemented,
   because elapsed time does not prove that no chain transaction was broadcast.
 - Nothing was pushed, merged, published, deployed, or submitted.
+
+## Corrective fix: legacy tenant attribution
+
+- Added the explicit `legacyTenantId` parser/store option. Only an absent or
+  blank stored `tenantId` uses it; present non-string, overlong, and otherwise
+  malformed records still fail the existing validation.
+- Configured every Citations file-store construction with
+  `legacyTenantId: "citations-core"`. The SDK remains tenant-neutral for external
+  integrators.
+- Restored Citations coverage for the production legacy shape with the
+  `tenantId` key absent and verified that payout routing reuses the stored split
+  instead of invoking `createSplit`.
+- Added an SDK regression fixture containing 12 valid legacy records with no
+  `tenantId` keys. Its read → existing `getOrInsert` → write round trip retains
+  all 12 records, invokes the insert callback zero times, and persists
+  `tenantId: "citations-core"` on every normalized record. A separate test covers
+  the empty-string legacy form.
+
+Final verification was rerun sequentially from this worktree on 2026-08-24:
+
+- `pay-per-piece/npm test`: **4 test files passed, 32 tests passed**.
+- `pay-per-piece/npm run typecheck`: **exit 0**.
+- `citations/npm test`: **67 test files passed, 397 tests passed**.
+- `citations/npm run typecheck`: **exit 0**.
+
+An earlier parallel full-suite run caused the unrelated Citations
+`proof-pack.test.ts` Git-subprocess test to exceed its 5-second timeout. The test
+passed alone (**3 tests passed**) and the complete Citations suite then passed
+when rerun sequentially as reported above.

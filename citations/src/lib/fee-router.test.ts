@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createFileSplitRegistryStore } from "tollgate-pay-per-piece/stores/file";
@@ -721,6 +721,54 @@ describe("assertValidFeeRouterSplit", () => {
 
       expect(writes).toEqual(["createSplit", "pay", "pay"]);
       expect(paidSplitIds).toEqual([124n, 124n]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes legacy split records to the core tenant", async () => {
+    const query = oneCitationQuery();
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lepton-splits-"));
+    const registryPath = path.join(dir, "fee-router-splits.json");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      1_000_000n,
+      124n,
+      writes,
+    );
+
+    try {
+      await writeFile(
+        registryPath,
+        `${JSON.stringify({
+          splits: [
+            {
+              wallet: query.citations[0].wallet,
+              splitId: "124",
+              recipients: [query.citations[0].wallet],
+              bps: [10_000],
+              createSplitTx: `0x${"a".repeat(64)}`,
+              createdAt: "2026-07-07T00:00:00.000Z",
+            },
+          ],
+        })}\n`,
+        "utf8",
+      );
+
+      await routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+        splitRegistryPath: registryPath,
+      });
+
+      expect(writes).toEqual(["pay"]);
+      const registry = await createFileSplitRegistryStore(registryPath, {
+        legacyTenantId: "citations-core",
+      }).read();
+      expect(registry.splits[0]?.tenantId).toBe("citations-core");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
