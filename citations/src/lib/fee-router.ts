@@ -7,7 +7,6 @@ import { createFileSplitRegistryStore } from "tollgate-pay-per-piece/stores/file
 import {
   createPublicClient,
   createWalletClient,
-  http,
   parseEventLogs,
   type Abi,
   type Address,
@@ -16,12 +15,13 @@ import {
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ARC_RPC_URL, ARC_USDC, arcChain } from "./chain";
+import { ARC_USDC, arcChain } from "./chain";
 import { w3sExecuteContract } from "./circle-w3s";
 import { feeRouterAllowanceTarget } from "./fee-router-allowance";
 import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "./fee-router-contract";
 import { withReservedNonce } from "./fee-router-nonce";
 import { withFeeRouterSignerOperation } from "./fee-router-signer-lifecycle";
+import { settlementTransport } from "./settlement-rpc.server";
 import type {
   Citation,
   CreatorSource,
@@ -145,7 +145,7 @@ export type CitationPaymentPlan = {
 export function createFeeRouterPublicClient() {
   return createPublicClient({
     chain: arcChain,
-    transport: http(ARC_RPC_URL),
+    transport: settlementTransport(),
     pollingInterval: ARC_POLLING_INTERVAL_MS,
   });
 }
@@ -345,7 +345,7 @@ export function createFeeRouterSigner(
         createWalletClient({
           account,
           chain: arcChain,
-          transport: http(ARC_RPC_URL),
+          transport: settlementTransport(),
           pollingInterval: ARC_POLLING_INTERVAL_MS,
         }),
       ),
