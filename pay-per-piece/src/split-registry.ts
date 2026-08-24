@@ -50,6 +50,10 @@ export type CreateFeeRouterSplit = () => Promise<{
   txHash: Hex;
 }>;
 
+export type VerifyFeeRouterSplit = (
+  record: FeeRouterSplitRecord,
+) => Promise<void>;
+
 function isNonZeroAddressString(value: unknown): value is Address {
   return (
     typeof value === "string" &&
@@ -208,10 +212,10 @@ export async function ensureCreatorSplit(
   wallet: Address,
   recipients: Address[],
   bps: number[],
-  signer: FeeRouterSigner,
+  signer: FeeRouterSigner | undefined,
   publicClient?: PublicClient,
-  createCreatorSplit: CreateFeeRouterSplit = () =>
-    createSplit(signer, recipients, bps, publicClient),
+  createCreatorSplit?: CreateFeeRouterSplit,
+  verifyStoredSplit?: VerifyFeeRouterSplit,
 ): Promise<FeeRouterSplitRecord> {
   assertValidFeeRouterSplit(recipients, bps);
   if (!isNonZeroAddressString(wallet)) {
@@ -220,7 +224,16 @@ export async function ensureCreatorSplit(
   const tenantId = normalizeTenantId(tenantIdInput);
   const key: FeeRouterSplitKey = { tenantId, wallet, recipients, bps };
   const insert = async (): Promise<FeeRouterSplitRecord> => {
-    const { splitId, txHash } = await createCreatorSplit();
+    let created: Awaited<ReturnType<CreateFeeRouterSplit>>;
+    if (createCreatorSplit) {
+      created = await createCreatorSplit();
+    } else {
+      if (!signer) {
+        throw new Error("FeeRouter signer or split creator is required.");
+      }
+      created = await createSplit(signer, recipients, bps, publicClient);
+    }
+    const { splitId, txHash } = created;
     return {
       tenantId,
       wallet,
@@ -238,7 +251,10 @@ export async function ensureCreatorSplit(
       throw new Error("FeeRouter split store returned a different identity.");
     }
     if (!result.inserted) {
-      await verifyCreatorSplit(result.record, recipients, bps, publicClient);
+      if (verifyStoredSplit) await verifyStoredSplit(result.record);
+      else {
+        await verifyCreatorSplit(result.record, recipients, bps, publicClient);
+      }
     }
     return result.record;
   }
@@ -247,7 +263,8 @@ export async function ensureCreatorSplit(
     const registry = await store.read();
     const existing = findFeeRouterSplit(registry, key);
     if (existing) {
-      await verifyCreatorSplit(existing, recipients, bps, publicClient);
+      if (verifyStoredSplit) await verifyStoredSplit(existing);
+      else await verifyCreatorSplit(existing, recipients, bps, publicClient);
       return existing;
     }
 

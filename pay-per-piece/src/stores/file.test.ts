@@ -86,7 +86,7 @@ describe("createFileSplitRegistryStore", () => {
     ).toEqual([]);
   });
 
-  it("claims a split before creation and rejects a concurrent creator", async () => {
+  it("claims a split before creation and shares it with a concurrent caller", async () => {
     const { store } = await temporaryRegistry();
     if (!store.getOrInsert) throw new Error("missing atomic store operation");
     const key = splitKey("toy-paywall", WALLET);
@@ -107,17 +107,19 @@ describe("createFileSplitRegistryStore", () => {
     });
     await started;
 
-    await expect(
-      store.getOrInsert(key, async () => {
-        secondInsertCalled = true;
-        return splitRecord(key, "43");
-      }),
-    ).rejects.toThrow("pending reconciliation");
+    const second = store.getOrInsert(key, async () => {
+      secondInsertCalled = true;
+      return splitRecord(key, "43");
+    });
 
     releaseCreation();
     await expect(first).resolves.toEqual({
       record: splitRecord(key, "42"),
       inserted: true,
+    });
+    await expect(second).resolves.toEqual({
+      record: splitRecord(key, "42"),
+      inserted: false,
     });
     expect(secondInsertCalled).toBe(false);
     await expect(

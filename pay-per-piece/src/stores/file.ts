@@ -14,11 +14,16 @@ import {
   parseFeeRouterSplitRegistry,
   type FeeRouterSplitKey,
   type FeeRouterSplitRegistry,
+  type SplitRegistryGetOrInsertResult,
   type SplitRegistryStore,
 } from "../split-registry.js";
 
 const WRITE_LOCK_RETRY_MS = 10;
 const WRITE_LOCK_TIMEOUT_MS = 5_000;
+const pendingInsertions = new Map<
+  string,
+  Promise<SplitRegistryGetOrInsertResult>
+>();
 
 function splitReservationName(key: FeeRouterSplitKey): string {
   return createHash("sha256")
@@ -96,42 +101,60 @@ export function createFileSplitRegistryStore(
         reservationDirectory,
         `${splitReservationName(key)}.json`,
       );
-      await mkdir(reservationDirectory, { recursive: true });
-      let reservation: Awaited<ReturnType<typeof open>> | undefined;
-      try {
-        reservation = await open(reservationPath, "wx");
-        await reservation.writeFile(
-          `${JSON.stringify({ ...key, claimedAt: new Date().toISOString() }, null, 2)}\n`,
-          "utf8",
-        );
-        await reservation.sync();
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code !== "EEXIST") throw error;
-        const committed = findFeeRouterSplit(await read(), key);
-        if (committed) return { record: committed, inserted: false };
-        throw new Error(
-          `FeeRouter split creation for tenant ${key.tenantId} is pending reconciliation.`,
-        );
-      } finally {
-        await reservation?.close();
+      const pending = pendingInsertions.get(reservationPath);
+      if (pending) {
+        const result = await pending;
+        return { record: result.record, inserted: false };
       }
 
-      const record = await insert();
-      if (!feeRouterSplitMatchesKey(record, key)) {
-        throw new Error("FeeRouter split insert returned a different identity.");
-      }
-      await withWriteLock(async () => {
-        const registry = await read();
-        if (findFeeRouterSplit(registry, key)) {
+      const insertion = (async (): Promise<SplitRegistryGetOrInsertResult> => {
+        await mkdir(reservationDirectory, { recursive: true });
+        let reservation: Awaited<ReturnType<typeof open>> | undefined;
+        try {
+          reservation = await open(reservationPath, "wx");
+          await reservation.writeFile(
+            `${JSON.stringify({ ...key, claimedAt: new Date().toISOString() }, null, 2)}\n`,
+            "utf8",
+          );
+          await reservation.sync();
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code !== "EEXIST") throw error;
+          const committed = findFeeRouterSplit(await read(), key);
+          if (committed) return { record: committed, inserted: false };
           throw new Error(
-            `FeeRouter split creation for tenant ${key.tenantId} conflicts with a committed record.`,
+            `FeeRouter split creation for tenant ${key.tenantId} is pending reconciliation.`,
+          );
+        } finally {
+          await reservation?.close();
+        }
+
+        const record = await insert();
+        if (!feeRouterSplitMatchesKey(record, key)) {
+          throw new Error(
+            "FeeRouter split insert returned a different identity.",
           );
         }
-        await write({ splits: [...registry.splits, record] });
-      });
-      await unlink(reservationPath);
-      return { record, inserted: true };
+        await withWriteLock(async () => {
+          const registry = await read();
+          if (findFeeRouterSplit(registry, key)) {
+            throw new Error(
+              `FeeRouter split creation for tenant ${key.tenantId} conflicts with a committed record.`,
+            );
+          }
+          await write({ splits: [...registry.splits, record] });
+        });
+        await unlink(reservationPath);
+        return { record, inserted: true };
+      })();
+      pendingInsertions.set(reservationPath, insertion);
+      try {
+        return await insertion;
+      } finally {
+        if (pendingInsertions.get(reservationPath) === insertion) {
+          pendingInsertions.delete(reservationPath);
+        }
+      }
     },
   };
 }

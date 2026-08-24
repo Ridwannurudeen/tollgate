@@ -389,7 +389,7 @@ describe("ensureCreatorSplit", () => {
         return { record: await insert(), inserted: true };
       },
     };
-    const { publicClient, signer, writes } = mockClients();
+    const { publicClient, writes } = mockClients();
 
     const record = await ensureCreatorSplit(
       store,
@@ -397,7 +397,7 @@ describe("ensureCreatorSplit", () => {
       RECIPIENT,
       [RECIPIENT],
       [10_000],
-      signer,
+      undefined,
       publicClient,
       async () => {
         createCalls += 1;
