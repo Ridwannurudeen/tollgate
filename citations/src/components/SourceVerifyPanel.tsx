@@ -6,7 +6,9 @@ import { formatUsdc } from "@/lib/format";
 
 type Props = {
   sourceId: string;
+  doi?: string;
   token: string | null;
+  orcidEnabled: boolean;
   verified: boolean;
   escrowedAtomicUsdc: number;
   escrowedCitationCount: number;
@@ -14,7 +16,9 @@ type Props = {
 
 export function SourceVerifyPanel({
   sourceId,
+  doi,
   token,
+  orcidEnabled,
   verified,
   escrowedAtomicUsdc,
   escrowedCitationCount,
@@ -89,11 +93,23 @@ export function SourceVerifyPanel({
       ) : (
         <p className="hero-text">Verification tokens are not configured.</p>
       )}
+      {doi && orcidEnabled && (
+        <div className="hero-cta">
+          <a
+            className="source-register-button"
+            href={`/api/sources/${sourceId}/verify/orcid`}
+          >
+            Sign in with ORCID
+          </a>
+        </div>
+      )}
       <p className="status-line" aria-live="polite">
         {status ||
           (escrowedAtomicUsdc > 0
             ? `${formatUsdc(escrowedAtomicUsdc)} USDC is held in escrow across ${escrowedCitationCount} citation${escrowedCitationCount === 1 ? "" : "s"}. Verifying ownership releases it to this source's wallet.`
-            : "Meta-tag or DNS ownership verification releases escrowed payouts for this source.")}
+            : doi && orcidEnabled
+              ? "Sign in with ORCID to match this paper's DOI, or verify control with a meta tag or DNS record."
+              : "Meta-tag or DNS ownership verification releases escrowed payouts for this source.")}
       </p>
     </section>
   );

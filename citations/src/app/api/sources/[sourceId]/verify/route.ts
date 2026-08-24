@@ -35,9 +35,7 @@ export async function GET(_request: NextRequest, context: Context) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Verification token failed.",
+          error instanceof Error ? error.message : "Verification token failed.",
       },
       { status: 501 },
     );
@@ -59,6 +57,12 @@ export async function PATCH(request: NextRequest, context: Context) {
     if (method === "creator-claimed") {
       throw new SourceRegistryError(
         "Creator claims require meta-tag or DNS domain ownership proof.",
+        403,
+      );
+    }
+    if (method === "orcid") {
+      throw new SourceRegistryError(
+        "ORCID verification requires a completed OAuth session.",
         403,
       );
     }

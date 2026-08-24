@@ -4,7 +4,9 @@ import {
   verificationToken,
   verifyDnsTxtSource,
   verifyMetaTagSource,
+  verifyOrcidSource,
 } from "./source-verification";
+import { createOrcidSession } from "./orcid-oauth";
 import type { CreatorSource } from "./types";
 
 const source: CreatorSource = {
@@ -21,6 +23,23 @@ const source: CreatorSource = {
   creatorKind: "external",
   verifiedCreator: false,
 };
+
+function orcidWorksResponse(doi: string): Response {
+  return Response.json({
+    group: [
+      {
+        "external-ids": {
+          "external-id": [
+            {
+              "external-id-type": "doi",
+              "external-id-value": doi,
+            },
+          ],
+        },
+      },
+    ],
+  });
+}
 
 describe("wallet-free source verification", () => {
   it("accepts a matching meta tag", async () => {
@@ -150,6 +169,62 @@ describe("wallet-free source verification", () => {
       } else {
         process.env.TOLLGATE_VERIFY_ALLOW_PRIVATE_HOSTS = previousAllow;
       }
+    }
+  });
+
+  it("accepts a DOI listed by the OAuth-bound ORCID session", async () => {
+    const previousId = process.env.ORCID_CLIENT_ID;
+    const previousSecret = process.env.ORCID_CLIENT_SECRET;
+    const previousVerifySecret = process.env.TOLLGATE_VERIFY_SECRET;
+    process.env.ORCID_CLIENT_ID = "APP-TEST";
+    process.env.ORCID_CLIENT_SECRET = "test-secret";
+    process.env.TOLLGATE_VERIFY_SECRET = "verify-secret";
+    const paper = { ...source, doi: "10.5555/fixture-paper" };
+    const session = createOrcidSession(paper.id, "0000-0002-1825-0097");
+
+    try {
+      await expect(
+        verifyOrcidSource(paper, session, async () =>
+          orcidWorksResponse("10.5555/fixture-paper"),
+        ),
+      ).resolves.toMatchObject({ method: "orcid" });
+    } finally {
+      if (previousId === undefined) delete process.env.ORCID_CLIENT_ID;
+      else process.env.ORCID_CLIENT_ID = previousId;
+      if (previousSecret === undefined) delete process.env.ORCID_CLIENT_SECRET;
+      else process.env.ORCID_CLIENT_SECRET = previousSecret;
+      if (previousVerifySecret === undefined)
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      else process.env.TOLLGATE_VERIFY_SECRET = previousVerifySecret;
+    }
+  });
+
+  it("tells the researcher how to add an unmatched DOI to ORCID", async () => {
+    const previousId = process.env.ORCID_CLIENT_ID;
+    const previousSecret = process.env.ORCID_CLIENT_SECRET;
+    const previousVerifySecret = process.env.TOLLGATE_VERIFY_SECRET;
+    process.env.ORCID_CLIENT_ID = "APP-TEST";
+    process.env.ORCID_CLIENT_SECRET = "test-secret";
+    process.env.TOLLGATE_VERIFY_SECRET = "verify-secret";
+    const paper = { ...source, doi: "10.5555/missing-paper" };
+    const session = createOrcidSession(paper.id, "0000-0002-1825-0097");
+
+    try {
+      await expect(
+        verifyOrcidSource(paper, session, async () =>
+          orcidWorksResponse("10.5555/different-paper"),
+        ),
+      ).rejects.toThrow(
+        "paper must be listed in your ORCID record (Add works → by DOI)",
+      );
+    } finally {
+      if (previousId === undefined) delete process.env.ORCID_CLIENT_ID;
+      else process.env.ORCID_CLIENT_ID = previousId;
+      if (previousSecret === undefined) delete process.env.ORCID_CLIENT_SECRET;
+      else process.env.ORCID_CLIENT_SECRET = previousSecret;
+      if (previousVerifySecret === undefined)
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      else process.env.TOLLGATE_VERIFY_SECRET = previousVerifySecret;
     }
   });
 });

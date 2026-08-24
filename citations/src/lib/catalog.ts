@@ -3,6 +3,7 @@ import path from "node:path";
 import { verifyMessage } from "viem";
 import { w3sMintWallet, type MintedWallet } from "./circle-w3s";
 import { sha256Hex } from "./hash";
+import { normalizeDoi } from "./orcid";
 import { projectPublicData } from "./public-data";
 import { readCappedResponseText, safeFetch } from "./safe-fetch";
 import { readRsshubSources } from "./sources/rsshub";
@@ -222,6 +223,12 @@ function normalizeUrl(value: unknown): string {
   return parsed.toString();
 }
 
+function normalizeOptionalDoi(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  return normalizeDoi(cleanText(value, "doi", 260));
+}
+
 function normalizeWallet(value: unknown): `0x${string}` {
   const wallet = cleanText(value, "wallet", 42);
   if (!WALLET_PATTERN.test(wallet)) {
@@ -383,6 +390,7 @@ export function normalizeSourceInput(input: unknown): CreatorSource {
       "origin must be registered, discovered, or rss-import.",
     );
   }
+  const doi = normalizeOptionalDoi(registration.doi);
 
   return {
     id: sourceId,
@@ -391,6 +399,7 @@ export function normalizeSourceInput(input: unknown): CreatorSource {
     handle: normalizeHandle(registration.handle),
     wallet,
     url: normalizeUrl(registration.url),
+    ...(doi ? { doi } : {}),
     summary: cleanText(registration.summary, "summary", 340),
     tags: normalizeTags(registration.tags),
     priceAtomicUsdc: normalizePrice(registration.priceAtomicUsdc),
@@ -836,12 +845,13 @@ export async function updateSourceVerification(
     if (index < 0) {
       throw new SourceRegistryError("source not found.", 404);
     }
-    const domainVerified =
+    const creatorVerified =
       ownershipProof.method === "meta-tag" ||
-      ownershipProof.method === "dns-txt";
+      ownershipProof.method === "dns-txt" ||
+      ownershipProof.method === "orcid";
     const source: CreatorSource = {
       ...customSources[index],
-      ...(domainVerified ? { verifiedCreator: true, probation: false } : {}),
+      ...(creatorVerified ? { verifiedCreator: true, probation: false } : {}),
       ownershipProof,
     };
     const nextCustomSources = customSources.slice();

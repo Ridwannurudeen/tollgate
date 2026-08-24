@@ -15,6 +15,7 @@ import {
 import { publicLedger } from "@/lib/public-data";
 import { sourceStatus, sourceStatusBadgeClassName } from "@/lib/source-status";
 import { verificationToken } from "@/lib/source-verification";
+import { orcidOAuthEnabled } from "@/lib/orcid-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +137,12 @@ export default async function SourcePage({ params }: Props) {
             <span>source url</span>
             <strong>{source.url}</strong>
           </div>
+          {source.doi && (
+            <div className="evidence-row">
+              <span>DOI</span>
+              <strong>{source.doi}</strong>
+            </div>
+          )}
           <div className="evidence-row">
             <span>source kind</span>
             <strong>{source.sourceKind}</strong>
@@ -190,7 +197,9 @@ export default async function SourcePage({ params }: Props) {
 
         <SourceVerifyPanel
           sourceId={source.id}
+          doi={source.doi}
           token={token}
+          orcidEnabled={orcidOAuthEnabled()}
           verified={source.verifiedCreator}
           escrowedAtomicUsdc={escrowedAtomicUsdc}
           escrowedCitationCount={escrowReceipts.length}
