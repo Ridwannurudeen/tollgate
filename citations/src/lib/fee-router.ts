@@ -18,6 +18,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { ARC_RPC_URL, ARC_USDC, arcChain } from "./chain";
 import { w3sExecuteContract } from "./circle-w3s";
+import { feeRouterAllowanceTarget } from "./fee-router-allowance";
 import { FEE_ROUTER_ADDRESS, feeRouterV1Abi } from "./fee-router-contract";
 import { withReservedNonce } from "./fee-router-nonce";
 import type {
@@ -39,12 +40,6 @@ export const feeRouterSplitRegistryStore =
 const FEE_ROUTER_CLAIMABLE_CACHE_TTL_MS = 60_000;
 const ARC_POLLING_INTERVAL_MS = 250;
 const DEFAULT_FEE_ROUTER_TENANT_ID = "citations-core";
-// Approving the exact payout amount resets the allowance to ~0 after every pay,
-// so concurrent payouts (demand engine + live queries) race a tiny allowance and
-// revert with "transfer amount exceeds allowance". Instead top up to a large
-// bounded standing allowance so many payouts clear without re-approving; actual
-// spend stays capped by the payer wallet's USDC balance regardless of allowance.
-export const STANDING_FEE_ROUTER_ALLOWANCE = 10_000_000_000n; // 10,000 USDC (atomic, 6dp)
 type FeeRouterClaimableCacheEntry =
   | { value: bigint; fetchedAt: number }
   | { error: unknown; fetchedAt: number };
@@ -604,6 +599,7 @@ export async function routeCitationPayments(
     (sum, payment) => sum + BigInt(payment.amountAtomicUsdc),
     0n,
   );
+  const allowanceTarget = feeRouterAllowanceTarget(totalAtomicUsdc);
   const [balance, allowance] = await Promise.all([
     publicClient.readContract({
       address: ARC_USDC,
@@ -629,7 +625,7 @@ export async function routeCitationPayments(
         address: ARC_USDC,
         abi: usdcRouterAbi,
         functionName: "approve",
-        args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
+        args: [FEE_ROUTER_ADDRESS, allowanceTarget],
         account,
         chain: arcChain,
         nonce,
@@ -721,6 +717,7 @@ export async function routeEscrowReleasePayment(
   const { account, walletClient } = createFeeRouterSigner(options);
   const tenantId = feeRouterTenantId(options);
   const amount = BigInt(amountAtomicUsdc);
+  const allowanceTarget = feeRouterAllowanceTarget(amount);
   const [balance, allowance] = await Promise.all([
     publicClient.readContract({
       address: ARC_USDC,
@@ -746,7 +743,7 @@ export async function routeEscrowReleasePayment(
         address: ARC_USDC,
         abi: usdcRouterAbi,
         functionName: "approve",
-        args: [FEE_ROUTER_ADDRESS, STANDING_FEE_ROUTER_ALLOWANCE],
+        args: [FEE_ROUTER_ADDRESS, allowanceTarget],
         account,
         chain: arcChain,
         nonce,

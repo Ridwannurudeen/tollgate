@@ -12,11 +12,11 @@ import {
   feeRouterSettlementEnabled,
   planCitationPayments,
   prepareCitationSplit,
-  STANDING_FEE_ROUTER_ALLOWANCE,
   usdcRouterAbi,
   waitForSuccessfulTransaction,
   type FeeRouterRouteOptions,
 } from "./fee-router";
+import { feeRouterAllowanceTarget } from "./fee-router-allowance";
 import { FEE_ROUTER_ADDRESS } from "./fee-router-contract";
 import { withReservedNonce } from "./fee-router-nonce";
 import type { QueryRecord, ReceiptEvidence } from "./types";
@@ -210,6 +210,7 @@ export async function payCitationsWithIntent(
     plannedPayments,
     built.intent,
   );
+  const allowanceTarget = feeRouterAllowanceTarget(total);
   const publicClient = options.publicClient ?? createFeeRouterPublicClient();
   const { account, walletClient } = createFeeRouterSigner(options);
   await assertPayGateConfiguration(
@@ -241,7 +242,7 @@ export async function payCitationsWithIntent(
         address: ARC_USDC,
         abi: usdcRouterAbi,
         functionName: "approve",
-        args: [address, STANDING_FEE_ROUTER_ALLOWANCE],
+        args: [address, allowanceTarget],
         account,
         chain: arcChain,
         nonce,

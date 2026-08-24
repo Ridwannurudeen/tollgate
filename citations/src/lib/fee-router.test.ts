@@ -103,6 +103,7 @@ function mockClients(
 ) {
   let createdRecipients: Address[] = [recipient];
   let createdBps = [10_000];
+  const contractWrites: ContractCall[] = [];
   const publicClient = {
     readContract: async ({ functionName }: { functionName: string }) => {
       if (functionName === "balanceOf") return 1_000_000n;
@@ -153,7 +154,9 @@ function mockClients(
     }),
   } as unknown as PublicClient;
   const walletClient = {
-    writeContract: async ({ functionName, args, account }: ContractCall) => {
+    writeContract: async (request: ContractCall) => {
+      contractWrites.push(request);
+      const { functionName, args, account } = request;
       writes.push(functionName);
       if (functionName === "createSplit") {
         createSplitAccounts.push(account);
@@ -174,7 +177,7 @@ function mockClients(
       return `0x${txByte.repeat(64)}` as Hex;
     },
   } as FeeRouterWalletClient;
-  return { publicClient, walletClient };
+  return { publicClient, walletClient, contractWrites };
 }
 
 describe("assertValidFeeRouterSplit", () => {
@@ -353,7 +356,7 @@ describe("assertValidFeeRouterSplit", () => {
     const writes: string[] = [];
     const paidSplitIds: bigint[] = [];
     const createSplitAccounts: unknown[] = [];
-    const { publicClient, walletClient } = mockClients(
+    const { publicClient, walletClient, contractWrites } = mockClients(
       query.citations[0].wallet,
       0n,
       123n,
@@ -372,6 +375,7 @@ describe("assertValidFeeRouterSplit", () => {
       });
 
       expect(writes).toEqual(["approve", "createSplit", "pay"]);
+      expect(contractWrites[0]?.args).toEqual([FEE_ROUTER, 1_000_000n]);
       expect(paidSplitIds).toEqual([123n]);
       expect(accountAddress(createSplitAccounts[0])).toBe(
         privateKeyToAccount(TEST_KEY).address,
@@ -382,6 +386,31 @@ describe("assertValidFeeRouterSplit", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("rejects a citation batch above the allowance ceiling before writing", async () => {
+    const query = oneCitationQuery();
+    query.citations = query.citations.map((citation) => ({
+      ...citation,
+      payoutAtomicUsdc: 1_000_001,
+    }));
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      query.citations[0].wallet,
+      0n,
+      123n,
+      writes,
+    );
+
+    await expect(
+      routeCitationPayments(query, {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+      }),
+    ).rejects.toThrow("exceeds the FeeRouter allowance ceiling");
+    expect(writes).toEqual([]);
   });
 
   it("uses the split id from the mined SplitCreated event when the prediction races", async () => {
@@ -873,6 +902,28 @@ describe("assertValidFeeRouterSplit", () => {
 });
 
 describe("routeEscrowReleasePayment", () => {
+  it("rejects an escrow release above the allowance ceiling before writing", async () => {
+    const source = DEFAULT_CREATOR_SOURCES[0];
+    if (!source) throw new Error("missing test source");
+    const writes: string[] = [];
+    const { publicClient, walletClient } = mockClients(
+      source.wallet,
+      0n,
+      201n,
+      writes,
+    );
+
+    await expect(
+      routeEscrowReleasePayment(source, 1_000_001, ["receipt-a"], {
+        enabled: true,
+        privateKey: TEST_KEY,
+        publicClient,
+        walletClient,
+      }),
+    ).rejects.toThrow("exceeds the FeeRouter allowance ceiling");
+    expect(writes).toEqual([]);
+  });
+
   it("rejects a reverted approval before creating a split", async () => {
     const source = DEFAULT_CREATOR_SOURCES[0];
     if (!source) throw new Error("missing test source");
