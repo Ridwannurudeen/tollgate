@@ -121,6 +121,23 @@ describe("PATCH /api/sources/[sourceId]/verify", () => {
     expect(mocks.releaseEscrowForSource).not.toHaveBeenCalled();
   });
 
+  it("rejects a caller-supplied ORCID iD without releasing escrow", async () => {
+    const response = await PATCH(
+      request({
+        method: "orcid",
+        orcid: "0000-0002-1825-0097",
+      }),
+      context(),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain("OAuth session");
+    expect(mocks.verifySourceOwnership).not.toHaveBeenCalled();
+    expect(mocks.verifySourceByWebProof).not.toHaveBeenCalled();
+    expect(mocks.releaseEscrowForSource).not.toHaveBeenCalled();
+  });
+
   it("keeps wallet-signature verification on the existing probationary branch", async () => {
     const walletSignedSource = {
       ...source,

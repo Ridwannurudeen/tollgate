@@ -34,6 +34,7 @@ export type SourceOwnershipProof = {
     | "operator-approved"
     | "meta-tag"
     | "dns-txt"
+    | "orcid"
     | "creator-claimed";
   signer?: `0x${string}`;
   signatureHash?: string;
@@ -52,6 +53,7 @@ export type CreatorSource = {
   handle: string;
   wallet: `0x${string}`;
   url: string;
+  doi?: string;
   summary: string;
   tags: string[];
   priceAtomicUsdc: number;
@@ -79,6 +81,7 @@ export type SourceRegistrationInput = {
   handle?: string;
   wallet?: string;
   url?: string;
+  doi?: string;
   summary?: string;
   tags?: string[] | string;
   priceAtomicUsdc?: number | string;

@@ -15,8 +15,10 @@ import {
 import { shouldEscrowSource } from "./escrow";
 import {
   verificationToken,
+  verifySourceByOrcidSession,
   verifySourceByWebProof,
 } from "./source-verification";
+import { createOrcidSession } from "./orcid-oauth";
 import type { CreatorSource, SourceRegistrationInput } from "./types";
 
 const mocks = vi.hoisted(() => ({
@@ -157,6 +159,26 @@ describe("appendSource registration content evidence", () => {
     } finally {
       restoreFetchEnv(previous);
     }
+  });
+
+  it("normalizes and persists an optional DOI", async () => {
+    await withTempRegistry(async (filePath) => {
+      const result = await withRegistrationFetchDisabled(() =>
+        appendSource(
+          {
+            ...sourceInput,
+            doi: "https://doi.org/10.5555/Fixture-Paper",
+          },
+          filePath,
+        ),
+      );
+      const stored = JSON.parse(await readFile(filePath, "utf8")) as Array<{
+        doi?: string;
+      }>;
+
+      expect(result.source.doi).toBe("10.5555/fixture-paper");
+      expect(stored[0]?.doi).toBe("10.5555/fixture-paper");
+    });
   });
 
   it("keeps registration working when content evidence cannot be fetched", async () => {
@@ -444,6 +466,65 @@ describe("source ownership trust gates", () => {
       } else {
         process.env.TOLLGATE_VERIFY_SECRET = previousSecret;
       }
+    }
+  });
+
+  it("lets an OAuth-bound ORCID DOI match clear probation", async () => {
+    const previousId = process.env.ORCID_CLIENT_ID;
+    const previousSecret = process.env.ORCID_CLIENT_SECRET;
+    process.env.ORCID_CLIENT_ID = "APP-TEST";
+    process.env.ORCID_CLIENT_SECRET = "test-secret";
+
+    try {
+      await withTempRegistry(async (filePath) => {
+        const registered = await withRegistrationFetchDisabled(() =>
+          appendSource(
+            {
+              ...sourceInput,
+              title: "ORCID Verified Source",
+              url: "https://example.com/orcid-verified",
+              doi: "10.5555/orcid-verified",
+            },
+            filePath,
+          ),
+        );
+        const session = createOrcidSession(
+          registered.source.id,
+          "0000-0002-1825-0097",
+        );
+
+        const result = await verifySourceByOrcidSession(
+          registered.source,
+          session,
+          {
+            filePath,
+            fetchImpl: async () =>
+              Response.json({
+                group: [
+                  {
+                    "external-ids": {
+                      "external-id": [
+                        {
+                          "external-id-type": "doi",
+                          "external-id-value": "10.5555/orcid-verified",
+                        },
+                      ],
+                    },
+                  },
+                ],
+              }),
+          },
+        );
+
+        expect(result.source.verifiedCreator).toBe(true);
+        expect(result.source.probation).toBe(false);
+        expect(result.source.ownershipProof?.method).toBe("orcid");
+      });
+    } finally {
+      if (previousId === undefined) delete process.env.ORCID_CLIENT_ID;
+      else process.env.ORCID_CLIENT_ID = previousId;
+      if (previousSecret === undefined) delete process.env.ORCID_CLIENT_SECRET;
+      else process.env.ORCID_CLIENT_SECRET = previousSecret;
     }
   });
 

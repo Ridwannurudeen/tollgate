@@ -2,6 +2,8 @@ import { createHmac } from "node:crypto";
 import { resolveTxt } from "node:dns/promises";
 import { updateSourceVerification } from "./catalog";
 import { sha256Hex } from "./hash";
+import { orcidIdFromSession } from "./orcid-oauth";
+import { normalizeDoi, orcidRecordListsDoi } from "./orcid";
 import {
   isUnsafeFetchHost,
   readCappedResponseText,
@@ -12,6 +14,15 @@ import type { CreatorSource, SourceOwnershipProof } from "./types";
 
 const VERIFY_TIMEOUT_MS = 5_000;
 export const SOURCE_VERIFICATION_MAX_BYTES = 512 * 1024;
+
+export class OrcidVerificationError extends Error {
+  constructor(
+    message: string,
+    public readonly status = 400,
+  ) {
+    super(message);
+  }
+}
 
 function verifySecret(): string {
   const secret = process.env.TOLLGATE_VERIFY_SECRET;
@@ -106,6 +117,48 @@ export async function verifyDnsTxtSource(
     throw new Error("verification DNS TXT record was not found.");
   }
   return proof("dns-txt", token);
+}
+
+export async function verifyOrcidSource(
+  source: CreatorSource,
+  sessionCookie: string | undefined,
+  fetchImpl: typeof fetch = fetch,
+): Promise<SourceOwnershipProof> {
+  const orcidId = orcidIdFromSession(sessionCookie, source.id);
+  if (!orcidId) {
+    throw new OrcidVerificationError(
+      "A completed ORCID OAuth session is required.",
+      403,
+    );
+  }
+  if (!source.doi) {
+    throw new OrcidVerificationError(
+      "This source does not have a DOI to verify.",
+    );
+  }
+  if (!(await orcidRecordListsDoi(orcidId, source.doi, fetchImpl))) {
+    throw new OrcidVerificationError(
+      "This paper must be listed in your ORCID record (Add works → by DOI) before Tollgate can verify it.",
+    );
+  }
+  return {
+    method: "orcid",
+    signatureHash: sha256Hex({ orcidId, doi: normalizeDoi(source.doi) }),
+    verifiedAt: new Date().toISOString(),
+  };
+}
+
+export async function verifySourceByOrcidSession(
+  source: CreatorSource,
+  sessionCookie: string | undefined,
+  options: { filePath?: string; fetchImpl?: typeof fetch } = {},
+): Promise<{ source: CreatorSource; sources: CreatorSource[] }> {
+  const ownershipProof = await verifyOrcidSource(
+    source,
+    sessionCookie,
+    options.fetchImpl,
+  );
+  return updateSourceVerification(source.id, ownershipProof, options.filePath);
 }
 
 export async function verifySourceByWebProof(
