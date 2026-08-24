@@ -2,7 +2,6 @@ import {
   createWalletClient,
   createPublicClient,
   encodeAbiParameters,
-  http,
   keccak256,
   toHex,
   type Address,
@@ -10,9 +9,10 @@ import {
   type PublicClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ARC_RPC_URL, arcChain } from "./chain";
+import { arcChain } from "./chain";
 import { FORUM_ADDRESSES } from "./forum";
 import { stableStringify } from "./hash";
+import { settlementTransport } from "./settlement-rpc.server";
 import type { PaymentReceipt, QueryRecord, TrackRecordEvidence } from "./types";
 
 export const TRACK_RECORD_ADDRESS = FORUM_ADDRESSES.trackRecordV2;
@@ -166,7 +166,7 @@ export type TrackRecordPublishOptions = {
 export function createTrackRecordPublicClient() {
   return createPublicClient({
     chain: arcChain,
-    transport: http(ARC_RPC_URL),
+    transport: settlementTransport(),
   });
 }
 
@@ -354,7 +354,7 @@ export async function publishTrackRecordForAnswer(
   const walletClient = createWalletClient({
     account,
     chain: arcChain,
-    transport: http(ARC_RPC_URL),
+    transport: settlementTransport(),
   });
 
   let state = await readTrackRecordState(botId, publicClient);

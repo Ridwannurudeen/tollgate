@@ -2,15 +2,15 @@ import {
   createPublicClient,
   createWalletClient,
   hashTypedData,
-  http,
   type Address,
   type Hex,
 } from "viem";
 import { privateKeyToAccount, type LocalAccount } from "viem/accounts";
-import { ARC_CHAIN_ID, ARC_RPC_URL, arcChain } from "./chain";
+import { ARC_CHAIN_ID, arcChain } from "./chain";
 import { withReservedNonce } from "./fee-router-nonce";
 import { sha256Hex } from "./hash";
 import { tollgateAgentWallet } from "./payments";
+import { settlementTransport } from "./settlement-rpc.server";
 import type { QueryRecord, UseIntentRecord } from "./types";
 
 const DEFAULT_INTENT_TTL_SECONDS = 900;
@@ -375,12 +375,12 @@ export async function anchorUseIntent(
   const account = createUseIntentSigner();
   const publicClient = createPublicClient({
     chain: arcChain,
-    transport: http(ARC_RPC_URL),
+    transport: settlementTransport(),
   });
   const walletClient = createWalletClient({
     account,
     chain: arcChain,
-    transport: http(ARC_RPC_URL),
+    transport: settlementTransport(),
   });
   const transaction = await withReservedNonce(publicClient, account, (nonce) =>
     walletClient.writeContract({

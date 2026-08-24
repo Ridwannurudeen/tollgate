@@ -1,5 +1,11 @@
 import { inspect } from "node:util";
-import { createWalletClient, http, publicActions, type Address } from "viem";
+import {
+  BaseError,
+  createWalletClient,
+  LimitExceededRpcError,
+  publicActions,
+  type Address,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   decodePaymentSignatureHeader,
@@ -21,16 +27,19 @@ import {
   ARC_CAIP2,
   ARC_GATEWAY_API_URL,
   ARC_GATEWAY_WALLET,
-  ARC_RPC_URL,
   ARC_USDC,
   arcChain,
 } from "./chain";
+import { settlementTransport } from "./settlement-rpc.server";
 
 export const PAYMENT_SIGNATURE_HEADER = "PAYMENT-SIGNATURE";
 export const PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED";
 export const PAYMENT_RESPONSE_HEADER = "PAYMENT-RESPONSE";
 export const GATEWAY_BATCHING_NAME = "GatewayWalletBatched";
 export const GATEWAY_BATCHING_VERSION = "1";
+
+const RATE_LIMIT_RETRY_DELAYS_MS = [250, 500] as const;
+const HTTP_URL_PATTERN = /https?:\/\/[^\s'"<>]+/g;
 
 type GatewayPaymentPayload = Parameters<BatchFacilitatorClient["verify"]>[0];
 type GatewayPaymentRequirements = Parameters<
@@ -146,16 +155,61 @@ export function paymentRequiredHeaders(
 // `invalid_exact_evm_transaction_failed` (parseEip3009TransferError's
 // fallback) — the 2026-08-12 production outage was undiagnosable because the
 // raw error died there. Log it — full viem detail and cause chain — to stderr
-// before the library classifies it, then rethrow unchanged.
+// before the library classifies it, redacting any configured settlement URL.
+export function redactSettlementRpcUrls(value: string): string {
+  if (!process.env.ARC_SETTLEMENT_RPC_URL) return value;
+  return value.replace(HTTP_URL_PATTERN, "[redacted rpc url]");
+}
+
+function inspectForX402Log(value: unknown): string {
+  return redactSettlementRpcUrls(inspect(value, { depth: 8 }));
+}
+
+function safeX402Error(error: unknown): unknown {
+  if (!process.env.ARC_SETTLEMENT_RPC_URL) return error;
+  if (!(error instanceof Error)) {
+    return redactSettlementRpcUrls(inspect(error, { depth: 8 }));
+  }
+  const cause =
+    error.cause === undefined ? undefined : safeX402Error(error.cause);
+  const safe = new Error(
+    redactSettlementRpcUrls(error.message),
+    cause === undefined ? undefined : { cause },
+  );
+  safe.name = error.name;
+  return safe;
+}
+
 function logRawX402Error(source: string, error: unknown): void {
   try {
     console.error(
       `[x402-raw-error] ${source} failed:`,
-      inspect(error, { depth: 8 }),
+      inspectForX402Log(error),
     );
   } catch {
     console.error(`[x402-raw-error] ${source} failed (uninspectable error)`);
   }
+}
+
+export function isRateLimitExceeded(error: unknown): boolean {
+  if (!(error instanceof BaseError)) return false;
+  const limit = error.walk((cause) => cause instanceof LimitExceededRpcError);
+  return (
+    limit instanceof LimitExceededRpcError &&
+    limit.details.trim().toLowerCase() === "rate limit exceeded"
+  );
+}
+
+async function withRateLimitRetry<T>(call: () => Promise<T>): Promise<T> {
+  for (const delay of RATE_LIMIT_RETRY_DELAYS_MS) {
+    try {
+      return await call();
+    } catch (error) {
+      if (!isRateLimitExceeded(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  return call();
 }
 
 export function withRawErrorLogging(
@@ -171,9 +225,16 @@ export function withRawErrorLogging(
         return await call(...args);
       } catch (error) {
         logRawX402Error(`signer.${method}`, error);
-        throw error;
+        const safeError = safeX402Error(error);
+        throw safeError;
       }
     };
+  const retrySubmission =
+    <Args extends unknown[], Result>(
+      call: (...args: Args) => Promise<Result>,
+    ) =>
+    (...args: Args): Promise<Result> =>
+      withRateLimitRetry(() => call(...args));
   return {
     ...signer,
     readContract: wrap("readContract", signer.readContract.bind(signer)),
@@ -181,10 +242,13 @@ export function withRawErrorLogging(
       "verifyTypedData",
       signer.verifyTypedData.bind(signer),
     ),
-    writeContract: wrap("writeContract", signer.writeContract.bind(signer)),
+    writeContract: wrap(
+      "writeContract",
+      retrySubmission(signer.writeContract.bind(signer)),
+    ),
     sendTransaction: wrap(
       "sendTransaction",
-      signer.sendTransaction.bind(signer),
+      retrySubmission(signer.sendTransaction.bind(signer)),
     ),
     waitForTransactionReceipt: wrap(
       "waitForTransactionReceipt",
@@ -203,7 +267,7 @@ function makeFacilitator() {
   const client = createWalletClient({
     account,
     chain: arcChain,
-    transport: http(ARC_RPC_URL),
+    transport: settlementTransport(),
   }).extend(publicActions);
   const signer = toFacilitatorEvmSigner(
     client as unknown as Omit<FacilitatorEvmSigner, "getAddresses"> & {
@@ -292,24 +356,28 @@ export async function settleX402(
     if (!verifyRes.isValid) {
       console.error(
         "[x402-raw-error] exact verify rejected:",
-        inspect(verifyRes, { depth: 8 }),
+        inspectForX402Log(verifyRes),
       );
       return {
         ok: false,
         status: 402,
-        reason: verifyRes.invalidReason ?? "payment verification failed",
+        reason: redactSettlementRpcUrls(
+          verifyRes.invalidReason ?? "payment verification failed",
+        ),
       };
     }
     const settleRes = await facilitator.settle(payload, requirements);
     if (!settleRes.success) {
       console.error(
         "[x402-raw-error] exact settle rejected:",
-        inspect(settleRes, { depth: 8 }),
+        inspectForX402Log(settleRes),
       );
       return {
         ok: false,
         status: 402,
-        reason: settleRes.errorReason ?? "settlement failed",
+        reason: redactSettlementRpcUrls(
+          settleRes.errorReason ?? "settlement failed",
+        ),
       };
     }
     return {
