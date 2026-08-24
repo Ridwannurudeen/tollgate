@@ -48,6 +48,12 @@ export function orcidOAuthEnabled(): boolean {
   return orcidConfig() !== null;
 }
 
+function verifySecret(): string {
+  const secret = process.env.TOLLGATE_VERIFY_SECRET;
+  if (!secret) throw new Error("TOLLGATE_VERIFY_SECRET is not configured.");
+  return secret;
+}
+
 function signature(value: string, secret: string): string {
   return createHmac("sha256", secret).update(value).digest("hex");
 }
@@ -61,17 +67,19 @@ function signaturesMatch(supplied: string, expected: string): boolean {
 }
 
 function signedToken(payload: OrcidStatePayload | OrcidSessionPayload): string {
-  const { clientSecret } = requireOrcidConfig();
+  requireOrcidConfig();
+  const secret = verifySecret();
   const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString(
     "base64url",
   );
   const signed = `${TOKEN_VERSION}.${encoded}`;
-  return `${signed}.${signature(signed, clientSecret)}`;
+  return `${signed}.${signature(signed, secret)}`;
 }
 
 function tokenPayload(token: string | undefined): unknown {
   const config = orcidConfig();
   if (!config || !token) return null;
+  const secret = verifySecret();
   const [version, encoded, suppliedSignature, extra] = token.trim().split(".");
   if (
     version !== TOKEN_VERSION ||
@@ -82,9 +90,7 @@ function tokenPayload(token: string | undefined): unknown {
     return null;
   }
   const signed = `${version}.${encoded}`;
-  if (
-    !signaturesMatch(suppliedSignature, signature(signed, config.clientSecret))
-  ) {
+  if (!signaturesMatch(suppliedSignature, signature(signed, secret))) {
     return null;
   }
   try {

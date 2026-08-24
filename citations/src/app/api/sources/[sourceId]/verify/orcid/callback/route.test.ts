@@ -12,6 +12,7 @@ vi.mock("@/lib/public-origin", () => ({
 
 const previousClientId = process.env.ORCID_CLIENT_ID;
 const previousClientSecret = process.env.ORCID_CLIENT_SECRET;
+const previousVerifySecret = process.env.TOLLGATE_VERIFY_SECRET;
 
 function context(sourceId = "paper") {
   return { params: Promise.resolve({ sourceId }) };
@@ -21,6 +22,7 @@ describe("GET /api/sources/[sourceId]/verify/orcid/callback", () => {
   beforeEach(() => {
     process.env.ORCID_CLIENT_ID = "APP-TEST";
     process.env.ORCID_CLIENT_SECRET = "test-secret";
+    process.env.TOLLGATE_VERIFY_SECRET = "verify-secret";
   });
 
   afterEach(() => {
@@ -30,6 +32,9 @@ describe("GET /api/sources/[sourceId]/verify/orcid/callback", () => {
     if (previousClientSecret === undefined)
       delete process.env.ORCID_CLIENT_SECRET;
     else process.env.ORCID_CLIENT_SECRET = previousClientSecret;
+    if (previousVerifySecret === undefined)
+      delete process.env.TOLLGATE_VERIFY_SECRET;
+    else process.env.TOLLGATE_VERIFY_SECRET = previousVerifySecret;
   });
 
   it("rejects a callback whose state does not match the session", async () => {

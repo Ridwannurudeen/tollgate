@@ -10,6 +10,7 @@ import {
 
 const previousClientId = process.env.ORCID_CLIENT_ID;
 const previousClientSecret = process.env.ORCID_CLIENT_SECRET;
+const previousVerifySecret = process.env.TOLLGATE_VERIFY_SECRET;
 
 function restoreEnvironment(): void {
   if (previousClientId === undefined) delete process.env.ORCID_CLIENT_ID;
@@ -17,12 +18,16 @@ function restoreEnvironment(): void {
   if (previousClientSecret === undefined)
     delete process.env.ORCID_CLIENT_SECRET;
   else process.env.ORCID_CLIENT_SECRET = previousClientSecret;
+  if (previousVerifySecret === undefined)
+    delete process.env.TOLLGATE_VERIFY_SECRET;
+  else process.env.TOLLGATE_VERIFY_SECRET = previousVerifySecret;
 }
 
 describe("ORCID OAuth", () => {
   beforeEach(() => {
     process.env.ORCID_CLIENT_ID = "APP-TEST";
     process.env.ORCID_CLIENT_SECRET = "test-secret";
+    process.env.TOLLGATE_VERIFY_SECRET = "verify-secret";
   });
 
   afterEach(() => {
@@ -104,5 +109,18 @@ describe("ORCID OAuth", () => {
     expect(
       orcidIdFromSession(cookie, "different-paper", 1_700_000_001_000),
     ).toBeNull();
+  });
+
+  it("keeps a session valid when the OAuth client secret rotates", () => {
+    const cookie = createOrcidSession(
+      "paper",
+      "0000-0002-1825-0097",
+      1_700_000_000_000,
+    );
+    process.env.ORCID_CLIENT_SECRET = "rotated-client-secret";
+
+    expect(orcidIdFromSession(cookie, "paper", 1_700_000_001_000)).toBe(
+      "0000-0002-1825-0097",
+    );
   });
 });

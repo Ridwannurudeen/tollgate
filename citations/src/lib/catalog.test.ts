@@ -472,8 +472,10 @@ describe("source ownership trust gates", () => {
   it("lets an OAuth-bound ORCID DOI match clear probation", async () => {
     const previousId = process.env.ORCID_CLIENT_ID;
     const previousSecret = process.env.ORCID_CLIENT_SECRET;
+    const previousVerifySecret = process.env.TOLLGATE_VERIFY_SECRET;
     process.env.ORCID_CLIENT_ID = "APP-TEST";
     process.env.ORCID_CLIENT_SECRET = "test-secret";
+    process.env.TOLLGATE_VERIFY_SECRET = "verify-secret";
 
     try {
       await withTempRegistry(async (filePath) => {
@@ -525,6 +527,9 @@ describe("source ownership trust gates", () => {
       else process.env.ORCID_CLIENT_ID = previousId;
       if (previousSecret === undefined) delete process.env.ORCID_CLIENT_SECRET;
       else process.env.ORCID_CLIENT_SECRET = previousSecret;
+      if (previousVerifySecret === undefined)
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      else process.env.TOLLGATE_VERIFY_SECRET = previousVerifySecret;
     }
   });
 

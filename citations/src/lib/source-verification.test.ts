@@ -175,8 +175,10 @@ describe("wallet-free source verification", () => {
   it("accepts a DOI listed by the OAuth-bound ORCID session", async () => {
     const previousId = process.env.ORCID_CLIENT_ID;
     const previousSecret = process.env.ORCID_CLIENT_SECRET;
+    const previousVerifySecret = process.env.TOLLGATE_VERIFY_SECRET;
     process.env.ORCID_CLIENT_ID = "APP-TEST";
     process.env.ORCID_CLIENT_SECRET = "test-secret";
+    process.env.TOLLGATE_VERIFY_SECRET = "verify-secret";
     const paper = { ...source, doi: "10.5555/fixture-paper" };
     const session = createOrcidSession(paper.id, "0000-0002-1825-0097");
 
@@ -191,14 +193,19 @@ describe("wallet-free source verification", () => {
       else process.env.ORCID_CLIENT_ID = previousId;
       if (previousSecret === undefined) delete process.env.ORCID_CLIENT_SECRET;
       else process.env.ORCID_CLIENT_SECRET = previousSecret;
+      if (previousVerifySecret === undefined)
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      else process.env.TOLLGATE_VERIFY_SECRET = previousVerifySecret;
     }
   });
 
   it("tells the researcher how to add an unmatched DOI to ORCID", async () => {
     const previousId = process.env.ORCID_CLIENT_ID;
     const previousSecret = process.env.ORCID_CLIENT_SECRET;
+    const previousVerifySecret = process.env.TOLLGATE_VERIFY_SECRET;
     process.env.ORCID_CLIENT_ID = "APP-TEST";
     process.env.ORCID_CLIENT_SECRET = "test-secret";
+    process.env.TOLLGATE_VERIFY_SECRET = "verify-secret";
     const paper = { ...source, doi: "10.5555/missing-paper" };
     const session = createOrcidSession(paper.id, "0000-0002-1825-0097");
 
@@ -215,6 +222,9 @@ describe("wallet-free source verification", () => {
       else process.env.ORCID_CLIENT_ID = previousId;
       if (previousSecret === undefined) delete process.env.ORCID_CLIENT_SECRET;
       else process.env.ORCID_CLIENT_SECRET = previousSecret;
+      if (previousVerifySecret === undefined)
+        delete process.env.TOLLGATE_VERIFY_SECRET;
+      else process.env.TOLLGATE_VERIFY_SECRET = previousVerifySecret;
     }
   });
 });
