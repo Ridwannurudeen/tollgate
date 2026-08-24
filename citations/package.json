@@ -18,7 +18,7 @@
     "test": "vitest run",
     "bench": "vite-node bench/run.ts",
     "refetch:content": "node scripts/refetch-source-content.mjs",
-    "rotate:fee-router-key": "node scripts/rotate-fee-router-key.mjs",
+    "prepare:fee-router-key-rotation": "node scripts/rotate-fee-router-key.mjs",
     "verify:ledger": "node scripts/verify-ledger.mjs",
     "judge:verify": "node scripts/judge-verify.mjs",
     "deploy:use-intent": "node scripts/deploy-use-receipt-registry.mjs",
